@@ -1,0 +1,179 @@
+package commands
+
+import (
+	"fmt"
+	"os"
+
+	"s0/internal/docker"
+
+	"github.com/spf13/cobra"
+)
+
+var (
+	imageTag        string
+	imageDockerfile string
+	imagePlatform   string
+	imageNoCache    bool
+	imagePull       bool
+)
+
+// imageCmd represents the image command.
+var imageCmd = &cobra.Command{
+	Use:   "image",
+	Short: "Manage container images",
+	Long:  `Build, push, and manage container images for sandboxes.`,
+}
+
+// imageBuildCmd builds a Docker image.
+var imageBuildCmd = &cobra.Command{
+	Use:   "build [CONTEXT]",
+	Short: "Build a container image",
+	Long:  `Build a container image from a Dockerfile.`,
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		contextPath := "."
+		if len(args) > 0 {
+			contextPath = args[0]
+		}
+
+		if imageTag == "" {
+			fmt.Fprintln(os.Stderr, "Error: --tag (-t) is required")
+			os.Exit(1)
+		}
+
+		builder, err := docker.NewBuilder()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating builder: %v\n", err)
+			os.Exit(1)
+		}
+
+		opts := docker.BuildOptions{
+			Context:    contextPath,
+			Dockerfile: imageDockerfile,
+			Tags:       []string{imageTag},
+			Platform:   imagePlatform,
+			NoCache:    imageNoCache,
+			Pull:       imagePull,
+			Progress:   os.Stdout,
+		}
+
+		if err := builder.Build(cmd.Context(), opts); err != nil {
+			fmt.Fprintf(os.Stderr, "Error building image: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("\nImage built successfully: %s\n", imageTag)
+	},
+}
+
+// imagePushCmd pushes a Docker image to the registry.
+var imagePushCmd = &cobra.Command{
+	Use:   "push <local-image>",
+	Short: "Push a container image",
+	Long:  `Push a container image to the Sandbox0 registry.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		localImage := args[0]
+
+		if imageTag == "" {
+			fmt.Fprintln(os.Stderr, "Error: --tag (-t) is required")
+			os.Exit(1)
+		}
+
+		client, err := getClient()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Get registry credentials
+		creds, err := client.GetRegistryCredentials(cmd.Context())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting registry credentials: %v\n", err)
+			os.Exit(1)
+		}
+
+		pusher, err := docker.NewPusher()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating pusher: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Prepend registry to tag if not already present
+		targetImage := imageTag
+		if creds.Registry != "" {
+			targetImage = fmt.Sprintf("%s/%s", creds.Registry, imageTag)
+		}
+
+		opts := docker.PushOptions{
+			SourceImage: localImage,
+			TargetImage: targetImage,
+			Registry:    creds.Registry,
+			Username:    creds.Username,
+			Password:    creds.Password,
+			Progress:    os.Stdout,
+		}
+
+		if err := pusher.Push(cmd.Context(), opts); err != nil {
+			fmt.Fprintf(os.Stderr, "Error pushing image: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("\nImage pushed successfully: %s\n", targetImage)
+	},
+}
+
+// imageCredentialsCmd shows registry credentials.
+var imageCredentialsCmd = &cobra.Command{
+	Use:   "credentials",
+	Short: "Show registry credentials",
+	Long:  `Display temporary registry credentials for image uploads.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		client, err := getClient()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		creds, err := client.GetRegistryCredentials(cmd.Context())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting registry credentials: %v\n", err)
+			os.Exit(1)
+		}
+
+		if cfgFormat == "json" || cfgFormat == "yaml" {
+			if err := getFormatter().Format(os.Stdout, creds); err != nil {
+				fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		// Table format
+		fmt.Printf("Provider:\t%s\n", creds.Provider)
+		fmt.Printf("Registry:\t%s\n", creds.Registry)
+		fmt.Printf("Username:\t%s\n", creds.Username)
+		fmt.Printf("Password:\t%s\n", creds.Password)
+		if creds.ExpiresAt != "" {
+			fmt.Printf("Expires At:\t%s\n", creds.ExpiresAt)
+		}
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(imageCmd)
+
+	// Build command flags
+	imageBuildCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "image name:tag (required)")
+	imageBuildCmd.Flags().StringVarP(&imageDockerfile, "file", "f", "Dockerfile", "path to Dockerfile")
+	imageBuildCmd.Flags().StringVar(&imagePlatform, "platform", "", "target platform (e.g., linux/amd64)")
+	imageBuildCmd.Flags().BoolVar(&imageNoCache, "no-cache", false, "do not use cache when building")
+	imageBuildCmd.Flags().BoolVar(&imagePull, "pull", false, "always attempt to pull a newer version of the image")
+
+	// Push command flags
+	imagePushCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "target image name:tag (required)")
+
+	imageCmd.AddCommand(imageBuildCmd)
+	imageCmd.AddCommand(imagePushCmd)
+	imageCmd.AddCommand(imageCredentialsCmd)
+}
