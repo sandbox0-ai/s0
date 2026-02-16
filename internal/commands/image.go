@@ -20,15 +20,18 @@ var (
 // imageCmd represents the image command.
 var imageCmd = &cobra.Command{
 	Use:   "image",
-	Short: "Manage container images",
-	Long:  `Build, push, and manage container images for sandboxes.`,
+	Short: "Manage template images",
+	Long:  `Build, push, and manage container images for sandbox templates.
+
+Sandboxes are created from templates, and templates reference container images.
+Use these commands to build and push images to the Sandbox0 registry.`,
 }
 
 // imageBuildCmd builds a Docker image.
 var imageBuildCmd = &cobra.Command{
 	Use:   "build [CONTEXT]",
-	Short: "Build a container image",
-	Long:  `Build a container image from a Dockerfile.`,
+	Short: "Build a template image",
+	Long:  `Build a container image from a Dockerfile for use in sandbox templates.`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		contextPath := "."
@@ -69,8 +72,8 @@ var imageBuildCmd = &cobra.Command{
 // imagePushCmd pushes a Docker image to the registry.
 var imagePushCmd = &cobra.Command{
 	Use:   "push <local-image>",
-	Short: "Push a container image",
-	Long:  `Push a container image to the Sandbox0 registry.`,
+	Short: "Push a template image",
+	Long:  `Push a container image to the Sandbox0 registry for use in sandbox templates.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		localImage := args[0]
@@ -127,7 +130,7 @@ var imagePushCmd = &cobra.Command{
 var imageCredentialsCmd = &cobra.Command{
 	Use:   "credentials",
 	Short: "Show registry credentials",
-	Long:  `Display temporary registry credentials for image uploads.`,
+	Long:  `Display temporary registry credentials for pushing template images.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient()
 		if err != nil {
@@ -161,8 +164,6 @@ var imageCredentialsCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(imageCmd)
-
 	// Build command flags
 	imageBuildCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "image name:tag (required)")
 	imageBuildCmd.Flags().StringVarP(&imageDockerfile, "file", "f", "Dockerfile", "path to Dockerfile")

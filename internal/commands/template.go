@@ -221,4 +221,7 @@ func init() {
 	templateCmd.AddCommand(templateCreateCmd)
 	templateCmd.AddCommand(templateUpdateCmd)
 	templateCmd.AddCommand(templateDeleteCmd)
+
+	// Image commands as subcommands of template
+	templateCmd.AddCommand(imageCmd)
 }

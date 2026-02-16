@@ -87,12 +87,12 @@ s0 snapshot delete <volume-id> <snapshot-id>
 s0 snapshot restore <volume-id> <snapshot-id>
 ```
 
-### Image
+### Template Image
 
 ```bash
-s0 image build [CONTEXT] -t <tag> [-f Dockerfile] [--platform linux/amd64]
-s0 image push <local-image> -t <target-tag>
-s0 image credentials    # Show registry credentials
+s0 template image build [CONTEXT] -t <tag> [-f Dockerfile] [--platform linux/amd64]
+s0 template image push <local-image> -t <target-tag>
+s0 template image credentials    # Show registry credentials
 ```
 
 ## Examples
@@ -107,9 +107,9 @@ s0 template list
 # Create a sandbox
 s0 sandbox create --template my-template --ttl 3600
 
-# Build and push an image
-s0 image build . -t my-image:v1
-s0 image push my-image:v1 -t my-image:v1
+# Build and push a template image
+s0 template image build . -t my-image:v1
+s0 template image push my-image:v1 -t my-image:v1
 
 # Create a volume and snapshot
 s0 volume create
