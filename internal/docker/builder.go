@@ -1,16 +1,13 @@
 package docker
 
 import (
-	"archive/tar"
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"os/exec"
+	"strings"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
 
@@ -40,7 +37,7 @@ func NewBuilder() (*Builder, error) {
 	return &Builder{client: cli}, nil
 }
 
-// Build builds a Docker image from the given context.
+// Build builds a Docker image from the given context using docker CLI.
 func (b *Builder) Build(ctx context.Context, opts BuildOptions) error {
 	// Default context to current directory
 	if opts.Context == "" {
@@ -52,154 +49,67 @@ func (b *Builder) Build(ctx context.Context, opts BuildOptions) error {
 		opts.Dockerfile = "Dockerfile"
 	}
 
-	// Create build context tar
-	buildContext, err := createBuildContext(opts.Context)
-	if err != nil {
-		return fmt.Errorf("failed to create build context: %w", err)
-	}
-	defer buildContext.Close()
-
-	// Build options
-	buildOpts := types.ImageBuildOptions{
-		Dockerfile:  opts.Dockerfile,
-		Tags:        opts.Tags,
-		BuildArgs:   opts.BuildArgs,
-		NoCache:     opts.NoCache,
-		Remove:      true,
-		ForceRemove: true,
-		PullParent:  opts.Pull,
-		Platform:    opts.Platform,
-	}
-
 	// Progress writer defaults to stdout
 	progress := opts.Progress
 	if progress == nil {
 		progress = os.Stdout
 	}
 
-	resp, err := b.client.ImageBuild(ctx, buildContext, buildOpts)
-	if err != nil {
-		return fmt.Errorf("failed to build image: %w", err)
-	}
-	defer resp.Body.Close()
+	// Build docker command arguments
+	args := []string{"build"}
+	args = append(args, "-f", opts.Dockerfile)
 
-	// Stream build output
-	return streamDockerResponse(resp.Body, progress)
+	for _, tag := range opts.Tags {
+		args = append(args, "-t", tag)
+	}
+
+	if opts.Platform != "" {
+		args = append(args, "--platform", opts.Platform)
+	}
+
+	for key, value := range opts.BuildArgs {
+		if value != nil {
+			args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, *value))
+		}
+	}
+
+	if opts.NoCache {
+		args = append(args, "--no-cache")
+	}
+
+	if opts.Pull {
+		args = append(args, "--pull")
+	}
+
+	args = append(args, opts.Context)
+
+	// Run docker build command
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdout = progress
+	cmd.Stderr = progress
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.Canceled {
+			return ctx.Err()
+		}
+		return fmt.Errorf("docker build failed: %w", err)
+	}
+
+	return nil
 }
 
-// createBuildContext creates a tar archive of the build context.
-func createBuildContext(contextPath string) (*os.File, error) {
-	absPath, err := filepath.Abs(contextPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if .dockerignore exists and parse it
-	// For simplicity, we'll use Docker's built-in context handling
-	// by creating a basic tar of the directory
-
-	tmpFile, err := os.CreateTemp("", "docker-build-context-*.tar")
-	if err != nil {
-		return nil, err
-	}
-
-	tw := tar.NewWriter(tmpFile)
-
-	err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories (they're created implicitly)
-		if info.IsDir() {
-			return nil
-		}
-
-		// Get relative path
-		relPath, err := filepath.Rel(absPath, path)
-		if err != nil {
-			return err
-		}
-
-		// Create tar header
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		header.Name = relPath
-
-		// Write header
-		if err := tw.WriteHeader(header); err != nil {
-			return err
-		}
-
-		// Write file content
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(tw, file)
-		return err
-	})
-
-	if err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
-		return nil, err
-	}
-
-	if err := tw.Close(); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
-		return nil, err
-	}
-
-	// Seek to beginning for reading
-	if _, err := tmpFile.Seek(0, 0); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
-		return nil, err
-	}
-
-	return tmpFile, nil
+// IsAvailable checks if docker CLI is available.
+func IsAvailable() bool {
+	_, err := exec.LookPath("docker")
+	return err == nil
 }
 
-// streamDockerResponse streams Docker API response to the writer.
-func streamDockerResponse(body io.Reader, w io.Writer) error {
-	scanner := bufio.NewScanner(body)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-
-		// Parse JSON stream response
-		var resp dockerStreamResponse
-		if err := json.Unmarshal(line, &resp); err != nil {
-			fmt.Fprintf(w, "%s\n", line)
-			continue
-		}
-
-		if resp.Stream != "" {
-			fmt.Fprint(w, resp.Stream)
-		}
-		if resp.Error != "" {
-			return fmt.Errorf("build error: %s", resp.Error)
-		}
-		if resp.Status != "" {
-			fmt.Fprintf(w, "%s", resp.Status)
-			if resp.Progress != nil {
-				fmt.Fprintf(w, " %s", resp.Progress)
-			}
-			fmt.Fprintln(w)
-		}
+// Info returns Docker version info.
+func Info() (string, error) {
+	cmd := exec.Command("docker", "version", "--format", "{{.Server.Version}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get docker version: %w", err)
 	}
-	return scanner.Err()
-}
-
-// dockerStreamResponse represents a Docker API stream response.
-type dockerStreamResponse struct {
-	Stream   string      `json:"stream,omitempty"`
-	Status   string      `json:"status,omitempty"`
-	Progress interface{} `json:"progressDetail,omitempty"`
-	Error    string      `json:"error,omitempty"`
+	return strings.TrimSpace(string(output)), nil
 }
