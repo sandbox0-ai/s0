@@ -92,7 +92,6 @@ s0 snapshot restore <volume-id> <snapshot-id>
 ```bash
 s0 template image build [CONTEXT] -t <tag> [-f Dockerfile] [--platform linux/amd64]
 s0 template image push <local-image> -t <target-tag>
-s0 template image credentials    # Show registry credentials
 ```
 
 ## Examples

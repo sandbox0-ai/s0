@@ -126,31 +126,6 @@ var imagePushCmd = &cobra.Command{
 	},
 }
 
-// imageCredentialsCmd shows registry credentials.
-var imageCredentialsCmd = &cobra.Command{
-	Use:   "credentials",
-	Short: "Show registry credentials",
-	Long:  `Display temporary registry credentials for pushing template images.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClient()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
-			os.Exit(1)
-		}
-
-		creds, err := client.GetRegistryCredentials(cmd.Context())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting registry credentials: %v\n", err)
-			os.Exit(1)
-		}
-
-		if err := getFormatter().Format(os.Stdout, creds); err != nil {
-			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
-			os.Exit(1)
-		}
-	},
-}
-
 func init() {
 	// Build command flags
 	imageBuildCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "image name:tag (required)")
@@ -164,5 +139,4 @@ func init() {
 
 	imageCmd.AddCommand(imageBuildCmd)
 	imageCmd.AddCommand(imagePushCmd)
-	imageCmd.AddCommand(imageCredentialsCmd)
 }
