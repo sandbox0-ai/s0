@@ -144,21 +144,9 @@ var imageCredentialsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if cfgFormat == "json" || cfgFormat == "yaml" {
-			if err := getFormatter().Format(os.Stdout, creds); err != nil {
-				fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		// Table format
-		fmt.Printf("Provider:\t%s\n", creds.Provider)
-		fmt.Printf("Registry:\t%s\n", creds.Registry)
-		fmt.Printf("Username:\t%s\n", creds.Username)
-		fmt.Printf("Password:\t%s\n", creds.Password)
-		if creds.ExpiresAt != "" {
-			fmt.Printf("Expires At:\t%s\n", creds.ExpiresAt)
+		if err := getFormatter().Format(os.Stdout, creds); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
 		}
 	},
 }

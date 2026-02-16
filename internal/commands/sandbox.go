@@ -13,6 +13,12 @@ var (
 	sandboxTTL        int32
 	sandboxHardTTL    int32
 	sandboxRefreshTTL int32
+	// list flags
+	sandboxListStatus     string
+	sandboxListTemplateID string
+	sandboxListPaused     string
+	sandboxListLimit      int
+	sandboxListOffset     int
 )
 
 // sandboxCmd represents the sandbox command.
@@ -53,15 +59,9 @@ var sandboxCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Print sandbox info
-		fmt.Printf("ID:\t%s\n", sandbox.ID)
-		fmt.Printf("Template:\t%s\n", sandbox.Template)
-		fmt.Printf("Status:\t%s\n", sandbox.Status)
-		if sandbox.ClusterID != nil {
-			fmt.Printf("Cluster ID:\t%s\n", *sandbox.ClusterID)
-		}
-		if sandbox.PodName != "" {
-			fmt.Printf("Pod Name:\t%s\n", sandbox.PodName)
+		if err := getFormatter().Format(os.Stdout, sandbox); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
 		}
 	},
 }
@@ -225,6 +225,49 @@ var sandboxStatusCmd = &cobra.Command{
 	},
 }
 
+// sandboxListCmd lists all sandboxes.
+var sandboxListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List sandboxes",
+	Long:  `List all sandboxes for the authenticated team.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		client, err := getClientRaw()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		opts := &sandbox0.ListSandboxesOptions{}
+		if sandboxListStatus != "" {
+			opts.Status = sandboxListStatus
+		}
+		if sandboxListTemplateID != "" {
+			opts.TemplateID = sandboxListTemplateID
+		}
+		if sandboxListPaused != "" {
+			paused := sandboxListPaused == "true"
+			opts.Paused = &paused
+		}
+		if sandboxListLimit > 0 {
+			opts.Limit = &sandboxListLimit
+		}
+		if sandboxListOffset > 0 {
+			opts.Offset = &sandboxListOffset
+		}
+
+		resp, err := client.ListSandboxes(cmd.Context(), opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error listing sandboxes: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := getFormatter().Format(os.Stdout, resp); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(sandboxCmd)
 
@@ -240,4 +283,12 @@ func init() {
 	sandboxCmd.AddCommand(sandboxResumeCmd)
 	sandboxCmd.AddCommand(sandboxRefreshCmd)
 	sandboxCmd.AddCommand(sandboxStatusCmd)
+
+	// List command flags
+	sandboxListCmd.Flags().StringVar(&sandboxListStatus, "status", "", "filter by status (starting, running, failed, completed)")
+	sandboxListCmd.Flags().StringVar(&sandboxListTemplateID, "template-id", "", "filter by template ID")
+	sandboxListCmd.Flags().StringVar(&sandboxListPaused, "paused", "", "filter by paused state (true/false)")
+	sandboxListCmd.Flags().IntVar(&sandboxListLimit, "limit", 50, "maximum number of results")
+	sandboxListCmd.Flags().IntVar(&sandboxListOffset, "offset", 0, "pagination offset")
+	sandboxCmd.AddCommand(sandboxListCmd)
 }

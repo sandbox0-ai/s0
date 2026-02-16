@@ -16,7 +16,7 @@ const (
 // Formatter is the interface for output formatters.
 type Formatter interface {
 	// Format writes the formatted output to the writer.
-	Format(w io.Writer, data interface{}) error
+	Format(w io.Writer, data any) error
 }
 
 // NewFormatter creates a new formatter for the given format.
