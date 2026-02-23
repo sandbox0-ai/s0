@@ -113,6 +113,51 @@ s0 sandbox pause <sandbox-id>
 s0 sandbox resume <sandbox-id>
 s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
+s0 sandbox list
+```
+
+### Sandbox Files
+
+```bash
+s0 sandbox files ls [path] -s <sandbox-id>
+s0 sandbox files cat <path> -s <sandbox-id>
+s0 sandbox files stat <path> -s <sandbox-id>
+s0 sandbox files mkdir <path> --parents -s <sandbox-id>
+s0 sandbox files rm <path> -s <sandbox-id>
+s0 sandbox files mv <src> <dst> -s <sandbox-id>
+s0 sandbox files upload <local> <remote> -s <sandbox-id>
+s0 sandbox files download <remote> <local> -s <sandbox-id>
+s0 sandbox files write <path> --stdin|--data <content> -s <sandbox-id>
+s0 sandbox files watch <path> --recursive -s <sandbox-id>
+```
+
+### Sandbox Context
+
+```bash
+s0 sandbox context list -s <sandbox-id>
+s0 sandbox context get <ctx-id> -s <sandbox-id>
+s0 sandbox context create --type repl|cmd --language <lang> --command <cmd> -s <sandbox-id>
+s0 sandbox context delete <ctx-id> -s <sandbox-id>
+s0 sandbox context restart <ctx-id> -s <sandbox-id>
+s0 sandbox context input <ctx-id> <input> -s <sandbox-id>
+s0 sandbox context signal <ctx-id> <signal> -s <sandbox-id>
+s0 sandbox context stats <ctx-id> -s <sandbox-id>
+```
+
+### Sandbox Network
+
+```bash
+s0 sandbox network get -s <sandbox-id>
+s0 sandbox network update --mode allow-all|block-all --allow-domain <domain> -s <sandbox-id>
+```
+
+### Sandbox Ports
+
+```bash
+s0 sandbox ports list -s <sandbox-id>
+s0 sandbox ports expose <port> --resume -s <sandbox-id>
+s0 sandbox ports unexpose <port> -s <sandbox-id>
+s0 sandbox ports clear -s <sandbox-id>
 ```
 
 ### Template
@@ -162,6 +207,16 @@ s0 template list
 
 # Create a sandbox
 s0 sandbox create --template my-template --ttl 3600
+
+# List files in sandbox
+s0 sandbox files ls /home/user -s <sandbox-id>
+
+# Execute code in sandbox
+s0 sandbox context create --type repl --language python -s <sandbox-id>
+s0 sandbox context input <ctx-id> "print('hello')" -s <sandbox-id>
+
+# Expose a port
+s0 sandbox ports expose 8080 --resume -s <sandbox-id>
 
 # Build and push a template image
 s0 template image build . -t my-image:v1
