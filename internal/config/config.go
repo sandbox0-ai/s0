@@ -11,9 +11,9 @@ import (
 
 // Config represents the CLI configuration.
 type Config struct {
-	CurrentProfile string            `yaml:"current-profile" mapstructure:"current-profile"`
+	CurrentProfile string             `yaml:"current-profile" mapstructure:"current-profile"`
 	Profiles       map[string]Profile `yaml:"profiles" mapstructure:"profiles"`
-	Output         OutputConfig      `yaml:"output" mapstructure:"output"`
+	Output         OutputConfig       `yaml:"output" mapstructure:"output"`
 }
 
 // Profile represents a named configuration profile.

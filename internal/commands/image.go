@@ -21,7 +21,7 @@ var (
 var imageCmd = &cobra.Command{
 	Use:   "image",
 	Short: "Manage template images",
-	Long:  `Build, push, and manage container images for sandbox templates.
+	Long: `Build, push, and manage container images for sandbox templates.
 
 Sandboxes are created from templates, and templates reference container images.
 Use these commands to build and push images to the Sandbox0 registry.`,

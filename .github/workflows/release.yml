@@ -161,7 +161,7 @@ jobs:
           If you have Go installed:
 
           ```bash
-          go install github.com/sandbox0-ai/s0@latest
+          go install github.com/sandbox0-ai/s0/cmd/s0@latest
           ```
           EOF
 

@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/sandbox0-ai/s0/internal/client"
 	"github.com/sandbox0-ai/s0/internal/config"
@@ -111,4 +112,14 @@ func getClientRaw() (*sandbox0.Client, error) {
 	}
 
 	return sandbox0.NewClient(opts...)
+}
+
+// parseInt32 parses a string to int32 with error handling.
+func parseInt32(s string, name string) int32 {
+	val, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: invalid %s %q: %v\n", name, s, err)
+		os.Exit(1)
+	}
+	return int32(val)
 }

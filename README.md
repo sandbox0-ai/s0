@@ -54,7 +54,7 @@ Expand-Archive -Path "s0.zip" -DestinationPath "s0"
 If you have Go 1.21+ installed:
 
 ```bash
-go install github.com/sandbox0-ai/s0@latest
+go install github.com/sandbox0-ai/s0/cmd/s0@latest
 ```
 
 ### Build from Source
