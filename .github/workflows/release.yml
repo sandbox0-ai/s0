@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Remove local replace directive
+        run: |
+          # Remove the local replace directive for release builds
+          sed -i '/^replace github.com\/sandbox0-ai\/sdk-go/d' go.mod
+          go mod tidy
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          BINARY_NAME=s0-${{ matrix.goos }}-${{ matrix.goarch }}
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          go build -ldflags "-X main.Version=v${VERSION}" -o "${BINARY_NAME}" ./cmd/s0
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: s0-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: s0-${{ matrix.goos }}-${{ matrix.goarch }}*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+
+      - name: Prepare release assets
+        run: |
+          cd binaries
+          for dir in */; do
+            cd "$dir"
+            for f in *; do
+              if [[ "$f" == *.exe ]]; then
+                zip "../${f%.exe}.zip" "$f"
+              else
+                tar -czvf "../${f}.tar.gz" "$f"
+              fi
+            done
+            cd ..
+          done
+          ls -la *.tar.gz *.zip 2>/dev/null || true
+
+      - name: Generate Release Notes
+        id: notes
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating release notes from $PREV_TAG to $GITHUB_REF_NAME"
+            git log $PREV_TAG..HEAD --oneline --no-merges > release_notes.md
+          else
+            echo "First release, generating notes from beginning"
+            git log --oneline --no-merges -20 > release_notes.md
+          fi
+
+          # Add installation instructions
+          cat >> release_notes.md << 'EOF'
+
+          ## Installation
+
+          ### Using Go (recommended)
+
+          ```bash
+          go install github.com/sandbox0-ai/s0@latest
+          ```
+
+          ### Download Binary
+
+          Download the appropriate binary for your platform from the assets below.
+
+          **Linux/macOS:**
+          ```bash
+          # Extract and install
+          tar -xzf s0-<os>-<arch>.tar.gz
+          chmod +x s0
+          sudo mv s0 /usr/local/bin/
+          ```
+
+          **Windows:**
+          Extract `s0-windows-amd64.zip` and add `s0.exe` to your PATH.
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          files: binaries/*.tar.gz
+          fail_on_unmatched_files: false

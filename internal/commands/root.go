@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"s0/internal/client"
-	"s0/internal/config"
-	"s0/internal/output"
+	"github.com/sandbox0-ai/s0/internal/client"
+	"github.com/sandbox0-ai/s0/internal/config"
+	"github.com/sandbox0-ai/s0/internal/output"
 
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/spf13/cobra"

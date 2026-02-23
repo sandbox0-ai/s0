@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"s0/internal/docker"
+	"github.com/sandbox0-ai/s0/internal/docker"
 
 	"github.com/spf13/cobra"
 )

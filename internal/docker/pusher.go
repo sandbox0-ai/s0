@@ -75,7 +75,7 @@ func (p *Pusher) Push(ctx context.Context, opts PushOptions) error {
 	if err != nil {
 		return fmt.Errorf("failed to push image: %w", err)
 	}
-	defer pushResp.Close()
+	defer func() { _ = pushResp.Close() }()
 
 	// Stream push output
 	return p.streamPushResponse(pushResp, progress)
@@ -90,16 +90,16 @@ func (p *Pusher) streamPushResponse(body io.Reader, w io.Writer) error {
 		// Parse JSON stream response
 		var resp pushStreamResponse
 		if err := json.Unmarshal(line, &resp); err != nil {
-			fmt.Fprintf(w, "%s\n", line)
+			_, _ = fmt.Fprintf(w, "%s\n", line)
 			continue
 		}
 
 		if resp.Status != "" {
-			fmt.Fprintf(w, "%s", resp.Status)
+			_, _ = fmt.Fprintf(w, "%s", resp.Status)
 			if resp.Progress != "" {
-				fmt.Fprintf(w, " %s", resp.Progress)
+				_, _ = fmt.Fprintf(w, " %s", resp.Progress)
 			}
-			fmt.Fprintln(w)
+			_, _ = fmt.Fprintln(w)
 		}
 		if resp.Error != "" {
 			return fmt.Errorf("push error: %s", resp.Error)

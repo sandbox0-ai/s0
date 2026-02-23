@@ -9,10 +9,9 @@ import (
 )
 
 var (
-	sandboxTemplate   string
-	sandboxTTL        int32
-	sandboxHardTTL    int32
-	sandboxRefreshTTL int32
+	sandboxTemplate string
+	sandboxTTL      int32
+	sandboxHardTTL  int32
 	// list flags
 	sandboxListStatus     string
 	sandboxListTemplateID string

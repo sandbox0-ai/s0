@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"s0/internal/client"
+	"github.com/sandbox0-ai/s0/internal/client"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -48,10 +48,10 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 	case *client.RegistryCredentials:
 		return f.formatRegistryCredentials(w, v)
 	case string:
-		fmt.Fprintln(w, v)
+		_, _ = fmt.Fprintln(w, v)
 		return nil
 	default:
-		fmt.Fprintf(w, "%v\n", data)
+		_, _ = fmt.Fprintf(w, "%v\n", data)
 		return nil
 	}
 }
@@ -78,7 +78,7 @@ func newTable(w io.Writer) *tablewriter.Table {
 
 func (f *TableFormatter) formatTemplates(w io.Writer, templates []apispec.Template) error {
 	if len(templates) == 0 {
-		fmt.Fprintln(w, "No templates found.")
+		_, _ = fmt.Fprintln(w, "No templates found.")
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func (f *TableFormatter) formatTemplates(w io.Writer, templates []apispec.Templa
 	t.Header([]string{"TEMPLATE ID", "SCOPE", "CREATED AT"})
 
 	for _, tmpl := range templates {
-		t.Append([]string{
+		_ = t.Append([]string{
 			tmpl.TemplateID,
 			tmpl.Scope,
 			tmpl.CreatedAt.Format("2006-01-02 15:04:05"),
@@ -97,22 +97,22 @@ func (f *TableFormatter) formatTemplates(w io.Writer, templates []apispec.Templa
 
 func (f *TableFormatter) formatTemplate(w io.Writer, tmpl *apispec.Template) error {
 	t := newTable(w)
-	t.Append([]string{"Template ID:", tmpl.TemplateID})
-	t.Append([]string{"Scope:", tmpl.Scope})
+	_ = t.Append([]string{"Template ID:", tmpl.TemplateID})
+	_ = t.Append([]string{"Scope:", tmpl.Scope})
 	if v, ok := tmpl.TeamID.Get(); ok {
-		t.Append([]string{"Team ID:", v})
+		_ = t.Append([]string{"Team ID:", v})
 	}
 	if v, ok := tmpl.UserID.Get(); ok {
-		t.Append([]string{"User ID:", v})
+		_ = t.Append([]string{"User ID:", v})
 	}
-	t.Append([]string{"Created:", tmpl.CreatedAt.Format("2006-01-02 15:04:05")})
-	t.Append([]string{"Updated:", tmpl.UpdatedAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Created:", tmpl.CreatedAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Updated:", tmpl.UpdatedAt.Format("2006-01-02 15:04:05")})
 	return t.Render()
 }
 
 func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVolume) error {
 	if len(volumes) == 0 {
-		fmt.Fprintln(w, "No volumes found.")
+		_, _ = fmt.Fprintln(w, "No volumes found.")
 		return nil
 	}
 
@@ -120,7 +120,7 @@ func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVol
 	t.Header([]string{"ID", "TEAM ID", "CACHE SIZE", "CREATED"})
 
 	for _, v := range volumes {
-		t.Append([]string{
+		_ = t.Append([]string{
 			v.ID,
 			v.TeamID,
 			v.CacheSize,
@@ -132,19 +132,19 @@ func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVol
 
 func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) error {
 	t := newTable(w)
-	t.Append([]string{"ID:", v.ID})
-	t.Append([]string{"Team ID:", v.TeamID})
-	t.Append([]string{"User ID:", v.UserID})
-	t.Append([]string{"Cache Size:", v.CacheSize})
-	t.Append([]string{"Buffer Size:", v.BufferSize})
-	t.Append([]string{"Created:", v.CreatedAt.Format("2006-01-02 15:04:05")})
-	t.Append([]string{"Updated:", v.UpdatedAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"ID:", v.ID})
+	_ = t.Append([]string{"Team ID:", v.TeamID})
+	_ = t.Append([]string{"User ID:", v.UserID})
+	_ = t.Append([]string{"Cache Size:", v.CacheSize})
+	_ = t.Append([]string{"Buffer Size:", v.BufferSize})
+	_ = t.Append([]string{"Created:", v.CreatedAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Updated:", v.UpdatedAt.Format("2006-01-02 15:04:05")})
 	return t.Render()
 }
 
 func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapshot) error {
 	if len(snapshots) == 0 {
-		fmt.Fprintln(w, "No snapshots found.")
+		_, _ = fmt.Fprintln(w, "No snapshots found.")
 		return nil
 	}
 
@@ -156,7 +156,7 @@ func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapsh
 		if name == "" {
 			name = "-"
 		}
-		t.Append([]string{
+		_ = t.Append([]string{
 			s.ID,
 			name,
 			fmt.Sprintf("%d bytes", s.SizeBytes),
@@ -168,76 +168,76 @@ func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapsh
 
 func (f *TableFormatter) formatSnapshot(w io.Writer, s *apispec.Snapshot) error {
 	t := newTable(w)
-	t.Append([]string{"ID:", s.ID})
-	t.Append([]string{"Volume ID:", s.VolumeID})
-	t.Append([]string{"Name:", s.Name})
+	_ = t.Append([]string{"ID:", s.ID})
+	_ = t.Append([]string{"Volume ID:", s.VolumeID})
+	_ = t.Append([]string{"Name:", s.Name})
 	if v, ok := s.Description.Get(); ok {
-		t.Append([]string{"Description:", v})
+		_ = t.Append([]string{"Description:", v})
 	}
-	t.Append([]string{"Size:", fmt.Sprintf("%d bytes", s.SizeBytes)})
-	t.Append([]string{"Created:", s.CreatedAt})
+	_ = t.Append([]string{"Size:", fmt.Sprintf("%d bytes", s.SizeBytes)})
+	_ = t.Append([]string{"Created:", s.CreatedAt})
 	return t.Render()
 }
 
 func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 	t := newTable(w)
-	t.Append([]string{"ID:", s.ID})
-	t.Append([]string{"Template ID:", s.TemplateID})
-	t.Append([]string{"Team ID:", s.TeamID})
+	_ = t.Append([]string{"ID:", s.ID})
+	_ = t.Append([]string{"Template ID:", s.TemplateID})
+	_ = t.Append([]string{"Team ID:", s.TeamID})
 	if v, ok := s.UserID.Get(); ok {
-		t.Append([]string{"User ID:", v})
+		_ = t.Append([]string{"User ID:", v})
 	}
-	t.Append([]string{"Status:", string(s.Status)})
-	t.Append([]string{"Paused:", fmt.Sprintf("%v", s.Paused)})
-	t.Append([]string{"Pod Name:", s.PodName})
-	t.Append([]string{"Claimed At:", s.ClaimedAt.Format("2006-01-02 15:04:05")})
-	t.Append([]string{"Expires At:", s.ExpiresAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Status:", string(s.Status)})
+	_ = t.Append([]string{"Paused:", fmt.Sprintf("%v", s.Paused)})
+	_ = t.Append([]string{"Pod Name:", s.PodName})
+	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Expires At:", s.ExpiresAt.Format("2006-01-02 15:04:05")})
 	return t.Render()
 }
 
 func (f *TableFormatter) formatSandboxStatus(w io.Writer, s *apispec.SandboxStatus) error {
 	t := newTable(w)
 	if v, ok := s.Status.Get(); ok {
-		t.Append([]string{"Status:", string(v)})
+		_ = t.Append([]string{"Status:", string(v)})
 	}
 	if v, ok := s.ClaimedAt.Get(); ok {
-		t.Append([]string{"Claimed At:", v})
+		_ = t.Append([]string{"Claimed At:", v})
 	}
 	if v, ok := s.ExpiresAt.Get(); ok {
-		t.Append([]string{"Expires At:", v})
+		_ = t.Append([]string{"Expires At:", v})
 	}
 	if v, ok := s.CreatedAt.Get(); ok {
-		t.Append([]string{"Created At:", v})
+		_ = t.Append([]string{"Created At:", v})
 	}
 	return t.Render()
 }
 
 func (f *TableFormatter) formatRefreshResponse(w io.Writer, r *apispec.RefreshResponse) error {
 	t := newTable(w)
-	t.Append([]string{"Sandbox ID:", r.SandboxID})
-	t.Append([]string{"Expires At:", r.ExpiresAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Sandbox ID:", r.SandboxID})
+	_ = t.Append([]string{"Expires At:", r.ExpiresAt.Format("2006-01-02 15:04:05")})
 	return t.Render()
 }
 
 func (f *TableFormatter) formatSuccessMessage(w io.Writer, r *apispec.SuccessMessageResponse) error {
 	t := newTable(w)
-	t.Append([]string{"Success:", fmt.Sprintf("%v", r.Success)})
+	_ = t.Append([]string{"Success:", fmt.Sprintf("%v", r.Success)})
 	if v, ok := r.Data.Get(); ok {
 		if msg, ok := v.Message.Get(); ok {
-			t.Append([]string{"Message:", msg})
+			_ = t.Append([]string{"Message:", msg})
 		}
 	}
 	return t.Render()
 }
 
 func (f *TableFormatter) formatSuccessDeleted(w io.Writer, _ *apispec.SuccessDeletedResponse) error {
-	fmt.Fprintln(w, "Resource deleted successfully.")
+	_, _ = fmt.Fprintln(w, "Resource deleted successfully.")
 	return nil
 }
 
 func (f *TableFormatter) formatSandboxList(w io.Writer, r *sandbox0.ListSandboxesResponse) error {
 	if len(r.Sandboxes) == 0 {
-		fmt.Fprintln(w, "No sandboxes found.")
+		_, _ = fmt.Fprintln(w, "No sandboxes found.")
 		return nil
 	}
 
@@ -245,7 +245,7 @@ func (f *TableFormatter) formatSandboxList(w io.Writer, r *sandbox0.ListSandboxe
 	t.Header([]string{"ID", "TEMPLATE ID", "STATUS", "PAUSED", "CREATED AT", "EXPIRES AT"})
 
 	for _, s := range r.Sandboxes {
-		t.Append([]string{
+		_ = t.Append([]string{
 			s.ID,
 			s.TemplateID,
 			string(s.Status),
@@ -254,38 +254,40 @@ func (f *TableFormatter) formatSandboxList(w io.Writer, r *sandbox0.ListSandboxe
 			s.ExpiresAt.Format("2006-01-02 15:04:05"),
 		})
 	}
-	t.Render()
-
-	fmt.Fprintf(w, "Total: %d", r.Count)
-	if r.HasMore {
-		fmt.Fprintf(w, " (more available)")
+	if err := t.Render(); err != nil {
+		return err
 	}
-	fmt.Fprintln(w)
+
+	_, _ = fmt.Fprintf(w, "Total: %d", r.Count)
+	if r.HasMore {
+		_, _ = fmt.Fprintf(w, " (more available)")
+	}
+	_, _ = fmt.Fprintln(w)
 	return nil
 }
 
 func (f *TableFormatter) formatSDKSandbox(w io.Writer, s *sandbox0.Sandbox) error {
 	t := newTable(w)
-	t.Append([]string{"ID:", s.ID})
-	t.Append([]string{"Template:", s.Template})
-	t.Append([]string{"Status:", s.Status})
+	_ = t.Append([]string{"ID:", s.ID})
+	_ = t.Append([]string{"Template:", s.Template})
+	_ = t.Append([]string{"Status:", s.Status})
 	if s.ClusterID != nil {
-		t.Append([]string{"Cluster ID:", *s.ClusterID})
+		_ = t.Append([]string{"Cluster ID:", *s.ClusterID})
 	}
 	if s.PodName != "" {
-		t.Append([]string{"Pod Name:", s.PodName})
+		_ = t.Append([]string{"Pod Name:", s.PodName})
 	}
 	return t.Render()
 }
 
 func (f *TableFormatter) formatRegistryCredentials(w io.Writer, c *client.RegistryCredentials) error {
 	t := newTable(w)
-	t.Append([]string{"Provider:", c.Provider})
-	t.Append([]string{"Registry:", c.Registry})
-	t.Append([]string{"Username:", c.Username})
-	t.Append([]string{"Password:", c.Password})
+	_ = t.Append([]string{"Provider:", c.Provider})
+	_ = t.Append([]string{"Registry:", c.Registry})
+	_ = t.Append([]string{"Username:", c.Username})
+	_ = t.Append([]string{"Password:", c.Password})
 	if c.ExpiresAt != "" {
-		t.Append([]string{"Expires At:", c.ExpiresAt})
+		_ = t.Append([]string{"Expires At:", c.ExpiresAt})
 	}
 	return t.Render()
 }
@@ -295,7 +297,7 @@ func PrintTable(headers []string, rows [][]string) {
 	t := newTable(os.Stdout)
 	t.Header(headers)
 	for _, row := range rows {
-		t.Append(row)
+		_ = t.Append(row)
 	}
-	t.Render()
+	_ = t.Render()
 }

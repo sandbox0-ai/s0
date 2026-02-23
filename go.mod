@@ -1,4 +1,4 @@
-module s0
+module github.com/sandbox0-ai/s0
 
 go 1.25.0
 
@@ -80,4 +80,5 @@ require (
 	gotest.tools/v3 v3.5.2 // indirect
 )
 
+// Local development only - CI removes this directive during release builds
 replace github.com/sandbox0-ai/sdk-go => ../sdk-go

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"s0/internal/commands"
+	"github.com/sandbox0-ai/s0/internal/commands"
 )
 
 var (
