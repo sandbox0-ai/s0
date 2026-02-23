@@ -13,8 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux, darwin]
-        goarch: [amd64, arm64]
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,19 +83,21 @@ jobs:
 
       - name: Prepare release assets
         run: |
+          mkdir -p release-assets
           cd binaries
           for dir in */; do
             cd "$dir"
             for f in *; do
               if [[ "$f" == *.exe ]]; then
-                zip "../${f%.exe}.zip" "$f"
+                zip "../../release-assets/${f%.exe}.zip" "$f"
               else
-                tar -czvf "../${f}.tar.gz" "$f"
+                tar -czvf "../../release-assets/${f}.tar.gz" "$f"
               fi
             done
             cd ..
           done
-          ls -la *.tar.gz *.zip 2>/dev/null || true
+          echo "Release assets:"
+          ls -la ../release-assets/
 
       - name: Generate Release Notes
         id: notes
@@ -105,26 +118,51 @@ jobs:
 
           ## Installation
 
-          ### Using Go (recommended)
-
-          ```bash
-          go install github.com/sandbox0-ai/s0@latest
-          ```
-
-          ### Download Binary
-
           Download the appropriate binary for your platform from the assets below.
 
-          **Linux/macOS:**
+          ### Linux
+
           ```bash
-          # Extract and install
-          tar -xzf s0-<os>-<arch>.tar.gz
+          # AMD64
+          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-linux-amd64.tar.gz
+          tar -xzf s0-linux-amd64.tar.gz
+          chmod +x s0
+          sudo mv s0 /usr/local/bin/
+
+          # ARM64
+          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-linux-arm64.tar.gz
+          tar -xzf s0-linux-arm64.tar.gz
           chmod +x s0
           sudo mv s0 /usr/local/bin/
           ```
 
-          **Windows:**
-          Extract `s0-windows-amd64.zip` and add `s0.exe` to your PATH.
+          ### macOS
+
+          ```bash
+          # Intel (AMD64)
+          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-darwin-amd64.tar.gz
+          tar -xzf s0-darwin-amd64.tar.gz
+          chmod +x s0
+          sudo mv s0 /usr/local/bin/
+
+          # Apple Silicon (ARM64)
+          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-darwin-arm64.tar.gz
+          tar -xzf s0-darwin-arm64.tar.gz
+          chmod +x s0
+          sudo mv s0 /usr/local/bin/
+          ```
+
+          ### Windows
+
+          Download `s0-windows-amd64.zip` or `s0-windows-arm64.zip` from the assets below, extract it, and add `s0.exe` to your PATH.
+
+          ### Using Go (alternative)
+
+          If you have Go installed:
+
+          ```bash
+          go install github.com/sandbox0-ai/s0@latest
+          ```
           EOF
 
       - name: Create GitHub Release
@@ -133,5 +171,4 @@ jobs:
           body_path: release_notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
-          files: binaries/*.tar.gz
-          fail_on_unmatched_files: false
+          files: release-assets/*

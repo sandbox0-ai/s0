@@ -4,7 +4,64 @@ Command-line interface for Sandbox0.
 
 ## Installation
 
+### Linux
+
 ```bash
+# AMD64
+curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-linux-amd64.tar.gz
+tar -xzf s0-linux-amd64.tar.gz
+chmod +x s0
+sudo mv s0 /usr/local/bin/
+
+# ARM64
+curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-linux-arm64.tar.gz
+tar -xzf s0-linux-arm64.tar.gz
+chmod +x s0
+sudo mv s0 /usr/local/bin/
+```
+
+### macOS
+
+```bash
+# Intel (AMD64)
+curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-darwin-amd64.tar.gz
+tar -xzf s0-darwin-amd64.tar.gz
+chmod +x s0
+sudo mv s0 /usr/local/bin/
+
+# Apple Silicon (ARM64)
+curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-darwin-arm64.tar.gz
+tar -xzf s0-darwin-arm64.tar.gz
+chmod +x s0
+sudo mv s0 /usr/local/bin/
+```
+
+### Windows
+
+Download `s0-windows-amd64.zip` or `s0-windows-arm64.zip` from [Releases](https://github.com/sandbox0-ai/s0/releases/latest), extract it, and add `s0.exe` to your PATH.
+
+Using PowerShell:
+
+```powershell
+# AMD64
+Invoke-WebRequest -Uri "https://github.com/sandbox0-ai/s0/releases/latest/download/s0-windows-amd64.zip" -OutFile "s0.zip"
+Expand-Archive -Path "s0.zip" -DestinationPath "s0"
+# Move s0.exe to a directory in your PATH
+```
+
+### Using Go (alternative)
+
+If you have Go 1.21+ installed:
+
+```bash
+go install github.com/sandbox0-ai/s0@latest
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/sandbox0-ai/s0.git
+cd s0
 make build
 cp bin/s0 /usr/local/bin/
 ```
