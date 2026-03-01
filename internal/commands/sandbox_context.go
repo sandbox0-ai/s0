@@ -12,7 +12,7 @@ import (
 var (
 	contextSandboxID string
 	contextType      string
-	contextLanguage  string
+	contextAlias     string
 	contextCommand   []string
 	contextCwd       string
 	contextEnv       []string
@@ -100,9 +100,9 @@ var sandboxContextCreateCmd = &cobra.Command{
 		switch contextType {
 		case "repl":
 			req.Type = apispec.NewOptProcessType(apispec.ProcessTypeRepl)
-			if contextLanguage != "" {
+			if contextAlias != "" {
 				req.Repl = apispec.NewOptCreateREPLContextRequest(apispec.CreateREPLContextRequest{
-					Language: apispec.NewOptString(contextLanguage),
+					Alias: apispec.NewOptString(contextAlias),
 				})
 			}
 		case "cmd":
@@ -204,32 +204,6 @@ var sandboxContextRestartCmd = &cobra.Command{
 	},
 }
 
-// sandboxContextInputCmd sends input to a context.
-var sandboxContextInputCmd = &cobra.Command{
-	Use:   "input <context-id> <input>",
-	Short: "Send input to a context",
-	Long:  `Send input to a context (for REPL or interactive CMD).`,
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		contextID := args[0]
-		input := args[1]
-
-		client, err := getClientRaw()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
-			os.Exit(1)
-		}
-
-		_, err = client.Sandbox(contextSandboxID).ContextInput(cmd.Context(), contextID, input)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error sending input: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("Input sent to context %s\n", contextID)
-	},
-}
-
 // sandboxContextSignalCmd sends a signal to a context.
 var sandboxContextSignalCmd = &cobra.Command{
 	Use:   "signal <context-id> <signal>",
@@ -253,6 +227,32 @@ var sandboxContextSignalCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Signal %s sent to context %s\n", signal, contextID)
+	},
+}
+
+// sandboxContextExecCmd executes input in a context and waits for completion.
+var sandboxContextExecCmd = &cobra.Command{
+	Use:   "exec <context-id> <input>",
+	Short: "Execute input in a context",
+	Long:  `Send input to a context and wait for completion.`,
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		contextID := args[0]
+		input := args[1]
+
+		client, err := getClientRaw()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		result, err := client.Sandbox(contextSandboxID).ContextExec(cmd.Context(), contextID, input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error executing input: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Print(result.OutputRaw)
 	},
 }
 
@@ -290,7 +290,7 @@ func init() {
 	sandboxContextCmd.AddCommand(sandboxContextCreateCmd)
 	sandboxContextCmd.AddCommand(sandboxContextDeleteCmd)
 	sandboxContextCmd.AddCommand(sandboxContextRestartCmd)
-	sandboxContextCmd.AddCommand(sandboxContextInputCmd)
+	sandboxContextCmd.AddCommand(sandboxContextExecCmd)
 	sandboxContextCmd.AddCommand(sandboxContextSignalCmd)
 	sandboxContextCmd.AddCommand(sandboxContextStatsCmd)
 
@@ -300,7 +300,7 @@ func init() {
 
 	// Create command flags
 	sandboxContextCreateCmd.Flags().StringVar(&contextType, "type", "", "context type (repl or cmd) (required)")
-	sandboxContextCreateCmd.Flags().StringVar(&contextLanguage, "language", "", "REPL language (e.g., python, node)")
+	sandboxContextCreateCmd.Flags().StringVar(&contextAlias, "alias", "", "REPL alias (e.g., python, node)")
 	sandboxContextCreateCmd.Flags().StringArrayVar(&contextCommand, "command", nil, "CMD command (can be repeated)")
 	sandboxContextCreateCmd.Flags().StringVar(&contextCwd, "cwd", "", "working directory")
 	sandboxContextCreateCmd.Flags().StringArrayVar(&contextEnv, "env", nil, "environment variables (KEY=VALUE, can be repeated)")

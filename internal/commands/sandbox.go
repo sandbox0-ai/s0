@@ -5,6 +5,7 @@ import (
 	"os"
 
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
+	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +19,10 @@ var (
 	sandboxListPaused     string
 	sandboxListLimit      int
 	sandboxListOffset     int
+	// update flags
+	sandboxUpdateTTL        int32
+	sandboxUpdateHardTTL    int32
+	sandboxUpdateAutoResume string
 )
 
 // sandboxCmd represents the sandbox command.
@@ -224,6 +229,61 @@ var sandboxStatusCmd = &cobra.Command{
 	},
 }
 
+// sandboxUpdateCmd updates a sandbox's configuration.
+var sandboxUpdateCmd = &cobra.Command{
+	Use:   "update <sandbox-id>",
+	Short: "Update sandbox configuration",
+	Long:  `Update the configuration of a sandbox (TTL, env vars, auto-resume, etc.).`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		sandboxID := args[0]
+
+		client, err := getClientRaw()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Build the config based on provided flags
+		var config apispec.SandboxUpdateConfig
+		hasConfig := false
+
+		if sandboxUpdateTTL > 0 {
+			config.TTL = apispec.NewOptInt32(sandboxUpdateTTL)
+			hasConfig = true
+		}
+		if sandboxUpdateHardTTL > 0 {
+			config.HardTTL = apispec.NewOptInt32(sandboxUpdateHardTTL)
+			hasConfig = true
+		}
+		if sandboxUpdateAutoResume != "" {
+			autoResume := sandboxUpdateAutoResume == "true"
+			config.AutoResume = apispec.NewOptBool(autoResume)
+			hasConfig = true
+		}
+
+		if !hasConfig {
+			fmt.Fprintln(os.Stderr, "Error: at least one update flag is required (--ttl, --hard-ttl, --env, --auto-resume)")
+			os.Exit(1)
+		}
+
+		req := apispec.SandboxUpdateRequest{
+			Config: apispec.NewOptSandboxUpdateConfig(config),
+		}
+
+		sandbox, err := client.UpdateSandbox(cmd.Context(), sandboxID, req)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error updating sandbox: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := getFormatter().Format(os.Stdout, sandbox); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
 // sandboxListCmd lists all sandboxes.
 var sandboxListCmd = &cobra.Command{
 	Use:   "list",
@@ -282,6 +342,12 @@ func init() {
 	sandboxCmd.AddCommand(sandboxResumeCmd)
 	sandboxCmd.AddCommand(sandboxRefreshCmd)
 	sandboxCmd.AddCommand(sandboxStatusCmd)
+	sandboxCmd.AddCommand(sandboxUpdateCmd)
+
+	// Update command flags
+	sandboxUpdateCmd.Flags().Int32Var(&sandboxUpdateTTL, "ttl", 0, "soft TTL in seconds")
+	sandboxUpdateCmd.Flags().Int32Var(&sandboxUpdateHardTTL, "hard-ttl", 0, "hard TTL in seconds")
+	sandboxUpdateCmd.Flags().StringVar(&sandboxUpdateAutoResume, "auto-resume", "", "auto resume on access (true/false)")
 
 	// List command flags
 	sandboxListCmd.Flags().StringVar(&sandboxListStatus, "status", "", "filter by status (starting, running, failed, completed)")

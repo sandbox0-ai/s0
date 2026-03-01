@@ -139,7 +139,7 @@ s0 sandbox context get <ctx-id> -s <sandbox-id>
 s0 sandbox context create --type repl|cmd --language <lang> --command <cmd> -s <sandbox-id>
 s0 sandbox context delete <ctx-id> -s <sandbox-id>
 s0 sandbox context restart <ctx-id> -s <sandbox-id>
-s0 sandbox context input <ctx-id> <input> -s <sandbox-id>
+s0 sandbox context exec <ctx-id> <input> -s <sandbox-id>
 s0 sandbox context signal <ctx-id> <signal> -s <sandbox-id>
 s0 sandbox context stats <ctx-id> -s <sandbox-id>
 ```

@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/docker/docker v27.0.0+incompatible
 	github.com/olekukonko/tablewriter v1.1.3
-	github.com/sandbox0-ai/sdk-go v0.1.1
+	github.com/sandbox0-ai/sdk-go v0.1.5
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	gopkg.in/yaml.v3 v3.0.1

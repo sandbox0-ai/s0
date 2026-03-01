@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/sandbox0-ai/s0/internal/client"
 
@@ -12,6 +13,8 @@ import (
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
+
+const timeLayout = "2006-01-02 15:04:05"
 
 // TableFormatter formats output as a table.
 type TableFormatter struct{}
@@ -204,8 +207,9 @@ func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 	_ = t.Append([]string{"Status:", string(s.Status)})
 	_ = t.Append([]string{"Paused:", fmt.Sprintf("%v", s.Paused)})
 	_ = t.Append([]string{"Pod Name:", s.PodName})
-	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format("2006-01-02 15:04:05")})
-	_ = t.Append([]string{"Expires At:", s.ExpiresAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format(timeLayout)})
+	_ = t.Append([]string{"Soft Expires At:", formatTimestamp(s.ExpiresAt)})
+	_ = t.Append([]string{"Hard Expires At:", formatTimestamp(s.HardExpiresAt)})
 	return t.Render()
 }
 
@@ -218,7 +222,10 @@ func (f *TableFormatter) formatSandboxStatus(w io.Writer, s *apispec.SandboxStat
 		_ = t.Append([]string{"Claimed At:", v})
 	}
 	if v, ok := s.ExpiresAt.Get(); ok {
-		_ = t.Append([]string{"Expires At:", v})
+		_ = t.Append([]string{"Soft Expires At:", formatTimestampText(v)})
+	}
+	if v, ok := s.HardExpiresAt.Get(); ok {
+		_ = t.Append([]string{"Hard Expires At:", formatTimestampText(v)})
 	}
 	if v, ok := s.CreatedAt.Get(); ok {
 		_ = t.Append([]string{"Created At:", v})
@@ -229,7 +236,8 @@ func (f *TableFormatter) formatSandboxStatus(w io.Writer, s *apispec.SandboxStat
 func (f *TableFormatter) formatRefreshResponse(w io.Writer, r *apispec.RefreshResponse) error {
 	t := newTable(w)
 	_ = t.Append([]string{"Sandbox ID:", r.SandboxID})
-	_ = t.Append([]string{"Expires At:", r.ExpiresAt.Format("2006-01-02 15:04:05")})
+	_ = t.Append([]string{"Soft Expires At:", formatTimestamp(r.ExpiresAt)})
+	_ = t.Append([]string{"Hard Expires At:", formatTimestamp(r.HardExpiresAt)})
 	return t.Render()
 }
 
@@ -256,7 +264,7 @@ func (f *TableFormatter) formatSandboxList(w io.Writer, r *sandbox0.ListSandboxe
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "TEMPLATE ID", "STATUS", "PAUSED", "CREATED AT", "EXPIRES AT"})
+	t.Header([]string{"ID", "TEMPLATE ID", "STATUS", "PAUSED", "CREATED AT", "HARD EXPIRES AT"})
 
 	for _, s := range r.Sandboxes {
 		_ = t.Append([]string{
@@ -264,8 +272,8 @@ func (f *TableFormatter) formatSandboxList(w io.Writer, r *sandbox0.ListSandboxe
 			s.TemplateID,
 			string(s.Status),
 			fmt.Sprintf("%v", s.Paused),
-			s.CreatedAt.Format("2006-01-02 15:04:05"),
-			s.ExpiresAt.Format("2006-01-02 15:04:05"),
+			s.CreatedAt.Format(timeLayout),
+			formatTimestamp(s.HardExpiresAt),
 		})
 	}
 	if err := t.Render(); err != nil {
@@ -384,18 +392,18 @@ func (f *TableFormatter) formatContextList(w io.Writer, contexts []apispec.Conte
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "TYPE", "LANGUAGE", "RUNNING", "PAUSED", "CREATED"})
+	t.Header([]string{"ID", "TYPE", "ALIAS", "RUNNING", "PAUSED", "CREATED"})
 
 	for _, ctx := range contexts {
-		language := "-"
-		if lang, ok := ctx.Language.Get(); ok {
-			language = lang
+		alias := "-"
+		if lang, ok := ctx.Alias.Get(); ok {
+			alias = lang
 		}
 
 		_ = t.Append([]string{
 			ctx.ID,
 			string(ctx.Type),
-			language,
+			alias,
 			fmt.Sprintf("%v", ctx.Running),
 			fmt.Sprintf("%v", ctx.Paused),
 			ctx.CreatedAt,
@@ -408,8 +416,8 @@ func (f *TableFormatter) formatContext(w io.Writer, ctx *apispec.ContextResponse
 	t := newTable(w)
 	_ = t.Append([]string{"ID:", ctx.ID})
 	_ = t.Append([]string{"Type:", string(ctx.Type)})
-	if language, ok := ctx.Language.Get(); ok {
-		_ = t.Append([]string{"Language:", language})
+	if alias, ok := ctx.Alias.Get(); ok {
+		_ = t.Append([]string{"Alias:", alias})
 	}
 	if cwd, ok := ctx.Cwd.Get(); ok {
 		_ = t.Append([]string{"Working Dir:", cwd})
@@ -431,8 +439,8 @@ func (f *TableFormatter) formatContextStats(w io.Writer, stats *apispec.ContextS
 	if ctxType, ok := stats.Type.Get(); ok {
 		_ = t.Append([]string{"Type:", ctxType})
 	}
-	if language, ok := stats.Language.Get(); ok {
-		_ = t.Append([]string{"Language:", language})
+	if alias, ok := stats.Alias.Get(); ok {
+		_ = t.Append([]string{"Alias:", alias})
 	}
 	if running, ok := stats.Running.Get(); ok {
 		_ = t.Append([]string{"Running:", fmt.Sprintf("%v", running)})
@@ -537,4 +545,25 @@ func (f *TableFormatter) formatExposedPorts(w io.Writer, resp *sandbox0.ExposedP
 		_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
 	}
 	return nil
+}
+
+func formatTimestamp(ts time.Time) string {
+	if ts.IsZero() {
+		return "-"
+	}
+	return ts.Format(timeLayout)
+}
+
+func formatTimestampText(v string) string {
+	if v == "" {
+		return "-"
+	}
+	parsed, err := time.Parse(time.RFC3339, v)
+	if err == nil {
+		return formatTimestamp(parsed)
+	}
+	if v == "0001-01-01T00:00:00Z" || v == "0001-01-01 00:00:00" {
+		return "-"
+	}
+	return v
 }

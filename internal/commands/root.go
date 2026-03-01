@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,6 +13,9 @@ import (
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/spf13/cobra"
 )
+
+// ErrNoToken is returned when no API token is configured.
+var ErrNoToken = errors.New("no API token configured. Set SANDBOX0_TOKEN environment variable, use --token flag, or add token to ~/.s0/config.yaml")
 
 var (
 	cfgVersion string
@@ -69,12 +73,14 @@ func getClient() (*client.Client, error) {
 		return nil, err
 	}
 
-	opts := []sandbox0.Option{
-		sandbox0.WithBaseURL(p.GetAPIURL()),
+	token := p.GetToken()
+	if token == "" {
+		return nil, ErrNoToken
 	}
 
-	if t := p.GetToken(); t != "" {
-		opts = append(opts, sandbox0.WithToken(t))
+	opts := []sandbox0.Option{
+		sandbox0.WithBaseURL(p.GetAPIURL()),
+		sandbox0.WithToken(token),
 	}
 
 	userAgent := fmt.Sprintf("s0/%s", cfgVersion)
@@ -98,12 +104,14 @@ func getClientRaw() (*sandbox0.Client, error) {
 		return nil, err
 	}
 
-	opts := []sandbox0.Option{
-		sandbox0.WithBaseURL(p.GetAPIURL()),
+	token := p.GetToken()
+	if token == "" {
+		return nil, ErrNoToken
 	}
 
-	if t := p.GetToken(); t != "" {
-		opts = append(opts, sandbox0.WithToken(t))
+	opts := []sandbox0.Option{
+		sandbox0.WithBaseURL(p.GetAPIURL()),
+		sandbox0.WithToken(token),
 	}
 
 	userAgent := fmt.Sprintf("s0/%s", cfgVersion)
