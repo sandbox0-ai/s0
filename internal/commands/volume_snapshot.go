@@ -13,15 +13,15 @@ var (
 	snapshotDescription string
 )
 
-// snapshotCmd represents the snapshot command.
-var snapshotCmd = &cobra.Command{
+// volumeSnapshotCmd represents the volume snapshot command group.
+var volumeSnapshotCmd = &cobra.Command{
 	Use:   "snapshot",
-	Short: "Manage snapshots",
+	Short: "Manage volume snapshots",
 	Long:  `List, get, create, delete, and restore volume snapshots.`,
 }
 
-// snapshotListCmd lists all snapshots for a volume.
-var snapshotListCmd = &cobra.Command{
+// volumeSnapshotListCmd lists all snapshots for a volume.
+var volumeSnapshotListCmd = &cobra.Command{
 	Use:   "list <volume-id>",
 	Short: "List snapshots",
 	Long:  `List all snapshots for a volume.`,
@@ -48,8 +48,8 @@ var snapshotListCmd = &cobra.Command{
 	},
 }
 
-// snapshotGetCmd gets a snapshot by ID.
-var snapshotGetCmd = &cobra.Command{
+// volumeSnapshotGetCmd gets a snapshot by ID.
+var volumeSnapshotGetCmd = &cobra.Command{
 	Use:   "get <volume-id> <snapshot-id>",
 	Short: "Get snapshot details",
 	Long:  `Get details of a snapshot by its ID.`,
@@ -77,8 +77,8 @@ var snapshotGetCmd = &cobra.Command{
 	},
 }
 
-// snapshotCreateCmd creates a new snapshot.
-var snapshotCreateCmd = &cobra.Command{
+// volumeSnapshotCreateCmd creates a new snapshot.
+var volumeSnapshotCreateCmd = &cobra.Command{
 	Use:   "create <volume-id>",
 	Short: "Create a snapshot",
 	Long:  `Create a new snapshot for a volume.`,
@@ -117,8 +117,8 @@ var snapshotCreateCmd = &cobra.Command{
 	},
 }
 
-// snapshotDeleteCmd deletes a snapshot.
-var snapshotDeleteCmd = &cobra.Command{
+// volumeSnapshotDeleteCmd deletes a snapshot.
+var volumeSnapshotDeleteCmd = &cobra.Command{
 	Use:   "delete <volume-id> <snapshot-id>",
 	Short: "Delete a snapshot",
 	Long:  `Delete a snapshot by its ID.`,
@@ -143,8 +143,8 @@ var snapshotDeleteCmd = &cobra.Command{
 	},
 }
 
-// snapshotRestoreCmd restores a snapshot.
-var snapshotRestoreCmd = &cobra.Command{
+// volumeSnapshotRestoreCmd restores a snapshot.
+var volumeSnapshotRestoreCmd = &cobra.Command{
 	Use:   "restore <volume-id> <snapshot-id>",
 	Short: "Restore a snapshot",
 	Long:  `Restore a volume to a specific snapshot.`,
@@ -170,15 +170,16 @@ var snapshotRestoreCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(snapshotCmd)
+	// Add snapshot as subcommand of volume
+	volumeCmd.AddCommand(volumeSnapshotCmd)
 
 	// Create command flags
-	snapshotCreateCmd.Flags().StringVarP(&snapshotName, "name", "n", "", "snapshot name (required)")
-	snapshotCreateCmd.Flags().StringVarP(&snapshotDescription, "description", "d", "", "snapshot description")
+	volumeSnapshotCreateCmd.Flags().StringVarP(&snapshotName, "name", "n", "", "snapshot name (required)")
+	volumeSnapshotCreateCmd.Flags().StringVarP(&snapshotDescription, "description", "d", "", "snapshot description")
 
-	snapshotCmd.AddCommand(snapshotListCmd)
-	snapshotCmd.AddCommand(snapshotGetCmd)
-	snapshotCmd.AddCommand(snapshotCreateCmd)
-	snapshotCmd.AddCommand(snapshotDeleteCmd)
-	snapshotCmd.AddCommand(snapshotRestoreCmd)
+	volumeSnapshotCmd.AddCommand(volumeSnapshotListCmd)
+	volumeSnapshotCmd.AddCommand(volumeSnapshotGetCmd)
+	volumeSnapshotCmd.AddCommand(volumeSnapshotCreateCmd)
+	volumeSnapshotCmd.AddCommand(volumeSnapshotDeleteCmd)
+	volumeSnapshotCmd.AddCommand(volumeSnapshotRestoreCmd)
 }
