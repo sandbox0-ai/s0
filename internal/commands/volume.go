@@ -5,17 +5,19 @@ import (
 	"os"
 	"strconv"
 
+	sdk "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
 
 // Volume create flags.
 var (
-	volumeAccessMode string
-	volumeCacheSize  string
-	volumePrefetch   string
-	volumeBufferSize string
-	volumeWriteback  string
+	volumeAccessMode  string
+	volumeCacheSize   string
+	volumePrefetch    string
+	volumeBufferSize  string
+	volumeWriteback   string
+	volumeDeleteForce bool
 )
 
 // volumeCmd represents the volume command.
@@ -146,7 +148,11 @@ var volumeDeleteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.DeleteVolume(cmd.Context(), volumeID)
+		if volumeDeleteForce {
+			_, err = client.DeleteVolumeWithOptions(cmd.Context(), volumeID, &sdk.DeleteVolumeOptions{Force: true})
+		} else {
+			_, err = client.DeleteVolume(cmd.Context(), volumeID)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error deleting volume: %v\n", err)
 			os.Exit(1)
@@ -170,4 +176,5 @@ func init() {
 	volumeCreateCmd.Flags().StringVar(&volumePrefetch, "prefetch", "", "prefetch count")
 	volumeCreateCmd.Flags().StringVar(&volumeBufferSize, "buffer-size", "", "buffer size (e.g., 64Mi)")
 	volumeCreateCmd.Flags().StringVar(&volumeWriteback, "writeback", "", "enable writeback (true/false)")
+	volumeDeleteCmd.Flags().BoolVar(&volumeDeleteForce, "force", false, "force delete volume even if it has active mounts")
 }

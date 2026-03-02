@@ -64,6 +64,10 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatNetworkPolicy(w, v)
 	case *sandbox0.ExposedPortsResponse:
 		return f.formatExposedPorts(w, v)
+	case []apispec.MountStatus:
+		return f.formatMountStatusList(w, v)
+	case *apispec.MountResponse:
+		return f.formatMountResponse(w, v)
 	case string:
 		_, _ = fmt.Fprintln(w, v)
 		return nil
@@ -566,4 +570,55 @@ func formatTimestampText(v string) string {
 		return "-"
 	}
 	return v
+}
+
+func (f *TableFormatter) formatMountStatusList(w io.Writer, mounts []apispec.MountStatus) error {
+	if len(mounts) == 0 {
+		_, _ = fmt.Fprintln(w, "No mounted volumes.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"VOLUME ID", "MOUNT POINT", "MOUNTED AT", "DURATION", "SESSION ID"})
+
+	for _, m := range mounts {
+		volumeID, _ := m.SandboxvolumeID.Get()
+		mountPoint, _ := m.MountPoint.Get()
+		mountedAt, _ := m.MountedAt.Get()
+		duration := "-"
+		if d, ok := m.MountedDurationSec.Get(); ok {
+			duration = formatDuration(d)
+		}
+		sessionID, _ := m.MountSessionID.Get()
+
+		_ = t.Append([]string{
+			volumeID,
+			mountPoint,
+			formatTimestampText(mountedAt),
+			duration,
+			sessionID,
+		})
+	}
+	return t.Render()
+}
+
+func formatDuration(seconds int64) string {
+	if seconds < 60 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if seconds < 3600 {
+		return fmt.Sprintf("%dm%ds", seconds/60, seconds%60)
+	}
+	hours := seconds / 3600
+	minutes := (seconds % 3600) / 60
+	return fmt.Sprintf("%dh%dm", hours, minutes)
+}
+
+func (f *TableFormatter) formatMountResponse(w io.Writer, r *apispec.MountResponse) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Volume ID:", r.SandboxvolumeID})
+	_ = t.Append([]string{"Mount Point:", r.MountPoint})
+	_ = t.Append([]string{"Mounted At:", formatTimestampText(r.MountedAt)})
+	_ = t.Append([]string{"Session ID:", r.MountSessionID})
+	return t.Render()
 }
