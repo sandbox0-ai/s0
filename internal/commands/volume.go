@@ -3,9 +3,19 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
+)
+
+// Volume create flags.
+var (
+	volumeAccessMode string
+	volumeCacheSize  string
+	volumePrefetch   string
+	volumeBufferSize string
+	volumeWriteback  string
 )
 
 // volumeCmd represents the volume command.
@@ -80,7 +90,35 @@ var volumeCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		volume, err := client.CreateVolume(cmd.Context(), apispec.CreateSandboxVolumeRequest{})
+		req := apispec.CreateSandboxVolumeRequest{}
+
+		if volumeAccessMode != "" {
+			req.AccessMode = apispec.NewOptVolumeAccessMode(apispec.VolumeAccessMode(volumeAccessMode))
+		}
+		if volumeCacheSize != "" {
+			req.CacheSize = apispec.NewOptString(volumeCacheSize)
+		}
+		if volumePrefetch != "" {
+			prefetch, err := strconv.Atoi(volumePrefetch)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing prefetch: %v\n", err)
+				os.Exit(1)
+			}
+			req.Prefetch = apispec.NewOptInt(prefetch)
+		}
+		if volumeBufferSize != "" {
+			req.BufferSize = apispec.NewOptString(volumeBufferSize)
+		}
+		if volumeWriteback != "" {
+			writeback, err := strconv.ParseBool(volumeWriteback)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing writeback: %v\n", err)
+				os.Exit(1)
+			}
+			req.Writeback = apispec.NewOptBool(writeback)
+		}
+
+		volume, err := client.CreateVolume(cmd.Context(), req)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating volume: %v\n", err)
 			os.Exit(1)
@@ -125,4 +163,11 @@ func init() {
 	volumeCmd.AddCommand(volumeGetCmd)
 	volumeCmd.AddCommand(volumeCreateCmd)
 	volumeCmd.AddCommand(volumeDeleteCmd)
+
+	// Volume create flags
+	volumeCreateCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode (RWO or RWX)")
+	volumeCreateCmd.Flags().StringVar(&volumeCacheSize, "cache-size", "", "cache size (e.g., 1Gi)")
+	volumeCreateCmd.Flags().StringVar(&volumePrefetch, "prefetch", "", "prefetch count")
+	volumeCreateCmd.Flags().StringVar(&volumeBufferSize, "buffer-size", "", "buffer size (e.g., 64Mi)")
+	volumeCreateCmd.Flags().StringVar(&volumeWriteback, "writeback", "", "enable writeback (true/false)")
 }
