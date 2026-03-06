@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sandbox0-ai/s0/internal/client"
@@ -17,7 +18,9 @@ import (
 const timeLayout = "2006-01-02 15:04:05"
 
 // TableFormatter formats output as a table.
-type TableFormatter struct{}
+type TableFormatter struct {
+	showSecrets bool
+}
 
 // Format writes the data as a table to the writer.
 func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
@@ -68,6 +71,28 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatMountStatusList(w, v)
 	case *apispec.MountResponse:
 		return f.formatMountResponse(w, v)
+	case []apispec.APIKey:
+		return f.formatAPIKeyList(w, v)
+	case apispec.CreateAPIKeyResponse:
+		return f.formatCreatedAPIKey(w, &v)
+	case *apispec.CreateAPIKeyResponse:
+		return f.formatCreatedAPIKey(w, v)
+	case []apispec.Team:
+		return f.formatTeamList(w, v)
+	case apispec.Team:
+		return f.formatTeam(w, &v)
+	case *apispec.Team:
+		return f.formatTeam(w, v)
+	case []apispec.TeamMember:
+		return f.formatTeamMemberList(w, v)
+	case apispec.TeamMember:
+		return f.formatTeamMember(w, &v)
+	case *apispec.TeamMember:
+		return f.formatTeamMember(w, v)
+	case apispec.User:
+		return f.formatUser(w, &v)
+	case *apispec.User:
+		return f.formatUser(w, v)
 	case string:
 		_, _ = fmt.Fprintln(w, v)
 		return nil
@@ -308,10 +333,15 @@ func (f *TableFormatter) formatSDKSandbox(w io.Writer, s *sandbox0.Sandbox) erro
 
 func (f *TableFormatter) formatRegistryCredentials(w io.Writer, c *client.RegistryCredentials) error {
 	t := newTable(w)
+	password := c.Password
+	if !f.showSecrets {
+		password = maskSecret(password)
+	}
 	_ = t.Append([]string{"Provider:", c.Provider})
-	_ = t.Append([]string{"Registry:", c.Registry})
+	_ = t.Append([]string{"Push Registry:", c.PushRegistry})
+	_ = t.Append([]string{"Pull Registry:", c.PullRegistry})
 	_ = t.Append([]string{"Username:", c.Username})
-	_ = t.Append([]string{"Password:", c.Password})
+	_ = t.Append([]string{"Password:", password})
 	if c.ExpiresAt != "" {
 		_ = t.Append([]string{"Expires At:", c.ExpiresAt})
 	}
@@ -621,4 +651,143 @@ func (f *TableFormatter) formatMountResponse(w io.Writer, r *apispec.MountRespon
 	_ = t.Append([]string{"Mounted At:", formatTimestampText(r.MountedAt)})
 	_ = t.Append([]string{"Session ID:", r.MountSessionID})
 	return t.Render()
+}
+
+func (f *TableFormatter) formatAPIKeyList(w io.Writer, keys []apispec.APIKey) error {
+	if len(keys) == 0 {
+		_, _ = fmt.Fprintln(w, "No API keys found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "NAME", "TYPE", "TEAM ID", "USER ID", "ROLES", "ACTIVE", "EXPIRES AT", "LAST USED"})
+	for _, k := range keys {
+		_ = t.Append([]string{
+			k.ID,
+			k.Name,
+			k.Type,
+			k.TeamID,
+			formatOptNilString(k.UserID),
+			formatStringSlice(k.Roles),
+			fmt.Sprintf("%v", k.IsActive),
+			formatTimestamp(k.ExpiresAt),
+			formatOptDateTime(k.LastUsedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatCreatedAPIKey(w io.Writer, k *apispec.CreateAPIKeyResponse) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", k.ID})
+	_ = t.Append([]string{"Name:", k.Name})
+	_ = t.Append([]string{"Type:", k.Type})
+	_ = t.Append([]string{"Team ID:", k.TeamID})
+	_ = t.Append([]string{"Roles:", formatStringSlice(k.Roles)})
+	_ = t.Append([]string{"Expires At:", formatTimestamp(k.ExpiresAt)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(k.CreatedAt)})
+	if key, ok := k.Key.Get(); ok && key != "" {
+		if !f.showSecrets {
+			key = maskSecret(key)
+		}
+		_ = t.Append([]string{"Key:", key})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatTeamList(w io.Writer, teams []apispec.Team) error {
+	if len(teams) == 0 {
+		_, _ = fmt.Fprintln(w, "No teams found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "NAME", "SLUG", "OWNER ID", "CREATED AT"})
+	for _, team := range teams {
+		_ = t.Append([]string{
+			team.ID,
+			team.Name,
+			team.Slug,
+			formatOptNilString(team.OwnerID),
+			formatTimestamp(team.CreatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatTeam(w io.Writer, team *apispec.Team) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", team.ID})
+	_ = t.Append([]string{"Name:", team.Name})
+	_ = t.Append([]string{"Slug:", team.Slug})
+	_ = t.Append([]string{"Owner ID:", formatOptNilString(team.OwnerID)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(team.CreatedAt)})
+	_ = t.Append([]string{"Updated At:", formatTimestamp(team.UpdatedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatTeamMemberList(w io.Writer, members []apispec.TeamMember) error {
+	if len(members) == 0 {
+		_, _ = fmt.Fprintln(w, "No team members found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "USER ID", "ROLE", "JOINED AT"})
+	for _, m := range members {
+		_ = t.Append([]string{
+			m.ID,
+			m.UserID,
+			m.Role,
+			formatTimestamp(m.JoinedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatTeamMember(w io.Writer, m *apispec.TeamMember) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", m.ID})
+	_ = t.Append([]string{"User ID:", m.UserID})
+	_ = t.Append([]string{"Role:", m.Role})
+	_ = t.Append([]string{"Joined At:", formatTimestamp(m.JoinedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatUser(w io.Writer, u *apispec.User) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", u.ID})
+	_ = t.Append([]string{"Email:", u.Email})
+	_ = t.Append([]string{"Name:", u.Name})
+	_ = t.Append([]string{"Avatar URL:", formatOptNilString(u.AvatarURL)})
+	_ = t.Append([]string{"Default Team ID:", formatOptNilString(u.DefaultTeamID)})
+	_ = t.Append([]string{"Email Verified:", fmt.Sprintf("%v", u.EmailVerified)})
+	_ = t.Append([]string{"Is Admin:", fmt.Sprintf("%v", u.IsAdmin)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(u.CreatedAt)})
+	_ = t.Append([]string{"Updated At:", formatTimestamp(u.UpdatedAt)})
+	return t.Render()
+}
+
+func formatStringSlice(values []string) string {
+	if len(values) == 0 {
+		return "-"
+	}
+	return strings.Join(values, ",")
+}
+
+func formatOptNilString(v apispec.OptNilString) string {
+	if v.IsNull() {
+		return "-"
+	}
+	if s, ok := v.Get(); ok && s != "" {
+		return s
+	}
+	return "-"
+}
+
+func formatOptDateTime(v apispec.OptDateTime) string {
+	if ts, ok := v.Get(); ok {
+		return formatTimestamp(ts)
+	}
+	return "-"
 }

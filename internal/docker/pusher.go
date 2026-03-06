@@ -83,6 +83,7 @@ func (p *Pusher) Push(ctx context.Context, opts PushOptions) error {
 
 // streamPushResponse streams push response to the writer.
 func (p *Pusher) streamPushResponse(body io.Reader, w io.Writer) error {
+	lastStatusByID := make(map[string]string)
 	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -94,15 +95,34 @@ func (p *Pusher) streamPushResponse(body io.Reader, w io.Writer) error {
 			continue
 		}
 
-		if resp.Status != "" {
-			_, _ = fmt.Fprintf(w, "%s", resp.Status)
-			if resp.Progress != "" {
-				_, _ = fmt.Fprintf(w, " %s", resp.Progress)
-			}
-			_, _ = fmt.Fprintln(w)
-		}
 		if resp.Error != "" {
 			return fmt.Errorf("push error: %s", resp.Error)
+		}
+
+		if resp.Status != "" {
+			var output string
+			if resp.ID != "" {
+				output = fmt.Sprintf("%s: %s", resp.ID, resp.Status)
+			} else {
+				output = resp.Status
+			}
+
+			if resp.Progress != "" {
+				output = fmt.Sprintf("%s %s", output, resp.Progress)
+			}
+
+			// Docker push emits many duplicate status events (especially "Waiting").
+			// Keep one line per layer status transition to avoid noisy output.
+			statusKey := resp.ID
+			if statusKey == "" {
+				statusKey = "__global__"
+			}
+			if lastStatusByID[statusKey] == output {
+				continue
+			}
+			lastStatusByID[statusKey] = output
+
+			_, _ = fmt.Fprintln(w, output)
 		}
 	}
 	return scanner.Err()

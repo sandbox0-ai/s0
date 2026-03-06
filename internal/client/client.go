@@ -23,11 +23,12 @@ func NewClient(opts ...sandbox0.Option) (*Client, error) {
 
 // RegistryCredentials represents registry authentication credentials.
 type RegistryCredentials struct {
-	Provider  string
-	Registry  string
-	Username  string
-	Password  string
-	ExpiresAt string
+	Provider     string
+	PushRegistry string
+	PullRegistry string
+	Username     string
+	Password     string
+	ExpiresAt    string
 }
 
 // GetRegistryCredentials retrieves temporary registry credentials for image push.
@@ -48,10 +49,11 @@ func (c *Client) GetRegistryCredentials(ctx context.Context) (*RegistryCredentia
 	}
 
 	creds := &RegistryCredentials{
-		Provider: data.Provider,
-		Registry: data.Registry,
-		Username: data.Username,
-		Password: data.Password,
+		Provider:     data.Provider,
+		PushRegistry: data.PushRegistry,
+		PullRegistry: data.PullRegistry,
+		Username:     data.Username,
+		Password:     data.Password,
 	}
 
 	if expiresAt, ok := data.ExpiresAt.Get(); ok {

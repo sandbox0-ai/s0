@@ -106,14 +106,15 @@ Flags:
 ### Sandbox
 
 ```bash
-s0 sandbox create --template <id> [--ttl 3600] [--hard-ttl 7200]
+s0 sandbox create -t <template-id> [--ttl 3600] [--hard-ttl 7200]
 s0 sandbox get <sandbox-id>
+s0 sandbox update <sandbox-id> [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
 s0 sandbox delete <sandbox-id>
 s0 sandbox pause <sandbox-id>
 s0 sandbox resume <sandbox-id>
 s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
-s0 sandbox list
+s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
 ```
 
 ### Sandbox Files
@@ -136,7 +137,7 @@ s0 sandbox files watch <path> --recursive -s <sandbox-id>
 ```bash
 s0 sandbox context list -s <sandbox-id>
 s0 sandbox context get <ctx-id> -s <sandbox-id>
-s0 sandbox context create --type repl|cmd --language <lang> --command <cmd> -s <sandbox-id>
+s0 sandbox context create --type repl|cmd [--alias <name>] [--command <cmd>] [--cwd <dir>] [--env KEY=VALUE] [--wait] -s <sandbox-id>
 s0 sandbox context delete <ctx-id> -s <sandbox-id>
 s0 sandbox context restart <ctx-id> -s <sandbox-id>
 s0 sandbox context exec <ctx-id> <input> -s <sandbox-id>
@@ -148,7 +149,7 @@ s0 sandbox context stats <ctx-id> -s <sandbox-id>
 
 ```bash
 s0 sandbox network get -s <sandbox-id>
-s0 sandbox network update --mode allow-all|block-all --allow-domain <domain> -s <sandbox-id>
+s0 sandbox network update --mode allow-all|block-all [--allow-cidr <cidr>] [--allow-domain <domain>] [--deny-cidr <cidr>] [--deny-domain <domain>] -s <sandbox-id>
 ```
 
 ### Sandbox Ports
@@ -175,24 +176,32 @@ s0 template delete <template-id>
 ```bash
 s0 volume list
 s0 volume get <volume-id>
-s0 volume create
-s0 volume delete <volume-id>
+s0 volume create [--access-mode RWO|RWX] [--cache-size <size>] [--prefetch <count>] [--buffer-size <size>] [--writeback true|false]
+s0 volume delete <volume-id> [--force]
 ```
 
-### Snapshot
+### Volume Snapshot
 
 ```bash
-s0 snapshot list <volume-id>
-s0 snapshot get <volume-id> <snapshot-id>
-s0 snapshot create <volume-id> --name <name>
-s0 snapshot delete <volume-id> <snapshot-id>
-s0 snapshot restore <volume-id> <snapshot-id>
+s0 volume snapshot list <volume-id>
+s0 volume snapshot get <volume-id> <snapshot-id>
+s0 volume snapshot create <volume-id> -n <name> [-d <description>]
+s0 volume snapshot delete <volume-id> <snapshot-id>
+s0 volume snapshot restore <volume-id> <snapshot-id>
+```
+
+### Sandbox Volume
+
+```bash
+s0 sandbox volume mount --volume-id <volume-id> --path <mount-path> [--cache-size <size>] [--buffer-size <size>] [--prefetch <count>] [--writeback true|false] -s <sandbox-id>
+s0 sandbox volume unmount --volume-id <volume-id> --session-id <session-id> -s <sandbox-id>
+s0 sandbox volume status -s <sandbox-id>
 ```
 
 ### Template Image
 
 ```bash
-s0 template image build [CONTEXT] -t <tag> [-f Dockerfile] [--platform linux/amd64]
+s0 template image build [CONTEXT] -t <tag> [-f Dockerfile] [--platform linux/amd64] [--no-cache] [--pull]
 s0 template image push <local-image> -t <target-tag>
 ```
 
@@ -206,14 +215,14 @@ export SANDBOX0_TOKEN=your-token
 s0 template list
 
 # Create a sandbox
-s0 sandbox create --template my-template --ttl 3600
+s0 sandbox create -t my-template --ttl 3600
 
 # List files in sandbox
 s0 sandbox files ls /home/user -s <sandbox-id>
 
 # Execute code in sandbox
-s0 sandbox context create --type repl --language python -s <sandbox-id>
-s0 sandbox context input <ctx-id> "print('hello')" -s <sandbox-id>
+s0 sandbox context create --type repl --alias python -s <sandbox-id>
+s0 sandbox context exec <ctx-id> "print('hello')" -s <sandbox-id>
 
 # Expose a port
 s0 sandbox ports expose 8080 --resume -s <sandbox-id>
@@ -224,5 +233,5 @@ s0 template image push my-image:v1 -t my-image:v1
 
 # Create a volume and snapshot
 s0 volume create
-s0 snapshot create <volume-id> --name my-snapshot
+s0 volume snapshot create <volume-id> -n my-snapshot
 ```

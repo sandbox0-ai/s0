@@ -4,8 +4,9 @@ go 1.25.0
 
 require (
 	github.com/docker/docker v27.0.0+incompatible
+	github.com/ghodss/yaml v1.0.0
 	github.com/olekukonko/tablewriter v1.1.3
-	github.com/sandbox0-ai/sdk-go v0.1.6
+	github.com/sandbox0-ai/sdk-go v0.1.7
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -25,7 +26,6 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-faster/jx v1.2.0 // indirect
 	github.com/go-faster/yaml v0.4.6 // indirect

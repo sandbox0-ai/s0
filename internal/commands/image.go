@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/sandbox0-ai/s0/internal/docker"
+	"github.com/sandbox0-ai/s0/internal/output"
 
 	"github.com/spf13/cobra"
 )
@@ -15,6 +16,7 @@ var (
 	imagePlatform   string
 	imageNoCache    bool
 	imagePull       bool
+	imageShowSecret bool
 )
 
 // imageCmd represents the image command.
@@ -104,14 +106,14 @@ var imagePushCmd = &cobra.Command{
 
 		// Prepend registry to tag if not already present
 		targetImage := imageTag
-		if creds.Registry != "" {
-			targetImage = fmt.Sprintf("%s/%s", creds.Registry, imageTag)
+		if creds.PushRegistry != "" {
+			targetImage = fmt.Sprintf("%s/%s", creds.PushRegistry, imageTag)
 		}
 
 		opts := docker.PushOptions{
 			SourceImage: localImage,
 			TargetImage: targetImage,
-			Registry:    creds.Registry,
+			Registry:    creds.PushRegistry,
 			Username:    creds.Username,
 			Password:    creds.Password,
 			Progress:    os.Stdout,
@@ -123,6 +125,41 @@ var imagePushCmd = &cobra.Command{
 		}
 
 		fmt.Printf("\nImage pushed successfully: %s\n", targetImage)
+		templateImage := imageTag
+		if creds.PullRegistry != "" {
+			templateImage = fmt.Sprintf("%s/%s", creds.PullRegistry, imageTag)
+		}
+		if templateImage != targetImage {
+			fmt.Printf("Template image reference: %s\n", templateImage)
+		}
+	},
+}
+
+// imageCredentialsCmd prints registry credentials used for image push.
+var imageCredentialsCmd = &cobra.Command{
+	Use:   "credentials",
+	Short: "Show temporary registry credentials",
+	Long:  `Show temporary registry credentials used by s0 template image push.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		client, err := getClient()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		creds, err := client.GetRegistryCredentials(cmd.Context())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting registry credentials: %v\n", err)
+			os.Exit(1)
+		}
+
+		formatter := getFormatterWithOptions(output.Options{
+			ShowSecrets: imageShowSecret,
+		})
+		if err := formatter.Format(os.Stdout, creds); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
@@ -136,7 +173,9 @@ func init() {
 
 	// Push command flags
 	imagePushCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "target image name:tag (required)")
+	imageCredentialsCmd.Flags().BoolVar(&imageShowSecret, "show-secret", false, "show full password in output")
 
 	imageCmd.AddCommand(imageBuildCmd)
 	imageCmd.AddCommand(imagePushCmd)
+	imageCmd.AddCommand(imageCredentialsCmd)
 }

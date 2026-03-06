@@ -18,8 +18,10 @@ type Config struct {
 
 // Profile represents a named configuration profile.
 type Profile struct {
-	APIURL string `yaml:"api-url" mapstructure:"api-url"`
-	Token  string `yaml:"token" mapstructure:"token"`
+	APIURL       string `yaml:"api-url" mapstructure:"api-url"`
+	Token        string `yaml:"token" mapstructure:"token"`
+	RefreshToken string `yaml:"refresh-token" mapstructure:"refresh-token"`
+	ExpiresAt    int64  `yaml:"expires-at" mapstructure:"expires-at"`
 }
 
 // OutputConfig represents output formatting configuration.
@@ -176,6 +178,64 @@ func (p *Profile) GetToken() string {
 	}
 	// Profile config with env var expansion support
 	return expandEnvVars(p.Token)
+}
+
+// GetRefreshToken returns the refresh token from profile config.
+func (p *Profile) GetRefreshToken() string {
+	return expandEnvVars(p.RefreshToken)
+}
+
+// SetCredentials updates profile credentials.
+func (c *Config) SetCredentials(profileName, apiURL, accessToken, refreshToken string, expiresAt int64) {
+	if c.Profiles == nil {
+		c.Profiles = make(map[string]Profile)
+	}
+	p, ok := c.Profiles[profileName]
+	if !ok {
+		p = Profile{}
+	}
+	if apiURL != "" {
+		p.APIURL = apiURL
+	}
+	p.Token = accessToken
+	p.RefreshToken = refreshToken
+	p.ExpiresAt = expiresAt
+	c.Profiles[profileName] = p
+	c.CurrentProfile = profileName
+}
+
+// ClearCredentials removes access and refresh credentials for a profile.
+func (c *Config) ClearCredentials(profileName string) {
+	if c.Profiles == nil {
+		return
+	}
+	p, ok := c.Profiles[profileName]
+	if !ok {
+		return
+	}
+	p.Token = ""
+	p.RefreshToken = ""
+	p.ExpiresAt = 0
+	c.Profiles[profileName] = p
+}
+
+// Save writes config to disk.
+func (c *Config) Save() error {
+	configPath := expandPath(cfgFile)
+	if configPath == "" {
+		configPath = expandPath(DefaultConfigFile)
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	v := viper.New()
+	v.Set("current-profile", c.CurrentProfile)
+	v.Set("profiles", c.Profiles)
+	v.Set("output", c.Output)
+	if err := v.WriteConfigAs(configPath); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+	return nil
 }
 
 // expandPath expands ~ to home directory.

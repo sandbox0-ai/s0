@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ghodss/yaml"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var (

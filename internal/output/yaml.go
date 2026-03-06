@@ -8,10 +8,13 @@ import (
 )
 
 // YAMLFormatter formats output as YAML.
-type YAMLFormatter struct{}
+type YAMLFormatter struct {
+	showSecrets bool
+}
 
 // Format writes the data as YAML to the writer.
 func (f *YAMLFormatter) Format(w io.Writer, data interface{}) error {
+	data = redactSensitiveData(data, f.showSecrets)
 	// First convert to JSON to handle Opt types correctly (they implement MarshalJSON)
 	// Then convert JSON to a generic structure for YAML serialization
 	jsonBytes, err := json.Marshal(data)

@@ -15,7 +15,7 @@ import (
 )
 
 // ErrNoToken is returned when no API token is configured.
-var ErrNoToken = errors.New("no API token configured. Set SANDBOX0_TOKEN environment variable, use --token flag, or add token to ~/.s0/config.yaml")
+var ErrNoToken = errors.New("no API token configured. Set SANDBOX0_TOKEN environment variable, use --token flag, or run `s0 auth login`")
 
 var (
 	cfgVersion string
@@ -54,6 +54,11 @@ func getFormatter() output.Formatter {
 	return output.NewFormatter(output.ParseFormat(cfgFormat))
 }
 
+// getFormatterWithOptions returns formatter with custom options.
+func getFormatterWithOptions(opts output.Options) output.Formatter {
+	return output.NewFormatterWithOptions(output.ParseFormat(cfgFormat), opts)
+}
+
 // getConfig loads and returns the configuration.
 func getConfig() (*config.Config, error) {
 	return config.Load()
@@ -61,14 +66,7 @@ func getConfig() (*config.Config, error) {
 
 // getClient creates a new wrapped SDK client from the configuration.
 func getClient() (*client.Client, error) {
-	cfg, err := getConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get profile info
-	activeProfile := cfg.GetActiveProfile()
-	p, err := cfg.GetProfile(activeProfile)
+	p, err := getProfileWithFreshToken()
 	if err != nil {
 		return nil, err
 	}
@@ -93,13 +91,7 @@ func getClient() (*client.Client, error) {
 
 // getClientRaw creates a raw SDK client for operations that don't need the wrapper.
 func getClientRaw() (*sandbox0.Client, error) {
-	cfg, err := getConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	activeProfile := cfg.GetActiveProfile()
-	p, err := cfg.GetProfile(activeProfile)
+	p, err := getProfileWithFreshToken()
 	if err != nil {
 		return nil, err
 	}
