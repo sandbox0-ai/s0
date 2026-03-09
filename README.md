@@ -70,6 +70,8 @@ cp bin/s0 /usr/local/bin/
 
 Configuration file: `~/.s0/config.yaml`
 
+Local skill store: `~/.s0/skills`
+
 ```yaml
 current-profile: default
 profiles:
@@ -203,6 +205,16 @@ s0 sandbox volume status -s <sandbox-id>
 ```bash
 s0 template image build [CONTEXT] -t <tag> [-f Dockerfile] [--platform linux/amd64] [--no-cache] [--pull]
 s0 template image push <local-image> -t <target-tag>
+```
+
+### Skill
+
+```bash
+s0 skill get [sandbox0]
+s0 skill install [sandbox0] [--force] [--activate]
+s0 skill list [sandbox0]
+s0 skill activate sandbox0 <version>
+s0 skill sync sandbox0 [--version <version>] [--agent codex | --target-dir <dir>] [--force]
 ```
 
 ## Examples

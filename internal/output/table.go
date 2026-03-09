@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sandbox0-ai/s0/internal/client"
+	"github.com/sandbox0-ai/s0/internal/skills"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -89,6 +90,10 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatTeamMember(w, &v)
 	case *apispec.TeamMember:
 		return f.formatTeamMember(w, v)
+	case []skills.InstalledVersion:
+		return f.formatInstalledSkills(w, v)
+	case *skills.Release:
+		return f.formatSkillRelease(w, v)
 	case apispec.User:
 		return f.formatUser(w, &v)
 	case *apispec.User:
@@ -138,6 +143,45 @@ func (f *TableFormatter) formatTemplates(w io.Writer, templates []apispec.Templa
 			tmpl.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatInstalledSkills(w io.Writer, installed []skills.InstalledVersion) error {
+	if len(installed) == 0 {
+		_, _ = fmt.Fprintln(w, "No installed skills found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"SKILL", "VERSION", "ACTIVE", "INSTALLED AT"})
+	for _, item := range installed {
+		active := "no"
+		if item.Active {
+			active = "yes"
+		}
+		_ = t.Append([]string{
+			item.Name,
+			item.Version,
+			active,
+			item.InstalledAt.Format(timeLayout),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSkillRelease(w io.Writer, release *skills.Release) error {
+	if release == nil {
+		_, _ = fmt.Fprintln(w, "No skill release found.")
+		return nil
+	}
+	t := newTable(w)
+	t.Header([]string{"FIELD", "VALUE"})
+	_ = t.Append([]string{"Name", release.Name})
+	_ = t.Append([]string{"Version", release.ReleaseVersion})
+	_ = t.Append([]string{"Tag", release.ReleaseTag})
+	_ = t.Append([]string{"Download URL", release.DownloadURL})
+	_ = t.Append([]string{"Checksum URL", release.ChecksumURL})
+	_ = t.Append([]string{"Manifest URL", release.ManifestURL})
 	return t.Render()
 }
 
