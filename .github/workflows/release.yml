@@ -118,51 +118,25 @@ jobs:
 
           ## Installation
 
-          Download the appropriate binary for your platform from the assets below.
-
-          ### Linux
+          Prefer one-step install:
 
           ```bash
-          # AMD64
-          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-linux-amd64.tar.gz
-          tar -xzf s0-linux-amd64.tar.gz
-          chmod +x s0
-          sudo mv s0 /usr/local/bin/
-
-          # ARM64
-          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-linux-arm64.tar.gz
-          tar -xzf s0-linux-arm64.tar.gz
-          chmod +x s0
-          sudo mv s0 /usr/local/bin/
+          curl -fsSL https://raw.githubusercontent.com/sandbox0-ai/s0/main/scripts/install.sh | bash
           ```
 
-          ### macOS
+          Windows PowerShell:
 
-          ```bash
-          # Intel (AMD64)
-          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-darwin-amd64.tar.gz
-          tar -xzf s0-darwin-amd64.tar.gz
-          chmod +x s0
-          sudo mv s0 /usr/local/bin/
-
-          # Apple Silicon (ARM64)
-          curl -sLO https://github.com/sandbox0-ai/s0/releases/latest/download/s0-darwin-arm64.tar.gz
-          tar -xzf s0-darwin-arm64.tar.gz
-          chmod +x s0
-          sudo mv s0 /usr/local/bin/
+          ```powershell
+          irm https://raw.githubusercontent.com/sandbox0-ai/s0/main/scripts/install.ps1 | iex
           ```
 
-          ### Windows
-
-          Download `s0-windows-amd64.zip` or `s0-windows-arm64.zip` from the assets below, extract it, and add `s0.exe` to your PATH.
-
-          ### Using Go (alternative)
-
-          If you have Go installed:
+          Or use Go:
 
           ```bash
           go install github.com/sandbox0-ai/s0/cmd/s0@latest
           ```
+
+          Manual archives are available in the release assets below. See the repository README for platform-specific manual install steps.
           EOF
 
       - name: Create GitHub Release
