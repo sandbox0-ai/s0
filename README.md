@@ -128,6 +128,7 @@ Flags:
 ### Sandbox
 
 ```bash
+s0 sandbox run <sandbox-id> <input> [--alias <alias>] [--context-id <ctx-id>]
 s0 sandbox create -t <template-id> [--ttl 3600] [--hard-ttl 7200]
 s0 sandbox get <sandbox-id>
 s0 sandbox update <sandbox-id> [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
@@ -166,6 +167,10 @@ s0 sandbox context exec <ctx-id> <input> -s <sandbox-id>
 s0 sandbox context signal <ctx-id> <signal> -s <sandbox-id>
 s0 sandbox context stats <ctx-id> -s <sandbox-id>
 ```
+
+`s0 sandbox run` is the REPL-oriented convenience command. It preserves state by
+reusing a matching running REPL context when there is exactly one match for the
+requested alias. `s0 sandbox exec` remains the one-shot command path.
 
 ### Sandbox Network
 
