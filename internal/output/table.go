@@ -65,8 +65,6 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatContextStats(w, v)
 	case *apispec.SandboxNetworkPolicy:
 		return f.formatSandboxNetworkPolicy(w, v)
-	case *apispec.TplSandboxNetworkPolicy:
-		return f.formatNetworkPolicy(w, v)
 	case *sandbox0.ExposedPortsResponse:
 		return f.formatExposedPorts(w, v)
 	case []apispec.MountStatus:
@@ -528,28 +526,7 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-func (f *TableFormatter) formatNetworkPolicy(w io.Writer, policy *apispec.TplSandboxNetworkPolicy) error {
-	t := newTable(w)
-	_ = t.Append([]string{"Mode:", string(policy.Mode)})
-	if egress, ok := policy.Egress.Get(); ok {
-		_ = t.Append([]string{"", ""})
-		_ = t.Append([]string{"Egress Policy:", ""})
-		if len(egress.AllowedCidrs) > 0 {
-			_ = t.Append([]string{"Allowed CIDRs:", fmt.Sprintf("%v", egress.AllowedCidrs)})
-		}
-		if len(egress.AllowedDomains) > 0 {
-			_ = t.Append([]string{"Allowed Domains:", fmt.Sprintf("%v", egress.AllowedDomains)})
-		}
-		if len(egress.DeniedCidrs) > 0 {
-			_ = t.Append([]string{"Denied CIDRs:", fmt.Sprintf("%v", egress.DeniedCidrs)})
-		}
-		if len(egress.DeniedDomains) > 0 {
-			_ = t.Append([]string{"Denied Domains:", fmt.Sprintf("%v", egress.DeniedDomains)})
-		}
-	}
-	return t.Render()
-}
-
+//nolint:staticcheck // The CLI still displays legacy allow/deny fields for compatibility with older policies.
 func (f *TableFormatter) formatSandboxNetworkPolicy(w io.Writer, policy *apispec.SandboxNetworkPolicy) error {
 	t := newTable(w)
 	_ = t.Append([]string{"Mode:", string(policy.Mode)})

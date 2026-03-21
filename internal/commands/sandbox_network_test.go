@@ -72,9 +72,11 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 		if !ok {
 			t.Fatal("egress not set")
 		}
+		//nolint:staticcheck // Exercise legacy compatibility fields that the CLI still accepts.
 		if len(egress.AllowedDomains) != 1 || egress.AllowedDomains[0] != "github.com" {
 			t.Fatalf("allowedDomains = %#v, want github.com", egress.AllowedDomains)
 		}
+		//nolint:staticcheck // Exercise legacy compatibility fields that the CLI still accepts.
 		if len(egress.AllowedPorts) != 1 || egress.AllowedPorts[0].Port != 443 {
 			t.Fatalf("allowedPorts = %#v, want single 443", egress.AllowedPorts)
 		}

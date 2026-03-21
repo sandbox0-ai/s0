@@ -63,7 +63,9 @@ func authRequest(ctx context.Context, method, endpoint, token string, requestBod
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	rawResp, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -177,7 +179,9 @@ func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*auth
 	if err != nil {
 		return nil, fmt.Errorf("listen callback: %w", err)
 	}
-	defer ln.Close()
+	defer func() {
+		_ = ln.Close()
+	}()
 
 	resultCh := make(chan *authLoginData, 1)
 	errCh := make(chan error, 1)

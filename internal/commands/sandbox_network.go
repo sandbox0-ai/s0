@@ -262,6 +262,7 @@ func validateNetworkPolicy(policy *apispec.SandboxNetworkPolicy) error {
 	return nil
 }
 
+//nolint:staticcheck // Legacy allow/deny fields remain intentionally supported for CLI compatibility.
 func hasLegacyEgressFields(egress apispec.NetworkEgressPolicy) bool {
 	return len(egress.AllowedCidrs) > 0 ||
 		len(egress.AllowedDomains) > 0 ||

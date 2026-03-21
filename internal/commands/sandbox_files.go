@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	filesSandboxID   string
-	filesRecursive   bool
-	filesParents     bool
-	filesStdin       bool
-	filesData        string
+	filesSandboxID string
+	filesRecursive bool
+	filesParents   bool
+	filesStdin     bool
+	filesData      string
 )
 
 // sandboxFilesCmd represents the sandbox files command group.
@@ -77,7 +77,10 @@ var sandboxFilesCatCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		os.Stdout.Write(result)
+		if _, err := os.Stdout.Write(result); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
