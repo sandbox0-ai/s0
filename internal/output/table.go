@@ -63,6 +63,8 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatContext(w, v)
 	case *apispec.ContextStatsResponse:
 		return f.formatContextStats(w, v)
+	case *apispec.SandboxNetworkPolicy:
+		return f.formatSandboxNetworkPolicy(w, v)
 	case *apispec.TplSandboxNetworkPolicy:
 		return f.formatNetworkPolicy(w, v)
 	case *sandbox0.ExposedPortsResponse:
@@ -544,6 +546,38 @@ func (f *TableFormatter) formatNetworkPolicy(w io.Writer, policy *apispec.TplSan
 		if len(egress.DeniedDomains) > 0 {
 			_ = t.Append([]string{"Denied Domains:", fmt.Sprintf("%v", egress.DeniedDomains)})
 		}
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSandboxNetworkPolicy(w io.Writer, policy *apispec.SandboxNetworkPolicy) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Mode:", string(policy.Mode)})
+	if egress, ok := policy.Egress.Get(); ok {
+		_ = t.Append([]string{"", ""})
+		_ = t.Append([]string{"Egress Policy:", ""})
+		if len(egress.AllowedCidrs) > 0 {
+			_ = t.Append([]string{"Allowed CIDRs:", fmt.Sprintf("%v", egress.AllowedCidrs)})
+		}
+		if len(egress.AllowedDomains) > 0 {
+			_ = t.Append([]string{"Allowed Domains:", fmt.Sprintf("%v", egress.AllowedDomains)})
+		}
+		if len(egress.DeniedCidrs) > 0 {
+			_ = t.Append([]string{"Denied CIDRs:", fmt.Sprintf("%v", egress.DeniedCidrs)})
+		}
+		if len(egress.DeniedDomains) > 0 {
+			_ = t.Append([]string{"Denied Domains:", fmt.Sprintf("%v", egress.DeniedDomains)})
+		}
+		if len(egress.TrafficRules) > 0 {
+			_ = t.Append([]string{"Traffic Rules:", fmt.Sprintf("%d", len(egress.TrafficRules))})
+		}
+		if len(egress.CredentialRules) > 0 {
+			_ = t.Append([]string{"Credential Rules:", fmt.Sprintf("%d", len(egress.CredentialRules))})
+		}
+	}
+	if len(policy.CredentialBindings) > 0 {
+		_ = t.Append([]string{"", ""})
+		_ = t.Append([]string{"Credential Bindings:", fmt.Sprintf("%d", len(policy.CredentialBindings))})
 	}
 	return t.Render()
 }
