@@ -19,6 +19,7 @@ type Config struct {
 // Profile represents a named configuration profile.
 type Profile struct {
 	APIURL       string `yaml:"api-url" mapstructure:"api-url"`
+	GatewayMode  string `yaml:"gateway-mode" mapstructure:"gateway-mode"`
 	Token        string `yaml:"token" mapstructure:"token"`
 	RefreshToken string `yaml:"refresh-token" mapstructure:"refresh-token"`
 	ExpiresAt    int64  `yaml:"expires-at" mapstructure:"expires-at"`
@@ -35,6 +36,13 @@ const (
 	DefaultProfile    = "default"
 	DefaultAPIURL     = "https://api.sandbox0.ai"
 	DefaultFormat     = "table"
+)
+
+type GatewayMode string
+
+const (
+	GatewayModeDirect GatewayMode = "direct"
+	GatewayModeGlobal GatewayMode = "global"
 )
 
 // Environment variables (same as sdk-go/sdk-js/sdk-py).
@@ -165,6 +173,11 @@ func (p *Profile) GetAPIURL() string {
 	return DefaultAPIURL
 }
 
+// GetConfiguredGatewayMode returns the explicitly configured gateway mode, if valid.
+func (p *Profile) GetConfiguredGatewayMode() (GatewayMode, bool) {
+	return ParseGatewayMode(p.GatewayMode)
+}
+
 // GetToken returns the token with override and env support.
 // Priority: --token flag > SANDBOX0_TOKEN env > profile config (with env expansion)
 func (p *Profile) GetToken() string {
@@ -183,6 +196,20 @@ func (p *Profile) GetToken() string {
 // GetRefreshToken returns the refresh token from profile config.
 func (p *Profile) GetRefreshToken() string {
 	return expandEnvVars(p.RefreshToken)
+}
+
+// ParseGatewayMode normalizes a gateway mode string.
+func ParseGatewayMode(raw string) (GatewayMode, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "":
+		return "", false
+	case string(GatewayModeDirect):
+		return GatewayModeDirect, true
+	case string(GatewayModeGlobal):
+		return GatewayModeGlobal, true
+	default:
+		return "", false
+	}
 }
 
 // SetCredentials updates profile credentials.

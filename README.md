@@ -97,10 +97,22 @@ current-profile: default
 profiles:
   default:
     api-url: https://api.sandbox0.ai
+    gateway-mode: direct
     token: ${SANDBOX0_TOKEN}
 output:
   format: table
 ```
+
+`gateway-mode` supports:
+
+- `direct`: `api-url` is the working control-plane entrypoint.
+- `global`: `api-url` is a Global Gateway entrypoint and workload commands are routed through the active team's home region.
+
+Mode resolution order:
+
+1. Explicit `gateway-mode` in the profile
+2. `GET /metadata` returned by the API entrypoint
+3. Fallback to `direct`
 
 ## Environment Variables
 
@@ -123,7 +135,15 @@ Flags:
   --token string     Override API token
 ```
 
+In `global` mode, `auth`, `user`, and `team` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `volume`, `credential`, `apikey`, and registry credential flows resolve the active team and switch to the home-region gateway automatically.
+
 ## Commands
+
+### Team
+
+```bash
+s0 team create --name <name> [--slug <slug>] [--home-region <region-id>]
+```
 
 ### Sandbox
 

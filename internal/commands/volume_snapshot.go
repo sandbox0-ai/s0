@@ -29,7 +29,7 @@ var volumeSnapshotListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		volumeID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -58,7 +58,7 @@ var volumeSnapshotGetCmd = &cobra.Command{
 		volumeID := args[0]
 		snapshotID := args[1]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -91,7 +91,7 @@ var volumeSnapshotCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -127,7 +127,7 @@ var volumeSnapshotDeleteCmd = &cobra.Command{
 		volumeID := args[0]
 		snapshotID := args[1]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -153,7 +153,7 @@ var volumeSnapshotRestoreCmd = &cobra.Command{
 		volumeID := args[0]
 		snapshotID := args[1]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

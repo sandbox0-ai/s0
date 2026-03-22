@@ -30,7 +30,7 @@ var apiKeyListCmd = &cobra.Command{
 	Short: "List API keys",
 	Long:  `List API keys in current scope.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -81,7 +81,7 @@ var apiKeyCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -138,7 +138,7 @@ var apiKeyDeactivateCmd = &cobra.Command{
 	Long:  `Deactivate an API key by ID.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -174,7 +174,7 @@ var apiKeyDeleteCmd = &cobra.Command{
 	Long:  `Delete an API key by ID.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

@@ -27,7 +27,7 @@ var templateListCmd = &cobra.Command{
 	Short: "List templates",
 	Long:  `List all available sandbox templates.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -55,7 +55,7 @@ var templateGetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		templateID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -102,7 +102,7 @@ var templateCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -153,7 +153,7 @@ var templateUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -185,7 +185,7 @@ var templateDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		templateID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	teamName string
-	teamSlug string
+	teamName       string
+	teamSlug       string
+	teamHomeRegion string
 
 	teamMemberTeamID string
 	teamMemberEmail  string
@@ -29,7 +30,7 @@ var teamListCmd = &cobra.Command{
 	Short: "List teams",
 	Long:  `List teams available to the current user.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -66,7 +67,7 @@ var teamGetCmd = &cobra.Command{
 	Long:  `Get details of a team by team ID.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -109,18 +110,13 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
 		}
 
-		req := &apispec.CreateTeamRequest{
-			Name: teamName,
-		}
-		if strings.TrimSpace(teamSlug) != "" {
-			req.Slug = apispec.NewOptString(teamSlug)
-		}
+		req := buildCreateTeamRequest(teamName, teamSlug, teamHomeRegion)
 
 		res, err := client.API().TeamsPost(cmd.Context(), req)
 		if err != nil {
@@ -171,7 +167,7 @@ var teamUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -210,7 +206,7 @@ var teamDeleteCmd = &cobra.Command{
 	Long:  `Delete a team by ID.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -251,7 +247,7 @@ var teamMemberListCmd = &cobra.Command{
 	Short: "List team members",
 	Long:  `List all members of a team.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -300,7 +296,7 @@ var teamMemberAddCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -352,7 +348,7 @@ var teamMemberUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -397,7 +393,7 @@ var teamMemberRemoveCmd = &cobra.Command{
 	Long:  `Remove a member from a team.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -457,6 +453,19 @@ func parseUpdateTeamMemberRole(s string) (apispec.UpdateTeamMemberRequestRole, e
 	}
 }
 
+func buildCreateTeamRequest(name, slug, homeRegion string) *apispec.CreateTeamRequest {
+	req := &apispec.CreateTeamRequest{
+		Name: name,
+	}
+	if trimmedSlug := strings.TrimSpace(slug); trimmedSlug != "" {
+		req.Slug = apispec.NewOptString(trimmedSlug)
+	}
+	if trimmedHomeRegion := strings.TrimSpace(homeRegion); trimmedHomeRegion != "" {
+		req.HomeRegionID = apispec.NewOptNilString(trimmedHomeRegion)
+	}
+	return req
+}
+
 func init() {
 	rootCmd.AddCommand(teamCmd)
 
@@ -476,6 +485,7 @@ func init() {
 
 	teamCreateCmd.Flags().StringVar(&teamName, "name", "", "team name (required)")
 	teamCreateCmd.Flags().StringVar(&teamSlug, "slug", "", "team slug")
+	teamCreateCmd.Flags().StringVar(&teamHomeRegion, "home-region", "", "team home region ID")
 
 	teamUpdateCmd.Flags().StringVar(&teamName, "name", "", "new team name")
 	teamUpdateCmd.Flags().StringVar(&teamSlug, "slug", "", "new team slug")

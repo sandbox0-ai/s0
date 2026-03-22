@@ -33,7 +33,7 @@ var volumeListCmd = &cobra.Command{
 	Short: "List volumes",
 	Long:  `List all sandbox volumes.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -61,7 +61,7 @@ var volumeGetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		volumeID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -86,7 +86,7 @@ var volumeCreateCmd = &cobra.Command{
 	Short: "Create a volume",
 	Long:  `Create a new sandbox volume.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -142,7 +142,7 @@ var volumeDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		volumeID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -171,7 +171,7 @@ var volumeForkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		volumeID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

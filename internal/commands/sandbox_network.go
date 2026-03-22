@@ -54,7 +54,7 @@ var sandboxNetworkGetCmd = &cobra.Command{
 	Short: "Get network policy",
 	Long:  `Get the network policy configuration for the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -79,7 +79,7 @@ var sandboxNetworkUpdateCmd = &cobra.Command{
 	Short: "Update network policy",
 	Long:  `Update the network policy configuration for the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

@@ -65,23 +65,16 @@ func getConfig() (*config.Config, error) {
 }
 
 // getClient creates a new wrapped SDK client from the configuration.
-func getClient() (*client.Client, error) {
-	p, err := getProfileWithFreshToken()
+func getClient(cmd *cobra.Command) (*client.Client, error) {
+	resolved, userAgent, err := resolveClientTarget(cmd)
 	if err != nil {
 		return nil, err
 	}
 
-	token := p.GetToken()
-	if token == "" {
-		return nil, ErrNoToken
-	}
-
 	opts := []sandbox0.Option{
-		sandbox0.WithBaseURL(p.GetAPIURL()),
-		sandbox0.WithToken(token),
+		sandbox0.WithBaseURL(resolved.BaseURL),
+		sandbox0.WithToken(resolved.Token),
 	}
-
-	userAgent := fmt.Sprintf("s0/%s", cfgVersion)
 	if userAgent != "" {
 		opts = append(opts, sandbox0.WithUserAgent(userAgent))
 	}
@@ -90,28 +83,73 @@ func getClient() (*client.Client, error) {
 }
 
 // getClientRaw creates a raw SDK client for operations that don't need the wrapper.
-func getClientRaw() (*sandbox0.Client, error) {
-	p, err := getProfileWithFreshToken()
+func getClientRaw(cmd *cobra.Command) (*sandbox0.Client, error) {
+	resolved, userAgent, err := resolveClientTarget(cmd)
 	if err != nil {
 		return nil, err
 	}
 
-	token := p.GetToken()
-	if token == "" {
-		return nil, ErrNoToken
-	}
-
 	opts := []sandbox0.Option{
-		sandbox0.WithBaseURL(p.GetAPIURL()),
-		sandbox0.WithToken(token),
+		sandbox0.WithBaseURL(resolved.BaseURL),
+		sandbox0.WithToken(resolved.Token),
 	}
-
-	userAgent := fmt.Sprintf("s0/%s", cfgVersion)
 	if userAgent != "" {
 		opts = append(opts, sandbox0.WithUserAgent(userAgent))
 	}
 
 	return sandbox0.NewClient(opts...)
+}
+
+func resolveClientTarget(cmd *cobra.Command) (*client.ResolvedTarget, string, error) {
+	p, err := getProfileWithFreshToken()
+	if err != nil {
+		return nil, "", err
+	}
+
+	token := p.GetToken()
+	if token == "" {
+		return nil, "", ErrNoToken
+	}
+
+	var configuredMode config.GatewayMode
+	if mode, ok := p.GetConfiguredGatewayMode(); ok {
+		configuredMode = mode
+	}
+
+	resolved, err := client.ResolveTarget(
+		cmd.Context(),
+		client.ResolveTargetOptions{
+			BaseURL:               p.GetAPIURL(),
+			Token:                 token,
+			ConfiguredGatewayMode: configuredMode,
+			Scope:                 commandRouteScope(cmd),
+			UserAgent:             buildUserAgent(),
+		},
+	)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return resolved, buildUserAgent(), nil
+}
+
+func buildUserAgent() string {
+	if cfgVersion == "" {
+		return ""
+	}
+	return fmt.Sprintf("s0/%s", cfgVersion)
+}
+
+func commandRouteScope(cmd *cobra.Command) client.RouteScope {
+	for current := cmd; current != nil; current = current.Parent() {
+		switch current.Name() {
+		case "sandbox", "template", "volume", "credential", "apikey", "image":
+			return client.RouteScopeHomeRegion
+		case "auth", "team", "user":
+			return client.RouteScopeEntrypoint
+		}
+	}
+	return client.RouteScopeEntrypoint
 }
 
 // parseInt32 parses a string to int32 with error handling.
