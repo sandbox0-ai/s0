@@ -103,6 +103,62 @@ func TestResolveTargetUsesGlobalHomeRegionRouting(t *testing.T) {
 	}
 }
 
+func TestResolveTargetUsesStoredRegionalSessionBeforeGlobalExchange(t *testing.T) {
+	var tenantActiveCalls int
+	var regionTokenCalls int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/metadata":
+			writeJSON(t, w, http.StatusOK, map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"gateway_mode": "global",
+					"service":      "global-gateway",
+				},
+			})
+		case "/tenant/active":
+			tenantActiveCalls++
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		case "/auth/region-token":
+			regionTokenCalls++
+			http.Error(w, "unexpected", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+		BaseURL: server.URL,
+		Token:   "global-token",
+		RegionalSession: &config.RegionalSession{
+			Token:      "regional-token",
+			GatewayURL: "https://regional.example.com",
+			RegionID:   "aws/us-east-1",
+			ExpiresAt:  1893456000,
+		},
+		Scope:     RouteScopeHomeRegion,
+		UserAgent: "s0/test",
+	})
+	if err != nil {
+		t.Fatalf("ResolveTarget() error = %v", err)
+	}
+
+	if target.BaseURL != "https://regional.example.com" {
+		t.Fatalf("BaseURL = %q, want regional gateway URL", target.BaseURL)
+	}
+	if target.Token != "regional-token" {
+		t.Fatalf("Token = %q, want regional-token", target.Token)
+	}
+	if tenantActiveCalls != 0 {
+		t.Fatalf("tenant/active calls = %d, want 0", tenantActiveCalls)
+	}
+	if regionTokenCalls != 0 {
+		t.Fatalf("auth/region-token calls = %d, want 0", regionTokenCalls)
+	}
+}
+
 func TestResolveTargetKeepsEntrypointCommandsOnGlobalGateway(t *testing.T) {
 	var tenantActiveCalls int
 	var regionTokenCalls int
