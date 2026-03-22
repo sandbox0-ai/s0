@@ -2,17 +2,20 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 
+	"github.com/ghodss/yaml"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
 
 var (
-	sandboxTemplate string
-	sandboxTTL      int32
-	sandboxHardTTL  int32
+	sandboxTemplate   string
+	sandboxTTL        int32
+	sandboxHardTTL    int32
+	sandboxConfigFile string
 	// list flags
 	sandboxListStatus     string
 	sandboxListTemplateID string
@@ -23,6 +26,7 @@ var (
 	sandboxUpdateTTL        int32
 	sandboxUpdateHardTTL    int32
 	sandboxUpdateAutoResume string
+	sandboxUpdateConfigFile string
 )
 
 // sandboxCmd represents the sandbox command.
@@ -49,12 +53,15 @@ var sandboxCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		var opts []sandbox0.SandboxOption
-		if sandboxTTL > 0 {
-			opts = append(opts, sandbox0.WithSandboxTTL(sandboxTTL))
+		config, hasConfig, err := buildSandboxCreateConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building sandbox config: %v\n", err)
+			os.Exit(1)
 		}
-		if sandboxHardTTL > 0 {
-			opts = append(opts, sandbox0.WithSandboxHardTTL(sandboxHardTTL))
+
+		var opts []sandbox0.SandboxOption
+		if hasConfig {
+			opts = append(opts, sandbox0.WithSandboxConfig(config))
 		}
 
 		sandbox, err := client.ClaimSandbox(cmd.Context(), sandboxTemplate, opts...)
@@ -244,26 +251,14 @@ var sandboxUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Build the config based on provided flags
-		var config apispec.SandboxUpdateConfig
-		hasConfig := false
-
-		if sandboxUpdateTTL > 0 {
-			config.TTL = apispec.NewOptInt32(sandboxUpdateTTL)
-			hasConfig = true
-		}
-		if sandboxUpdateHardTTL > 0 {
-			config.HardTTL = apispec.NewOptInt32(sandboxUpdateHardTTL)
-			hasConfig = true
-		}
-		if sandboxUpdateAutoResume != "" {
-			autoResume := sandboxUpdateAutoResume == "true"
-			config.AutoResume = apispec.NewOptBool(autoResume)
-			hasConfig = true
+		config, hasConfig, err := buildSandboxUpdateConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building sandbox update config: %v\n", err)
+			os.Exit(1)
 		}
 
 		if !hasConfig {
-			fmt.Fprintln(os.Stderr, "Error: at least one update flag is required (--ttl, --hard-ttl, --env, --auto-resume)")
+			fmt.Fprintln(os.Stderr, "Error: at least one update input is required (--config-file, --ttl, --hard-ttl, --auto-resume)")
 			os.Exit(1)
 		}
 
@@ -332,6 +327,7 @@ func init() {
 
 	// Create command flags
 	sandboxCreateCmd.Flags().StringVarP(&sandboxTemplate, "template", "t", "", "template ID (required)")
+	sandboxCreateCmd.Flags().StringVarP(&sandboxConfigFile, "config-file", "f", "", "path to sandbox config YAML/JSON file, or - for stdin")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
 
@@ -345,6 +341,7 @@ func init() {
 	sandboxCmd.AddCommand(sandboxUpdateCmd)
 
 	// Update command flags
+	sandboxUpdateCmd.Flags().StringVarP(&sandboxUpdateConfigFile, "config-file", "f", "", "path to sandbox update config YAML/JSON file, or - for stdin")
 	sandboxUpdateCmd.Flags().Int32Var(&sandboxUpdateTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxUpdateCmd.Flags().Int32Var(&sandboxUpdateHardTTL, "hard-ttl", 0, "hard TTL in seconds")
 	sandboxUpdateCmd.Flags().StringVar(&sandboxUpdateAutoResume, "auto-resume", "", "auto resume on access (true/false)")
@@ -356,4 +353,104 @@ func init() {
 	sandboxListCmd.Flags().IntVar(&sandboxListLimit, "limit", 50, "maximum number of results")
 	sandboxListCmd.Flags().IntVar(&sandboxListOffset, "offset", 0, "pagination offset")
 	sandboxCmd.AddCommand(sandboxListCmd)
+}
+
+func buildSandboxCreateConfig() (apispec.SandboxConfig, bool, error) {
+	var (
+		config apispec.SandboxConfig
+		err    error
+	)
+	hasConfig := false
+	if sandboxConfigFile != "" {
+		config, err = readSandboxConfigFile(sandboxConfigFile)
+		if err != nil {
+			return apispec.SandboxConfig{}, false, err
+		}
+		hasConfig = true
+	}
+	if sandboxTTL > 0 {
+		config.TTL = apispec.NewOptInt32(sandboxTTL)
+		hasConfig = true
+	}
+	if sandboxHardTTL > 0 {
+		config.HardTTL = apispec.NewOptInt32(sandboxHardTTL)
+		hasConfig = true
+	}
+	if hasConfig {
+		if err := config.Validate(); err != nil {
+			return apispec.SandboxConfig{}, false, fmt.Errorf("invalid sandbox config: %w", err)
+		}
+	}
+	return config, hasConfig, nil
+}
+
+func buildSandboxUpdateConfig() (apispec.SandboxUpdateConfig, bool, error) {
+	var (
+		config apispec.SandboxUpdateConfig
+		err    error
+	)
+	hasConfig := false
+	if sandboxUpdateConfigFile != "" {
+		config, err = readSandboxUpdateConfigFile(sandboxUpdateConfigFile)
+		if err != nil {
+			return apispec.SandboxUpdateConfig{}, false, err
+		}
+		hasConfig = true
+	}
+	if sandboxUpdateTTL > 0 {
+		config.TTL = apispec.NewOptInt32(sandboxUpdateTTL)
+		hasConfig = true
+	}
+	if sandboxUpdateHardTTL > 0 {
+		config.HardTTL = apispec.NewOptInt32(sandboxUpdateHardTTL)
+		hasConfig = true
+	}
+	if sandboxUpdateAutoResume != "" {
+		autoResume := sandboxUpdateAutoResume == "true"
+		config.AutoResume = apispec.NewOptBool(autoResume)
+		hasConfig = true
+	}
+	if hasConfig {
+		if err := config.Validate(); err != nil {
+			return apispec.SandboxUpdateConfig{}, false, fmt.Errorf("invalid sandbox update config: %w", err)
+		}
+	}
+	return config, hasConfig, nil
+}
+
+func readSandboxConfigFile(path string) (apispec.SandboxConfig, error) {
+	data, err := readConfigFile(path)
+	if err != nil {
+		return apispec.SandboxConfig{}, err
+	}
+	var config apispec.SandboxConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return apispec.SandboxConfig{}, fmt.Errorf("parse sandbox config file: %w", err)
+	}
+	if err := config.Validate(); err != nil {
+		return apispec.SandboxConfig{}, fmt.Errorf("invalid sandbox config: %w", err)
+	}
+	return config, nil
+}
+
+func readSandboxUpdateConfigFile(path string) (apispec.SandboxUpdateConfig, error) {
+	data, err := readConfigFile(path)
+	if err != nil {
+		return apispec.SandboxUpdateConfig{}, err
+	}
+	var config apispec.SandboxUpdateConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return apispec.SandboxUpdateConfig{}, fmt.Errorf("parse sandbox update config file: %w", err)
+	}
+	if err := config.Validate(); err != nil {
+		return apispec.SandboxUpdateConfig{}, fmt.Errorf("invalid sandbox update config: %w", err)
+	}
+	return config, nil
+}
+
+func readConfigFile(path string) ([]byte, error) {
+	if path == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+	return os.ReadFile(path)
 }

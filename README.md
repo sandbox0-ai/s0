@@ -129,9 +129,9 @@ Flags:
 
 ```bash
 s0 sandbox run <sandbox-id> <input> [--alias <alias>] [--context-id <ctx-id>]
-s0 sandbox create -t <template-id> [--ttl 3600] [--hard-ttl 7200]
+s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200]
 s0 sandbox get <sandbox-id>
-s0 sandbox update <sandbox-id> [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
+s0 sandbox update <sandbox-id> [-f sandbox-update.yaml] [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
 s0 sandbox delete <sandbox-id>
 s0 sandbox pause <sandbox-id>
 s0 sandbox resume <sandbox-id>
@@ -175,8 +175,70 @@ requested alias. `s0 sandbox exec` remains the one-shot command path.
 ### Sandbox Network
 
 ```bash
+s0 sandbox create -t <template-id> -f sandbox-config.yaml
 s0 sandbox network get -s <sandbox-id>
-s0 sandbox network update --mode allow-all|block-all [--allow-cidr <cidr>] [--allow-domain <domain>] [--deny-cidr <cidr>] [--deny-domain <domain>] -s <sandbox-id>
+s0 sandbox network update --mode allow-all|block-all [--allow-cidr <cidr>] [--allow-domain <domain>] [--allow-port <port[/proto]|start-end[/proto]>] [--deny-cidr <cidr>] [--deny-domain <domain>] [--deny-port <port[/proto]|start-end[/proto]>] [--traffic-rule '<json>'] [--credential-rule '<json>'] [--credential-binding '<json>'] -s <sandbox-id>
+s0 sandbox network update --policy-file network.yaml -s <sandbox-id>
+
+# Claim-time network policy via sandbox config file
+cat <<'EOF' > sandbox-config.yaml
+network:
+  mode: block-all
+  egress:
+    trafficRules:
+      - name: allow-github-api
+        action: allow
+        domains: [api.github.com]
+        ports:
+          - port: 443
+            protocol: tcp
+  credentialBindings:
+    - ref: gh-token
+      sourceRef: github-source
+      projection:
+        type: http_headers
+        httpHeaders:
+          headers:
+            - name: Authorization
+              valueTemplate: "Bearer {{token}}"
+EOF
+s0 sandbox create -t default -f sandbox-config.yaml
+
+# Simple compatibility path: block all except HTTPS to GitHub
+s0 sandbox network update --mode block-all \
+  --allow-domain github.com \
+  --allow-port 443/tcp \
+  -s <sandbox-id>
+
+# Recommended for complex policies: edit a YAML file and apply it directly
+cat <<'EOF' > network.yaml
+mode: block-all
+egress:
+  trafficRules:
+    - name: allow-ssh
+      action: allow
+      appProtocols: [ssh]
+      ports:
+        - port: 22
+          protocol: tcp
+credentialBindings:
+  - ref: gh-token
+    sourceRef: github-source
+    projection:
+      type: http_headers
+      httpHeaders:
+        headers:
+          - name: Authorization
+            valueTemplate: "Bearer {{token}}"
+EOF
+s0 sandbox network update --policy-file network.yaml -s <sandbox-id>
+
+# Script-oriented structured flags: allow SSH traffic first, then inject outbound auth for GitHub API
+s0 sandbox network update --mode block-all \
+  --traffic-rule '{"name":"allow-ssh","action":"allow","appProtocols":["ssh"],"ports":[{"port":22,"protocol":"tcp"}]}' \
+  --credential-binding '{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}' \
+  --credential-rule '{"name":"github-auth","credentialRef":"gh-token","protocol":"https","domains":["api.github.com"],"ports":[{"port":443,"protocol":"tcp"}]}' \
+  -s <sandbox-id>
 ```
 
 ### Sandbox Ports

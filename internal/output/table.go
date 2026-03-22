@@ -63,8 +63,8 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatContext(w, v)
 	case *apispec.ContextStatsResponse:
 		return f.formatContextStats(w, v)
-	case *apispec.TplSandboxNetworkPolicy:
-		return f.formatNetworkPolicy(w, v)
+	case *apispec.SandboxNetworkPolicy:
+		return f.formatSandboxNetworkPolicy(w, v)
 	case *sandbox0.ExposedPortsResponse:
 		return f.formatExposedPorts(w, v)
 	case []apispec.MountStatus:
@@ -526,7 +526,8 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-func (f *TableFormatter) formatNetworkPolicy(w io.Writer, policy *apispec.TplSandboxNetworkPolicy) error {
+//nolint:staticcheck // The CLI still displays legacy allow/deny fields for compatibility with older policies.
+func (f *TableFormatter) formatSandboxNetworkPolicy(w io.Writer, policy *apispec.SandboxNetworkPolicy) error {
 	t := newTable(w)
 	_ = t.Append([]string{"Mode:", string(policy.Mode)})
 	if egress, ok := policy.Egress.Get(); ok {
@@ -544,6 +545,16 @@ func (f *TableFormatter) formatNetworkPolicy(w io.Writer, policy *apispec.TplSan
 		if len(egress.DeniedDomains) > 0 {
 			_ = t.Append([]string{"Denied Domains:", fmt.Sprintf("%v", egress.DeniedDomains)})
 		}
+		if len(egress.TrafficRules) > 0 {
+			_ = t.Append([]string{"Traffic Rules:", fmt.Sprintf("%d", len(egress.TrafficRules))})
+		}
+		if len(egress.CredentialRules) > 0 {
+			_ = t.Append([]string{"Credential Rules:", fmt.Sprintf("%d", len(egress.CredentialRules))})
+		}
+	}
+	if len(policy.CredentialBindings) > 0 {
+		_ = t.Append([]string{"", ""})
+		_ = t.Append([]string{"Credential Bindings:", fmt.Sprintf("%d", len(policy.CredentialBindings))})
 	}
 	return t.Render()
 }
