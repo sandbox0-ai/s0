@@ -37,7 +37,7 @@ var sandboxVolumeMountCmd = &cobra.Command{
 	Short: "Mount a volume",
 	Long:  `Mount a volume to the sandbox at the specified path.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -85,7 +85,7 @@ var sandboxVolumeUnmountCmd = &cobra.Command{
 	Short: "Unmount a volume",
 	Long:  `Unmount a volume from the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -107,7 +107,7 @@ var sandboxVolumeMountStatusCmd = &cobra.Command{
 	Short: "Show mount status",
 	Long:  `Show volume mount status for the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

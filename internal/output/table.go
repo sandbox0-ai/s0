@@ -53,6 +53,12 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSDKSandbox(w, v)
 	case *client.RegistryCredentials:
 		return f.formatRegistryCredentials(w, v)
+	case []apispec.CredentialSourceMetadata:
+		return f.formatCredentialSourceList(w, v)
+	case apispec.CredentialSourceMetadata:
+		return f.formatCredentialSource(w, &v)
+	case *apispec.CredentialSourceMetadata:
+		return f.formatCredentialSource(w, v)
 	case []apispec.FileInfo:
 		return f.formatFileList(w, v)
 	case *apispec.FileInfo:
@@ -345,6 +351,38 @@ func (f *TableFormatter) formatRegistryCredentials(w io.Writer, c *client.Regist
 	if c.ExpiresAt != "" {
 		_ = t.Append([]string{"Expires At:", c.ExpiresAt})
 	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatCredentialSourceList(w io.Writer, sources []apispec.CredentialSourceMetadata) error {
+	if len(sources) == 0 {
+		_, _ = fmt.Fprintln(w, "No credential sources found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"NAME", "RESOLVER KIND", "VERSION", "STATUS", "CREATED AT", "UPDATED AT"})
+	for _, source := range sources {
+		_ = t.Append([]string{
+			source.Name,
+			string(source.ResolverKind),
+			formatOptInt64(source.CurrentVersion),
+			formatOptString(source.Status),
+			formatOptNilDateTime(source.CreatedAt),
+			formatOptNilDateTime(source.UpdatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatCredentialSource(w io.Writer, source *apispec.CredentialSourceMetadata) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Name:", source.Name})
+	_ = t.Append([]string{"Resolver Kind:", string(source.ResolverKind)})
+	_ = t.Append([]string{"Current Version:", formatOptInt64(source.CurrentVersion)})
+	_ = t.Append([]string{"Status:", formatOptString(source.Status)})
+	_ = t.Append([]string{"Created At:", formatOptNilDateTime(source.CreatedAt)})
+	_ = t.Append([]string{"Updated At:", formatOptNilDateTime(source.UpdatedAt)})
 	return t.Render()
 }
 
@@ -786,6 +824,20 @@ func formatStringSlice(values []string) string {
 	return strings.Join(values, ",")
 }
 
+func formatOptString(v apispec.OptString) string {
+	if s, ok := v.Get(); ok && s != "" {
+		return s
+	}
+	return "-"
+}
+
+func formatOptInt64(v apispec.OptInt64) string {
+	if n, ok := v.Get(); ok {
+		return fmt.Sprintf("%d", n)
+	}
+	return "-"
+}
+
 func formatOptNilString(v apispec.OptNilString) string {
 	if v.IsNull() {
 		return "-"
@@ -797,6 +849,16 @@ func formatOptNilString(v apispec.OptNilString) string {
 }
 
 func formatOptDateTime(v apispec.OptDateTime) string {
+	if ts, ok := v.Get(); ok {
+		return formatTimestamp(ts)
+	}
+	return "-"
+}
+
+func formatOptNilDateTime(v apispec.OptNilDateTime) string {
+	if v.IsNull() {
+		return "-"
+	}
 	if ts, ok := v.Get(); ok {
 		return formatTimestamp(ts)
 	}

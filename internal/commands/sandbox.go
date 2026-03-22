@@ -47,7 +47,7 @@ var sandboxCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -86,7 +86,7 @@ var sandboxGetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -114,7 +114,7 @@ var sandboxDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -139,7 +139,7 @@ var sandboxPauseCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -164,7 +164,7 @@ var sandboxResumeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -189,7 +189,7 @@ var sandboxRefreshCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -217,7 +217,7 @@ var sandboxStatusCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -245,7 +245,7 @@ var sandboxUpdateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -285,7 +285,7 @@ var sandboxListCmd = &cobra.Command{
 	Short: "List sandboxes",
 	Long:  `List all sandboxes for the authenticated team.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

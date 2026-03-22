@@ -25,7 +25,7 @@ var sandboxPortsListCmd = &cobra.Command{
 	Short: "List exposed ports",
 	Long:  `List all exposed ports for the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -53,7 +53,7 @@ var sandboxPortsExposeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		port := parseInt32(args[0], "port")
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -81,7 +81,7 @@ var sandboxPortsUnexposeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		port := parseInt32(args[0], "port")
 
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -106,7 +106,7 @@ var sandboxPortsClearCmd = &cobra.Command{
 	Short: "Clear all exposed ports",
 	Long:  `Remove all exposed ports from the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClientRaw()
+		client, err := getClientRaw(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)

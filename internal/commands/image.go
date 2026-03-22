@@ -85,7 +85,7 @@ var imagePushCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClient()
+		client, err := getClient(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -141,7 +141,7 @@ var imageCredentialsCmd = &cobra.Command{
 	Short: "Show temporary registry credentials",
 	Long:  `Show temporary registry credentials used by s0 template image push.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		client, err := getClient()
+		client, err := getClient(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
