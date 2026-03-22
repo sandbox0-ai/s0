@@ -122,8 +122,14 @@ func resolveClientTarget(cmd *cobra.Command) (*client.ResolvedTarget, string, er
 			BaseURL:               p.GetAPIURL(),
 			Token:                 token,
 			ConfiguredGatewayMode: configuredMode,
-			Scope:                 commandRouteScope(cmd),
-			UserAgent:             buildUserAgent(),
+			RegionalSession: func() *config.RegionalSession {
+				if session, ok := p.GetRegionalSession(); ok {
+					return session
+				}
+				return nil
+			}(),
+			Scope:     commandRouteScope(cmd),
+			UserAgent: buildUserAgent(),
 		},
 	)
 	if err != nil {

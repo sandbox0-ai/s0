@@ -18,11 +18,22 @@ type Config struct {
 
 // Profile represents a named configuration profile.
 type Profile struct {
-	APIURL       string `yaml:"api-url" mapstructure:"api-url"`
-	GatewayMode  string `yaml:"gateway-mode" mapstructure:"gateway-mode"`
-	Token        string `yaml:"token" mapstructure:"token"`
-	RefreshToken string `yaml:"refresh-token" mapstructure:"refresh-token"`
-	ExpiresAt    int64  `yaml:"expires-at" mapstructure:"expires-at"`
+	APIURL             string `yaml:"api-url" mapstructure:"api-url"`
+	GatewayMode        string `yaml:"gateway-mode" mapstructure:"gateway-mode"`
+	Token              string `yaml:"token" mapstructure:"token"`
+	RefreshToken       string `yaml:"refresh-token" mapstructure:"refresh-token"`
+	ExpiresAt          int64  `yaml:"expires-at" mapstructure:"expires-at"`
+	RegionalToken      string `yaml:"regional-token" mapstructure:"regional-token"`
+	RegionalGatewayURL string `yaml:"regional-gateway-url" mapstructure:"regional-gateway-url"`
+	RegionalRegionID   string `yaml:"regional-region-id" mapstructure:"regional-region-id"`
+	RegionalExpiresAt  int64  `yaml:"regional-expires-at" mapstructure:"regional-expires-at"`
+}
+
+type RegionalSession struct {
+	Token      string
+	GatewayURL string
+	RegionID   string
+	ExpiresAt  int64
 }
 
 // OutputConfig represents output formatting configuration.
@@ -198,6 +209,22 @@ func (p *Profile) GetRefreshToken() string {
 	return expandEnvVars(p.RefreshToken)
 }
 
+// GetRegionalSession returns the stored regional session when all required fields are present.
+func (p *Profile) GetRegionalSession() (*RegionalSession, bool) {
+	token := expandEnvVars(p.RegionalToken)
+	gatewayURL := expandEnvVars(p.RegionalGatewayURL)
+	regionID := expandEnvVars(p.RegionalRegionID)
+	if token == "" || gatewayURL == "" || regionID == "" || p.RegionalExpiresAt == 0 {
+		return nil, false
+	}
+	return &RegionalSession{
+		Token:      token,
+		GatewayURL: gatewayURL,
+		RegionID:   regionID,
+		ExpiresAt:  p.RegionalExpiresAt,
+	}, true
+}
+
 // ParseGatewayMode normalizes a gateway mode string.
 func ParseGatewayMode(raw string) (GatewayMode, bool) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
@@ -213,7 +240,14 @@ func ParseGatewayMode(raw string) (GatewayMode, bool) {
 }
 
 // SetCredentials updates profile credentials.
-func (c *Config) SetCredentials(profileName, apiURL, accessToken, refreshToken string, expiresAt int64) {
+func (c *Config) SetCredentials(
+	profileName,
+	apiURL,
+	accessToken,
+	refreshToken string,
+	expiresAt int64,
+	regionalSession *RegionalSession,
+) {
 	if c.Profiles == nil {
 		c.Profiles = make(map[string]Profile)
 	}
@@ -227,6 +261,17 @@ func (c *Config) SetCredentials(profileName, apiURL, accessToken, refreshToken s
 	p.Token = accessToken
 	p.RefreshToken = refreshToken
 	p.ExpiresAt = expiresAt
+	if regionalSession != nil {
+		p.RegionalToken = regionalSession.Token
+		p.RegionalGatewayURL = regionalSession.GatewayURL
+		p.RegionalRegionID = regionalSession.RegionID
+		p.RegionalExpiresAt = regionalSession.ExpiresAt
+	} else {
+		p.RegionalToken = ""
+		p.RegionalGatewayURL = ""
+		p.RegionalRegionID = ""
+		p.RegionalExpiresAt = 0
+	}
 	c.Profiles[profileName] = p
 	c.CurrentProfile = profileName
 }
@@ -243,6 +288,10 @@ func (c *Config) ClearCredentials(profileName string) {
 	p.Token = ""
 	p.RefreshToken = ""
 	p.ExpiresAt = 0
+	p.RegionalToken = ""
+	p.RegionalGatewayURL = ""
+	p.RegionalRegionID = ""
+	p.RegionalExpiresAt = 0
 	c.Profiles[profileName] = p
 }
 

@@ -26,9 +26,15 @@ type authProvider struct {
 }
 
 type authLoginData struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
+	AccessToken     string `json:"access_token"`
+	RefreshToken    string `json:"refresh_token"`
+	ExpiresAt       int64  `json:"expires_at"`
+	RegionalSession *struct {
+		RegionID           string `json:"region_id"`
+		RegionalGatewayURL string `json:"regional_gateway_url"`
+		Token              string `json:"token"`
+		ExpiresAt          int64  `json:"expires_at"`
+	} `json:"regional_session,omitempty"`
 }
 
 type authEnvelope struct {
@@ -163,7 +169,14 @@ func getProfileWithFreshToken() (*config.Profile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("token expired and refresh failed: %w (run `s0 auth login`)", err)
 	}
-	cfg.SetCredentials(profileName, p.GetAPIURL(), refreshed.AccessToken, refreshed.RefreshToken, refreshed.ExpiresAt)
+	cfg.SetCredentials(
+		profileName,
+		p.GetAPIURL(),
+		refreshed.AccessToken,
+		refreshed.RefreshToken,
+		refreshed.ExpiresAt,
+		toRegionalSessionConfig(refreshed),
+	)
 	if err := cfg.Save(); err != nil {
 		return nil, fmt.Errorf("save refreshed credentials: %w", err)
 	}
@@ -213,6 +226,23 @@ func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*auth
 			AccessToken:  q.Get("access_token"),
 			RefreshToken: q.Get("refresh_token"),
 			ExpiresAt:    expiresUnix,
+		}
+		regionalExpiresUnix, err := strconv.ParseInt(q.Get("regional_expires_unix"), 10, 64)
+		if err == nil &&
+			q.Get("regional_access_token") != "" &&
+			q.Get("regional_gateway_url") != "" &&
+			q.Get("region_id") != "" {
+			data.RegionalSession = &struct {
+				RegionID           string `json:"region_id"`
+				RegionalGatewayURL string `json:"regional_gateway_url"`
+				Token              string `json:"token"`
+				ExpiresAt          int64  `json:"expires_at"`
+			}{
+				RegionID:           q.Get("region_id"),
+				RegionalGatewayURL: q.Get("regional_gateway_url"),
+				Token:              q.Get("regional_access_token"),
+				ExpiresAt:          regionalExpiresUnix,
+			}
 		}
 		if data.AccessToken == "" || data.RefreshToken == "" {
 			http.Error(w, "missing tokens in callback", http.StatusBadRequest)
@@ -268,6 +298,24 @@ func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*auth
 	case <-time.After(3 * time.Minute):
 		_ = server.Shutdown(context.Background())
 		return nil, fmt.Errorf("oidc login timed out")
+	}
+}
+
+func toRegionalSessionConfig(data *authLoginData) *config.RegionalSession {
+	if data == nil || data.RegionalSession == nil {
+		return nil
+	}
+	if data.RegionalSession.Token == "" ||
+		data.RegionalSession.RegionalGatewayURL == "" ||
+		data.RegionalSession.RegionID == "" ||
+		data.RegionalSession.ExpiresAt == 0 {
+		return nil
+	}
+	return &config.RegionalSession{
+		Token:      data.RegionalSession.Token,
+		GatewayURL: data.RegionalSession.RegionalGatewayURL,
+		RegionID:   data.RegionalSession.RegionID,
+		ExpiresAt:  data.RegionalSession.ExpiresAt,
 	}
 }
 

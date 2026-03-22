@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sandbox0-ai/s0/internal/config"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
@@ -27,6 +28,7 @@ type ResolveTargetOptions struct {
 	BaseURL               string
 	Token                 string
 	ConfiguredGatewayMode config.GatewayMode
+	RegionalSession       *config.RegionalSession
 	Scope                 RouteScope
 	UserAgent             string
 }
@@ -49,6 +51,10 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 	}
 	if opts.Scope != RouteScopeHomeRegion || mode != config.GatewayModeGlobal {
 		return target, nil
+	}
+
+	if regionalTarget, ok := resolveStoredRegionalTarget(opts.RegionalSession, mode); ok {
+		return regionalTarget, nil
 	}
 
 	globalClient, err := newSDKClient(opts.BaseURL, opts.Token, opts.UserAgent)
@@ -98,6 +104,23 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 		Token:       regionToken.Token,
 		GatewayMode: mode,
 	}, nil
+}
+
+func resolveStoredRegionalTarget(session *config.RegionalSession, mode config.GatewayMode) (*ResolvedTarget, bool) {
+	if session == nil {
+		return nil, false
+	}
+	if strings.TrimSpace(session.Token) == "" || strings.TrimSpace(session.GatewayURL) == "" {
+		return nil, false
+	}
+	if session.ExpiresAt != 0 && time.Now().Unix() >= session.ExpiresAt-30 {
+		return nil, false
+	}
+	return &ResolvedTarget{
+		BaseURL:     session.GatewayURL,
+		Token:       session.Token,
+		GatewayMode: mode,
+	}, true
 }
 
 func discoverGatewayMode(ctx context.Context, baseURL, userAgent string) (config.GatewayMode, bool) {
