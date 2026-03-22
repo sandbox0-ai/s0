@@ -2,12 +2,8 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/sandbox0-ai/s0/internal/config"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
@@ -33,14 +29,6 @@ type ResolveTargetOptions struct {
 	ConfiguredGatewayMode config.GatewayMode
 	Scope                 RouteScope
 	UserAgent             string
-}
-
-type gatewayMetadataEnvelope struct {
-	Success bool `json:"success"`
-	Data    struct {
-		GatewayMode string `json:"gateway_mode"`
-		Service     string `json:"service"`
-	} `json:"data"`
 }
 
 // ResolveTarget resolves the correct API target for the current command scope.
@@ -113,40 +101,22 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 }
 
 func discoverGatewayMode(ctx context.Context, baseURL, userAgent string) (config.GatewayMode, bool) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/metadata", nil)
-	if err != nil {
-		return "", false
-	}
-	if strings.TrimSpace(userAgent) != "" {
-		req.Header.Set("User-Agent", userAgent)
-	}
-
-	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
-	if err != nil {
-		return "", false
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", false
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	client, err := newSDKClient(baseURL, "", userAgent)
 	if err != nil {
 		return "", false
 	}
 
-	var envelope gatewayMetadataEnvelope
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return "", false
-	}
-	if !envelope.Success {
+	metadataRes, err := client.API().MetadataGet(ctx)
+	if err != nil {
 		return "", false
 	}
 
-	return config.ParseGatewayMode(envelope.Data.GatewayMode)
+	metadata, ok := metadataRes.Data.Get()
+	if !ok {
+		return "", false
+	}
+
+	return config.ParseGatewayMode(string(metadata.GatewayMode))
 }
 
 func newSDKClient(baseURL, token, userAgent string) (*sandbox0.Client, error) {
