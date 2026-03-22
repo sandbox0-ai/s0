@@ -89,6 +89,12 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatTeam(w, &v)
 	case *apispec.Team:
 		return f.formatTeam(w, v)
+	case []apispec.Region:
+		return f.formatRegionList(w, v)
+	case apispec.Region:
+		return f.formatRegion(w, &v)
+	case *apispec.Region:
+		return f.formatRegion(w, v)
 	case []apispec.TeamMember:
 		return f.formatTeamMemberList(w, v)
 	case apispec.TeamMember:
@@ -772,6 +778,36 @@ func (f *TableFormatter) formatTeam(w io.Writer, team *apispec.Team) error {
 	_ = t.Append([]string{"Owner ID:", formatOptNilString(team.OwnerID)})
 	_ = t.Append([]string{"Created At:", formatTimestamp(team.CreatedAt)})
 	_ = t.Append([]string{"Updated At:", formatTimestamp(team.UpdatedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatRegionList(w io.Writer, regions []apispec.Region) error {
+	if len(regions) == 0 {
+		_, _ = fmt.Fprintln(w, "No regions found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "DISPLAY NAME", "REGIONAL GATEWAY URL", "METERING EXPORT URL", "ENABLED"})
+	for _, region := range regions {
+		_ = t.Append([]string{
+			region.ID,
+			formatOptString(region.DisplayName),
+			region.RegionalGatewayURL,
+			formatOptNilString(region.MeteringExportURL),
+			fmt.Sprintf("%v", region.Enabled),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatRegion(w io.Writer, region *apispec.Region) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", region.ID})
+	_ = t.Append([]string{"Display Name:", formatOptString(region.DisplayName)})
+	_ = t.Append([]string{"Regional Gateway URL:", region.RegionalGatewayURL})
+	_ = t.Append([]string{"Metering Export URL:", formatOptNilString(region.MeteringExportURL)})
+	_ = t.Append([]string{"Enabled:", fmt.Sprintf("%v", region.Enabled)})
 	return t.Render()
 }
 

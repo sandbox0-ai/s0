@@ -135,7 +135,7 @@ Flags:
   --token string     Override API token
 ```
 
-In `global` mode, `auth`, `user`, and `team` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `volume`, `credential`, `apikey`, and registry credential flows resolve the active team and switch to the home-region gateway automatically.
+In `global` mode, `auth`, `user`, `team`, and `admin` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `volume`, `credential`, `apikey`, and registry credential flows resolve the active team and switch to the home-region gateway automatically.
 
 ## Commands
 
@@ -144,6 +144,18 @@ In `global` mode, `auth`, `user`, and `team` commands stay on the configured ent
 ```bash
 s0 team create --name <name> [--slug <slug>] [--home-region <region-id>]
 ```
+
+### Admin Region
+
+```bash
+s0 admin region list
+s0 admin region get <region-id>
+s0 admin region create --id <id> --regional-gateway-url <url> [--display-name <name>] [--metering-export-url <url>] [--enabled=true|false]
+s0 admin region update <region-id> [--display-name <name>] [--regional-gateway-url <url>] [--metering-export-url <url>] [--enabled=true|false]
+s0 admin region delete <region-id>
+```
+
+`s0 admin region ...` targets the Global Gateway region directory and requires a system-admin token. `--edge-gateway-url` is also accepted as an alias for `--regional-gateway-url`.
 
 ### Sandbox
 

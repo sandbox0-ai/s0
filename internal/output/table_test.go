@@ -89,3 +89,72 @@ func TestTableFormatterFormatCredentialSourceListEmpty(t *testing.T) {
 		t.Fatalf("empty output = %q, want %q", got, "No credential sources found.")
 	}
 }
+
+func TestTableFormatterFormatRegionList(t *testing.T) {
+	formatter := &TableFormatter{}
+	regions := []apispec.Region{
+		{
+			ID:                 "aws/us-east-1",
+			DisplayName:        apispec.NewOptString("US East 1"),
+			RegionalGatewayURL: "https://use1.example.com",
+			MeteringExportURL:  apispec.NewOptNilString("https://metering.use1.example.com"),
+			Enabled:            true,
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, regions); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID",
+		"DISPLAY NAME",
+		"REGIONAL GATEWAY URL",
+		"METERING EXPORT URL",
+		"ENABLED",
+		"aws/us-east-1",
+		"US East 1",
+		"https://use1.example.com",
+		"https://metering.use1.example.com",
+		"true",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatRegion(t *testing.T) {
+	formatter := &TableFormatter{}
+	region := &apispec.Region{
+		ID:                 "aws/us-east-1",
+		DisplayName:        apispec.NewOptString("US East 1"),
+		RegionalGatewayURL: "https://use1.example.com",
+		Enabled:            false,
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, region); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID:",
+		"Display Name:",
+		"Regional Gateway URL:",
+		"Metering Export URL:",
+		"Enabled:",
+		"aws/us-east-1",
+		"US East 1",
+		"https://use1.example.com",
+		"false",
+		"-",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
