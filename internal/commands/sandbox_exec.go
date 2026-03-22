@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -320,8 +319,13 @@ func forwardInput(ctx context.Context, cancel context.CancelFunc, writeJSON func
 }
 
 func forwardResizeEvents(ctx context.Context, writeJSON func(execWSMessage) error) {
+	signals := resizeSignals()
+	if len(signals) == 0 {
+		return
+	}
+
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGWINCH)
+	signal.Notify(sigCh, signals...)
 	defer signal.Stop(sigCh)
 
 	for {
@@ -340,8 +344,13 @@ func forwardResizeEvents(ctx context.Context, writeJSON func(execWSMessage) erro
 }
 
 func forwardSignals(ctx context.Context, writeJSON func(execWSMessage) error) {
+	signals := forwardingSignals()
+	if len(signals) == 0 {
+		return
+	}
+
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(sigCh, signals...)
 	defer signal.Stop(sigCh)
 
 	for {
@@ -358,17 +367,6 @@ func forwardSignals(ctx context.Context, writeJSON func(execWSMessage) error) {
 				Signal: name,
 			})
 		}
-	}
-}
-
-func signalName(sig os.Signal) string {
-	switch sig {
-	case os.Interrupt:
-		return "INT"
-	case syscall.SIGTERM:
-		return "TERM"
-	default:
-		return ""
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -312,7 +311,7 @@ var sandboxFilesWatchCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		ctx, cancel := signal.NotifyContext(cmd.Context(), forwardingSignals()...)
 		defer cancel()
 
 		events, errs, unsubscribe, err := client.Sandbox(filesSandboxID).WatchFiles(ctx, path, filesRecursive)
