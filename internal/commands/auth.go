@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	authEmail    string
-	authPassword string
+	authEmail      string
+	authPassword   string
+	authHomeRegion string
 )
 
 var authCmd = &cobra.Command{
@@ -53,7 +54,7 @@ var authLoginCmd = &cobra.Command{
 		var loginData *authLoginData
 		switch provider.Type {
 		case "oidc":
-			loginData, err = oidcLoginViaBrowser(cmd.Context(), baseURL, provider.ID)
+			loginData, err = oidcLoginViaBrowser(cmd.Context(), baseURL, provider.ID, authHomeRegion)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "OIDC login failed: %v\n", err)
 				os.Exit(1)
@@ -163,5 +164,6 @@ func init() {
 
 	authLoginCmd.Flags().StringVar(&authEmail, "email", "", "email for built-in provider login")
 	authLoginCmd.Flags().StringVar(&authPassword, "password", "", "password for built-in provider login")
+	authLoginCmd.Flags().StringVar(&authHomeRegion, "home-region", "", "home region ID for first-time OIDC provisioning in global mode")
 	authLoginCmd.MarkFlagsRequiredTogether("email", "password")
 }

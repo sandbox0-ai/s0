@@ -187,7 +187,7 @@ func getProfileWithFreshToken() (*config.Profile, error) {
 	return updated, nil
 }
 
-func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*authLoginData, error) {
+func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID, homeRegionID string) (*authLoginData, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("listen callback: %w", err)
@@ -279,6 +279,9 @@ func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*auth
 		url.PathEscape(providerID),
 		url.QueryEscape(returnURL),
 	)
+	if trimmedHomeRegion := strings.TrimSpace(homeRegionID); trimmedHomeRegion != "" {
+		loginURL += "&home_region_id=" + url.QueryEscape(trimmedHomeRegion)
+	}
 
 	fmt.Printf("Opening browser for %s login...\n", providerID)
 	if err := openBrowser(loginURL); err != nil {
