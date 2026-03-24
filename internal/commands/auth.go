@@ -84,6 +84,10 @@ var authLoginCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Login successful via provider %q (profile: %s)\n", provider.ID, profileName)
+		if shouldShowFirstTeamOnboardingHint(cmd.Context(), baseURL, loginData) {
+			fmt.Println("No active team is configured yet. Create and activate your first team with:")
+			fmt.Println("  s0 team create --name <name> --home-region <region-id> --activate")
+		}
 	},
 }
 

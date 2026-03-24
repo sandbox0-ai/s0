@@ -137,12 +137,18 @@ Flags:
 
 In `global` mode, `auth`, `user`, `team`, and `admin` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `volume`, `credential`, `apikey`, and registry credential flows resolve the active team and switch to the home-region gateway automatically.
 
+If a newly authenticated global-gateway user has no default team yet, finish first-team onboarding with:
+
+```bash
+s0 team create --name <name> --home-region <region-id> --activate
+```
+
 ## Commands
 
 ### Team
 
 ```bash
-s0 team create --name <name> [--slug <slug>] [--home-region <region-id>]
+s0 team create --name <name> [--slug <slug>] [--home-region <region-id>] [--activate]
 ```
 
 ### Admin Region

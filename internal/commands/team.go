@@ -1,10 +1,12 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +15,7 @@ var (
 	teamName       string
 	teamSlug       string
 	teamHomeRegion string
+	teamActivate   bool
 
 	teamMemberTeamID string
 	teamMemberEmail  string
@@ -136,9 +139,20 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		if teamActivate {
+			if err := activateCreatedTeam(cmd.Context(), client, data.ID); err != nil {
+				fmt.Fprintf(os.Stderr, "Error activating team: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
+		}
+
+		if teamActivate {
+			fmt.Fprintf(os.Stderr, "Activated team %s as the default team\n", data.ID)
 		}
 	},
 }
@@ -466,6 +480,30 @@ func buildCreateTeamRequest(name, slug, homeRegion string) *apispec.CreateTeamRe
 	return req
 }
 
+func buildActivateTeamRequest(teamID string) *apispec.UpdateUserRequest {
+	req := &apispec.UpdateUserRequest{}
+	req.DefaultTeamID = apispec.NewOptNilString(strings.TrimSpace(teamID))
+	return req
+}
+
+func activateCreatedTeam(ctx context.Context, client *sandbox0.Client, teamID string) error {
+	res, err := client.API().TenantActivePut(ctx, buildActivateTeamRequest(teamID))
+	if err != nil {
+		return err
+	}
+
+	successRes, ok := res.(*apispec.SuccessUserResponse)
+	if !ok {
+		return fmt.Errorf("unexpected response type %T", res)
+	}
+
+	if _, ok := successRes.Data.Get(); !ok {
+		return fmt.Errorf("missing response data")
+	}
+
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(teamCmd)
 
@@ -486,6 +524,7 @@ func init() {
 	teamCreateCmd.Flags().StringVar(&teamName, "name", "", "team name (required)")
 	teamCreateCmd.Flags().StringVar(&teamSlug, "slug", "", "team slug")
 	teamCreateCmd.Flags().StringVar(&teamHomeRegion, "home-region", "", "team home region ID")
+	teamCreateCmd.Flags().BoolVar(&teamActivate, "activate", false, "set the created team as the default active team")
 
 	teamUpdateCmd.Flags().StringVar(&teamName, "name", "", "new team name")
 	teamUpdateCmd.Flags().StringVar(&teamSlug, "slug", "", "new team slug")
