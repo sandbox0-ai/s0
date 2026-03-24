@@ -110,6 +110,19 @@ func fetchAuthProviders(ctx context.Context, baseURL string) ([]authProvider, er
 	return data.Providers, nil
 }
 
+func fetchGatewayMode(ctx context.Context, baseURL string) (config.GatewayMode, bool) {
+	var data struct {
+		GatewayMode string `json:"gateway_mode"`
+	}
+
+	err := authRequest(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/metadata", "", nil, &data)
+	if err != nil {
+		return "", false
+	}
+
+	return config.ParseGatewayMode(data.GatewayMode)
+}
+
 func builtinLogin(ctx context.Context, baseURL, email, password string) (*authLoginData, error) {
 	var data authLoginData
 	err := authRequest(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/auth/login", "", map[string]string{
@@ -187,7 +200,7 @@ func getProfileWithFreshToken() (*config.Profile, error) {
 	return updated, nil
 }
 
-func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID, homeRegionID string) (*authLoginData, error) {
+func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*authLoginData, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("listen callback: %w", err)
@@ -274,14 +287,7 @@ func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID, homeRegionID 
 		Host:   ln.Addr().String(),
 		Path:   "/callback",
 	}).String()
-	loginURL := fmt.Sprintf("%s/auth/oidc/%s/login?return_url=%s",
-		strings.TrimRight(baseURL, "/"),
-		url.PathEscape(providerID),
-		url.QueryEscape(returnURL),
-	)
-	if trimmedHomeRegion := strings.TrimSpace(homeRegionID); trimmedHomeRegion != "" {
-		loginURL += "&home_region_id=" + url.QueryEscape(trimmedHomeRegion)
-	}
+	loginURL := buildOIDCLoginURL(baseURL, providerID, returnURL)
 
 	fmt.Printf("Opening browser for %s login...\n", providerID)
 	if err := openBrowser(loginURL); err != nil {
@@ -302,6 +308,23 @@ func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID, homeRegionID 
 		_ = server.Shutdown(context.Background())
 		return nil, fmt.Errorf("oidc login timed out")
 	}
+}
+
+func buildOIDCLoginURL(baseURL, providerID, returnURL string) string {
+	return fmt.Sprintf("%s/auth/oidc/%s/login?return_url=%s",
+		strings.TrimRight(baseURL, "/"),
+		url.PathEscape(providerID),
+		url.QueryEscape(returnURL),
+	)
+}
+
+func shouldShowFirstTeamOnboardingHint(ctx context.Context, baseURL string, data *authLoginData) bool {
+	if data == nil || data.RegionalSession != nil {
+		return false
+	}
+
+	mode, ok := fetchGatewayMode(ctx, baseURL)
+	return ok && mode == config.GatewayModeGlobal
 }
 
 func toRegionalSessionConfig(data *authLoginData) *config.RegionalSession {
