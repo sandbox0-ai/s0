@@ -30,5 +30,3 @@ Thumbs.db
 .env
 .env.*
 
-# Development scripts
-fswatch-sh.sh

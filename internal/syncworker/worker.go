@@ -3,6 +3,7 @@ package syncworker
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,8 +11,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	syncsdk "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 
@@ -24,6 +27,7 @@ const (
 	workerHeartbeatInterval = 2 * time.Second
 	reconcileInterval       = 5 * time.Second
 	replicaRefreshInterval  = 30 * time.Second
+	watchDebounceInterval   = 250 * time.Millisecond
 	changeBatchLimit        = 256
 	maxReplayBatches        = 8
 )
@@ -57,11 +61,78 @@ func Run(ctx context.Context, client *syncsdk.Client, attachmentID, mode string,
 		logger.Printf("Sync worker stopped for attachment %s", attachmentID)
 	}()
 
-	if err := reconcileOnce(ctx, api, attachmentID, logger, true); err != nil {
-		if err := recordSyncError(attachmentID, err); err != nil {
-			logger.Printf("Failed to record sync error: %v", err)
+	var workspaceWatcher *workspaceWatcher
+	syncWorkspaceWatch := func() {
+		if workspaceWatcher == nil {
+			return
 		}
-		logger.Printf("Initial reconcile failed: %v", err)
+		if err := workspaceWatcher.Sync(); err != nil {
+			_ = recordSyncError(attachmentID, err)
+			logger.Printf("Filesystem watch refresh failed: %v", err)
+		}
+	}
+	runReconcile := func(forceReplicaRefresh bool) {
+		syncWorkspaceWatch()
+		if err := reconcileOnce(ctx, api, attachmentID, logger, forceReplicaRefresh); err != nil {
+			_ = recordSyncError(attachmentID, err)
+			if forceReplicaRefresh {
+				logger.Printf("Initial reconcile failed: %v", err)
+				return
+			}
+			logger.Printf("Reconcile failed: %v", err)
+			syncWorkspaceWatch()
+			return
+		}
+		syncWorkspaceWatch()
+	}
+
+	runReconcile(true)
+
+	workspaceWatcher, err = newWorkspaceWatcher(attachment.WorkspaceRoot)
+	if err != nil {
+		logger.Printf("Filesystem watch unavailable for workspace %s: %v", attachment.WorkspaceRoot, err)
+	}
+	if workspaceWatcher != nil {
+		defer workspaceWatcher.Close()
+	}
+
+	var watchEvents <-chan fsnotify.Event
+	var watchErrors <-chan error
+	if workspaceWatcher != nil {
+		watchEvents = workspaceWatcher.Events()
+		watchErrors = workspaceWatcher.Errors()
+	}
+
+	var watchDebounceTimer *time.Timer
+	var watchDebounceC <-chan time.Time
+	stopWatchDebounce := func() {
+		if watchDebounceTimer == nil {
+			return
+		}
+		if !watchDebounceTimer.Stop() {
+			select {
+			case <-watchDebounceTimer.C:
+			default:
+			}
+		}
+		watchDebounceTimer = nil
+		watchDebounceC = nil
+	}
+	defer stopWatchDebounce()
+
+	scheduleWatchReconcile := func() {
+		if watchDebounceTimer == nil {
+			watchDebounceTimer = time.NewTimer(watchDebounceInterval)
+			watchDebounceC = watchDebounceTimer.C
+			return
+		}
+		if !watchDebounceTimer.Stop() {
+			select {
+			case <-watchDebounceTimer.C:
+			default:
+			}
+		}
+		watchDebounceTimer.Reset(watchDebounceInterval)
 	}
 
 	for {
@@ -78,11 +149,31 @@ func Run(ctx context.Context, client *syncsdk.Client, attachmentID, mode string,
 				_ = recordSyncError(attachmentID, err)
 				logger.Printf("Replica refresh failed: %v", err)
 			}
-		case <-reconcileTicker.C:
-			if err := reconcileOnce(ctx, api, attachmentID, logger, false); err != nil {
-				_ = recordSyncError(attachmentID, err)
-				logger.Printf("Reconcile failed: %v", err)
+		case event, ok := <-watchEvents:
+			if !ok {
+				watchEvents = nil
+				continue
 			}
+			trigger, err := workspaceWatcher.HandleEvent(event)
+			if err != nil {
+				_ = recordSyncError(attachmentID, err)
+				logger.Printf("Filesystem watch refresh failed: %v", err)
+				continue
+			}
+			if trigger {
+				scheduleWatchReconcile()
+			}
+		case err, ok := <-watchErrors:
+			if !ok {
+				watchErrors = nil
+				continue
+			}
+			logger.Printf("Filesystem watch error: %v", err)
+		case <-watchDebounceC:
+			stopWatchDebounce()
+			runReconcile(false)
+		case <-reconcileTicker.C:
+			runReconcile(false)
 		}
 	}
 }
@@ -152,12 +243,18 @@ func ensureInitialized(ctx context.Context, api *syncapi.Client, attachment *syn
 	}
 
 	logger.Printf("Seeding volume %s from local workspace %s", attachment.VolumeID, attachment.WorkspaceRoot)
+	if err := auditWorkspaceCompatibility(current, attachment.Capabilities); err != nil {
+		return err
+	}
 	return seedFromLocal(ctx, api, attachment.ID, current, matcher, logger)
 }
 
 func uploadLocalChanges(ctx context.Context, api *syncapi.Client, attachment *syncstate.Attachment, manifest *syncstate.Manifest, matcher *syncignore.Matcher, logger *log.Logger) error {
 	current, err := scanWorkspace(attachment.WorkspaceRoot)
 	if err != nil {
+		return err
+	}
+	if err := auditWorkspaceCompatibility(current, attachment.Capabilities); err != nil {
 		return err
 	}
 
@@ -229,6 +326,12 @@ func replayRemoteChanges(ctx context.Context, api *syncapi.Client, attachmentID 
 			})
 		}
 
+		manifest, err := syncstate.LoadManifest(attachmentID)
+		if err != nil {
+			return err
+		}
+		compatibilityTracker := newCompatibilityTracker(manifest, attachment.Capabilities)
+
 		mutated := false
 		lastApplied := attachment.LastSync.LastAppliedSeq
 		for _, change := range resp.Changes {
@@ -240,7 +343,12 @@ func replayRemoteChanges(ctx context.Context, api *syncapi.Client, attachmentID 
 				lastApplied = seq
 				continue
 			}
-			applied, err := applyRemoteChange(attachment.WorkspaceRoot, change)
+			if compatibilityTracker != nil {
+				if err := compatibilityTracker.ValidateRemoteChange(optString(change.Path), optNilString(change.OldPath), optEvent(change.EventType)); err != nil {
+					return err
+				}
+			}
+			applied, err := applyRemoteChange(ctx, api, attachment.VolumeID, attachment.WorkspaceRoot, change)
 			if err != nil {
 				if errors.Is(err, errRemoteBootstrapRequired) {
 					logger.Printf("Remote change requires bootstrap fallback (seq=%d path=%s event=%s)", seq, optString(change.Path), optEvent(change.EventType))
@@ -250,6 +358,9 @@ func replayRemoteChanges(ctx context.Context, api *syncapi.Client, attachmentID 
 			}
 			if applied {
 				mutated = true
+				if compatibilityTracker != nil {
+					compatibilityTracker.ApplyRemoteChange(optString(change.Path), optNilString(change.OldPath), optEvent(change.EventType))
+				}
 			}
 			lastApplied = seq
 		}
@@ -478,7 +589,7 @@ func updateCheckpoint(attachmentID string, update func(*syncstate.SyncCheckpoint
 
 var errRemoteBootstrapRequired = errors.New("remote change requires bootstrap")
 
-func applyRemoteChange(root string, change apispec.SyncJournalEntry) (bool, error) {
+func applyRemoteChange(ctx context.Context, api *syncapi.Client, volumeID, root string, change apispec.SyncJournalEntry) (bool, error) {
 	event := optEvent(change.EventType)
 	switch event {
 	case string(apispec.SyncEventTypeRemove):
@@ -511,9 +622,171 @@ func applyRemoteChange(root string, change apispec.SyncJournalEntry) (bool, erro
 			return false, err
 		}
 		return true, nil
+	case string(apispec.SyncEventTypeCreate):
+		return applyRemoteCreate(root, change)
+	case string(apispec.SyncEventTypeWrite):
+		return applyRemoteWrite(ctx, api, volumeID, root, change)
+	case string(apispec.SyncEventTypeChmod):
+		return applyRemoteChmod(root, change)
 	default:
+		return false, unsupportedRemoteChangeError(optString(change.Path), event, optEntryKind(change.EntryKind))
+	}
+}
+
+func applyRemoteCreate(root string, change apispec.SyncJournalEntry) (bool, error) {
+	relativePath := optString(change.Path)
+	if strings.TrimSpace(relativePath) == "" {
 		return false, errRemoteBootstrapRequired
 	}
+	target := filepath.Join(root, filepath.FromSlash(relativePath))
+	mode := os.FileMode(optMode(change.Mode, 0))
+	entryKind := optEntryKind(change.EntryKind)
+	switch entryKind {
+	case string(apispec.SyncJournalEntryEntryKindDirectory):
+		if err := os.MkdirAll(target, defaultDirMode(mode)); err != nil {
+			return false, err
+		}
+		if mode != 0 {
+			if err := os.Chmod(target, mode); err != nil {
+				return false, err
+			}
+		}
+		return true, nil
+	case "", string(apispec.SyncJournalEntryEntryKindFile):
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return false, err
+		}
+		info, err := os.Stat(target)
+		switch {
+		case err == nil && info.IsDir():
+			return false, errRemoteBootstrapRequired
+		case err == nil:
+			if mode != 0 {
+				if err := os.Chmod(target, mode); err != nil {
+					return false, err
+				}
+			}
+			return true, nil
+		case !os.IsNotExist(err):
+			return false, err
+		}
+
+		file, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, defaultFileMode(mode))
+		if err != nil {
+			return false, err
+		}
+		if err := file.Close(); err != nil {
+			return false, err
+		}
+		if mode != 0 {
+			if err := os.Chmod(target, mode); err != nil {
+				return false, err
+			}
+		}
+		return true, nil
+	default:
+		return false, unsupportedRemoteChangeError(relativePath, optEvent(change.EventType), entryKind)
+	}
+}
+
+func applyRemoteWrite(ctx context.Context, api *syncapi.Client, volumeID, root string, change apispec.SyncJournalEntry) (bool, error) {
+	if api == nil || strings.TrimSpace(volumeID) == "" {
+		return false, errRemoteBootstrapRequired
+	}
+	relativePath := optString(change.Path)
+	contentRef := optNilString(change.ContentRef)
+	if strings.TrimSpace(relativePath) == "" || strings.TrimSpace(contentRef) == "" {
+		return false, errRemoteBootstrapRequired
+	}
+	entryKind := optEntryKind(change.EntryKind)
+	if entryKind != "" && entryKind != string(apispec.SyncJournalEntryEntryKindFile) {
+		return false, unsupportedRemoteChangeError(relativePath, optEvent(change.EventType), entryKind)
+	}
+
+	payload, err := api.DownloadReplayPayload(ctx, volumeID, contentRef)
+	if err != nil {
+		return false, err
+	}
+	if expected := optNilString(change.ContentSHA256); expected != "" {
+		sum := sha256.Sum256(payload)
+		if hex.EncodeToString(sum[:]) != expected {
+			return false, fmt.Errorf("replay payload sha256 mismatch for %s", relativePath)
+		}
+	}
+
+	target := filepath.Join(root, filepath.FromSlash(relativePath))
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return false, err
+	}
+	if info, err := os.Stat(target); err == nil && info.IsDir() {
+		return false, errRemoteBootstrapRequired
+	} else if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+
+	mode := os.FileMode(optMode(change.Mode, 0))
+	file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, defaultFileMode(mode))
+	if err != nil {
+		return false, err
+	}
+	if _, err := file.Write(payload); err != nil {
+		file.Close()
+		return false, err
+	}
+	if err := file.Close(); err != nil {
+		return false, err
+	}
+	if mode != 0 {
+		if err := os.Chmod(target, mode); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+func applyRemoteChmod(root string, change apispec.SyncJournalEntry) (bool, error) {
+	relativePath := optString(change.Path)
+	modeValue, ok := change.Mode.Get()
+	if strings.TrimSpace(relativePath) == "" || !ok {
+		return false, errRemoteBootstrapRequired
+	}
+	target := filepath.Join(root, filepath.FromSlash(relativePath))
+	if _, err := os.Stat(target); err != nil {
+		if os.IsNotExist(err) {
+			return false, errRemoteBootstrapRequired
+		}
+		return false, err
+	}
+	if err := os.Chmod(target, os.FileMode(modeValue)); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func optEntryKind(value apispec.OptNilSyncJournalEntryEntryKind) string {
+	v, _ := value.Get()
+	return string(v)
+}
+
+func optMode(value apispec.OptNilInt64, fallback int64) int64 {
+	if v, ok := value.Get(); ok {
+		return v
+	}
+	return fallback
+}
+
+func defaultFileMode(mode os.FileMode) os.FileMode {
+	if mode != 0 {
+		return mode
+	}
+	return 0o644
+}
+
+func defaultDirMode(mode os.FileMode) os.FileMode {
+	if mode != 0 {
+		return mode
+	}
+	return 0o755
 }
 
 func isOwnReplicaEcho(change apispec.SyncJournalEntry, replicaID string) bool {
