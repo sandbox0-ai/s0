@@ -137,3 +137,59 @@ func TestResetWorkerStateStopsRunningAttachment(t *testing.T) {
 		t.Fatalf("Worker.LastStoppedAt = nil, want value")
 	}
 }
+
+func TestSQLiteStatePersistsAttachmentsAndManifests(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	attachment, err := NewAttachment(filepath.Join(home, "work"), "vol-1", "repo", "auto")
+	if err != nil {
+		t.Fatalf("NewAttachment() error = %v", err)
+	}
+	attachment.LastError = "db-state"
+	if err := SaveAttachment(attachment); err != nil {
+		t.Fatalf("SaveAttachment() error = %v", err)
+	}
+
+	manifest := &Manifest{
+		Entries: map[string]ManifestEntry{
+			"README.md": {
+				Path:   "README.md",
+				Kind:   "file",
+				Mode:   0o644,
+				Size:   12,
+				SHA256: "abc123",
+			},
+		},
+	}
+	if err := SaveManifest(attachment.ID, manifest); err != nil {
+		t.Fatalf("SaveManifest() error = %v", err)
+	}
+
+	loadedAttachment, err := LoadAttachmentByID(attachment.ID)
+	if err != nil {
+		t.Fatalf("LoadAttachmentByID() error = %v", err)
+	}
+	if loadedAttachment.VolumeID != "vol-1" {
+		t.Fatalf("loaded attachment volume_id = %q, want %q", loadedAttachment.VolumeID, "vol-1")
+	}
+	if loadedAttachment.LastError != "db-state" {
+		t.Fatalf("loaded attachment last_error = %q, want %q", loadedAttachment.LastError, "db-state")
+	}
+
+	loadedManifest, err := LoadManifest(attachment.ID)
+	if err != nil {
+		t.Fatalf("LoadManifest() error = %v", err)
+	}
+	entry, ok := loadedManifest.Entries["README.md"]
+	if !ok {
+		t.Fatalf("loaded manifest missing README.md entry")
+	}
+	if entry.SHA256 != "abc123" {
+		t.Fatalf("loaded manifest sha256 = %q, want %q", entry.SHA256, "abc123")
+	}
+
+	if _, err := os.Stat(stateDatabasePath()); err != nil {
+		t.Fatalf("Stat(state.db) error = %v", err)
+	}
+}

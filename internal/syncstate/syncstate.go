@@ -3,13 +3,11 @@ package syncstate
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"time"
 )
@@ -124,105 +122,27 @@ func DefaultIgnorePatterns() []string {
 
 // ListAttachments returns all persisted attachments sorted by workspace root.
 func ListAttachments() ([]Attachment, error) {
-	dir, err := attachmentsDir()
-	if err != nil {
-		return nil, err
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	attachments := make([]Attachment, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		attachment, err := LoadAttachmentByID(strings.TrimSuffix(entry.Name(), ".json"))
-		if err != nil {
-			return nil, err
-		}
-		attachments = append(attachments, *attachment)
-	}
-
-	slices.SortFunc(attachments, func(a, b Attachment) int {
-		return strings.Compare(a.WorkspaceRoot, b.WorkspaceRoot)
-	})
-	return attachments, nil
+	return listAttachmentsFromStore()
 }
 
 // LoadAttachmentByID loads one attachment record by ID.
 func LoadAttachmentByID(id string) (*Attachment, error) {
-	data, err := os.ReadFile(attachmentPath(id))
-	if err != nil {
-		return nil, err
-	}
-	var attachment Attachment
-	if err := json.Unmarshal(data, &attachment); err != nil {
-		return nil, err
-	}
-	return &attachment, nil
+	return loadAttachmentFromStore(id)
 }
 
 // SaveAttachment persists one attachment atomically.
 func SaveAttachment(attachment *Attachment) error {
-	if attachment == nil {
-		return errors.New("attachment is nil")
-	}
-	dir, err := attachmentsDir()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	attachment.UpdatedAt = time.Now().UTC()
-	payload, err := json.MarshalIndent(attachment, "", "  ")
-	if err != nil {
-		return err
-	}
-	path := attachmentPath(attachment.ID)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveAttachmentToStore(attachment)
 }
 
 // UpdateAttachment loads, mutates, and persists one attachment atomically enough for the local worker.
 func UpdateAttachment(id string, update func(*Attachment) error) (*Attachment, error) {
-	if update == nil {
-		return nil, errors.New("update function is nil")
-	}
-	attachment, err := LoadAttachmentByID(id)
-	if err != nil {
-		return nil, err
-	}
-	if attachment.LastSync == nil {
-		attachment.LastSync = &SyncCheckpoint{}
-	}
-	if err := update(attachment); err != nil {
-		return nil, err
-	}
-	if err := SaveAttachment(attachment); err != nil {
-		return nil, err
-	}
-	return attachment, nil
+	return updateAttachmentInStore(id, update)
 }
 
 // DeleteAttachment removes one attachment record.
 func DeleteAttachment(id string) error {
-	err := os.Remove(attachmentPath(id))
-	if errors.Is(err, os.ErrNotExist) {
-		return DeleteManifest(id)
-	}
-	if err != nil {
-		return err
-	}
-	return DeleteManifest(id)
+	return deleteAttachmentFromStore(id)
 }
 
 // ResolveAttachmentTarget resolves either an explicit target or the current directory.
@@ -381,11 +301,6 @@ func ResetWorkerState(attachmentID string) (*Attachment, error) {
 	})
 }
 
-// attachmentPath returns the JSON record path for one attachment.
-func attachmentPath(id string) string {
-	return filepath.Join(rootDir(), "attachments", id+".json")
-}
-
 // LogPath returns the persisted log file path for one attachment.
 func LogPath(id string) string {
 	return logPath(id)
@@ -393,54 +308,17 @@ func LogPath(id string) string {
 
 // LoadManifest loads the last local manifest snapshot for one attachment.
 func LoadManifest(id string) (*Manifest, error) {
-	data, err := os.ReadFile(manifestPath(id))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return &Manifest{Entries: map[string]ManifestEntry{}}, nil
-		}
-		return nil, err
-	}
-	var manifest Manifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return nil, err
-	}
-	if manifest.Entries == nil {
-		manifest.Entries = map[string]ManifestEntry{}
-	}
-	return &manifest, nil
+	return loadManifestFromStore(id)
 }
 
 // SaveManifest persists one manifest atomically.
 func SaveManifest(id string, manifest *Manifest) error {
-	if manifest == nil {
-		return errors.New("manifest is nil")
-	}
-	if manifest.Entries == nil {
-		manifest.Entries = map[string]ManifestEntry{}
-	}
-	dir := filepath.Join(rootDir(), "manifests")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	payload, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return err
-	}
-	path := manifestPath(id)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveManifestToStore(id, manifest)
 }
 
 // DeleteManifest removes one manifest file.
 func DeleteManifest(id string) error {
-	err := os.Remove(manifestPath(id))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	return err
+	return deleteManifestFromStore(id)
 }
 
 // EnsureLogDir prepares the log directory on disk.
@@ -450,15 +328,6 @@ func EnsureLogDir() error {
 
 func logPath(id string) string {
 	return filepath.Join(rootDir(), "logs", id+".log")
-}
-
-func manifestPath(id string) string {
-	return filepath.Join(rootDir(), "manifests", id+".json")
-}
-
-func attachmentsDir() (string, error) {
-	dir := filepath.Join(rootDir(), "attachments")
-	return dir, nil
 }
 
 func rootDir() string {

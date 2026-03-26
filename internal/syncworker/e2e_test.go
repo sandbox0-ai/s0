@@ -5,8 +5,11 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -130,6 +133,247 @@ func TestReconcileOnceEndToEndThroughSDKHTTP(t *testing.T) {
 	}
 }
 
+func TestReconcileOnceReplaysSandboxCreateWriteChmodWithoutBootstrapFallback(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	service := newFakeSyncService()
+	server := httptest.NewServer(service)
+	defer server.Close()
+
+	client, err := syncsdk.NewClient(
+		syncsdk.WithBaseURL(server.URL),
+		syncsdk.WithToken("test-token"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	api := syncapi.New(client)
+
+	workspace := filepath.Join(home, "work")
+	attachment, err := syncstate.NewAttachment(workspace, service.volumeID, "work", "volume")
+	if err != nil {
+		t.Fatalf("NewAttachment() error = %v", err)
+	}
+	if err := syncstate.SaveAttachment(attachment); err != nil {
+		t.Fatalf("SaveAttachment() error = %v", err)
+	}
+
+	logger := log.New(io.Discard, "", 0)
+	ctx := context.Background()
+
+	if err := reconcileOnce(ctx, api, attachment.ID, logger, true); err != nil {
+		t.Fatalf("initial reconcileOnce() error = %v", err)
+	}
+
+	service.addSandboxCreateWriteChmod("docs/note.txt", "sandbox payload\n", 0o644, 0o600)
+	if err := reconcileOnce(ctx, api, attachment.ID, logger, false); err != nil {
+		t.Fatalf("reconcileOnce(sandbox create/write/chmod) error = %v", err)
+	}
+
+	target := filepath.Join(workspace, "docs", "note.txt")
+	if got := readFile(t, target); got != "sandbox payload\n" {
+		t.Fatalf("note.txt content = %q, want %q", got, "sandbox payload\n")
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("Stat(note.txt) error = %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("note.txt mode = %#o, want %#o", info.Mode().Perm(), 0o600)
+	}
+
+	attachment, err = syncstate.LoadAttachmentByID(attachment.ID)
+	if err != nil {
+		t.Fatalf("LoadAttachmentByID() error = %v", err)
+	}
+	if attachment.LastSync.LastAppliedSeq != service.headSeq {
+		t.Fatalf("LastAppliedSeq = %d, want %d", attachment.LastSync.LastAppliedSeq, service.headSeq)
+	}
+}
+
+func TestRunUploadsLocalChangesFromFilesystemWatch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	service := newFakeSyncService()
+	server := httptest.NewServer(service)
+	defer server.Close()
+
+	client, err := syncsdk.NewClient(
+		syncsdk.WithBaseURL(server.URL),
+		syncsdk.WithToken("test-token"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	workspace := filepath.Join(home, "work")
+	attachment, err := syncstate.NewAttachment(workspace, service.volumeID, "work", "volume")
+	if err != nil {
+		t.Fatalf("NewAttachment() error = %v", err)
+	}
+	if err := syncstate.SaveAttachment(attachment); err != nil {
+		t.Fatalf("SaveAttachment() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Run(ctx, client, attachment.ID, "foreground", io.Discard)
+	}()
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return service.fileContent("README.md") == "hello from volume\n"
+	})
+
+	readmePath := filepath.Join(workspace, "README.md")
+	waitForCondition(t, 2*time.Second, func() bool {
+		data, err := os.ReadFile(readmePath)
+		return err == nil && string(data) == "hello from volume\n"
+	})
+
+	if err := os.WriteFile(readmePath, []byte("hello from watch\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(README.md) error = %v", err)
+	}
+	waitForCondition(t, 2*time.Second, func() bool {
+		return service.fileContent("README.md") == "hello from watch\n"
+	})
+
+	nestedDir := filepath.Join(workspace, "notes")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(notes) error = %v", err)
+	}
+	nestedFile := filepath.Join(nestedDir, "todo.txt")
+	if err := os.WriteFile(nestedFile, []byte("v1\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(todo.txt) error = %v", err)
+	}
+	waitForCondition(t, 2*time.Second, func() bool {
+		return service.fileContent("notes/todo.txt") == "v1\n"
+	})
+
+	if err := os.WriteFile(nestedFile, []byte("v2\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(todo.txt second update) error = %v", err)
+	}
+	waitForCondition(t, 2*time.Second, func() bool {
+		return service.fileContent("notes/todo.txt") == "v2\n"
+	})
+
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not stop after context cancellation")
+	}
+}
+
+func TestReconcileOnceReturnsExplicitErrorForUnsupportedBootstrapEntry(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	service := newFakeSyncService()
+	server := httptest.NewServer(service)
+	defer server.Close()
+
+	client, err := syncsdk.NewClient(
+		syncsdk.WithBaseURL(server.URL),
+		syncsdk.WithToken("test-token"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	api := syncapi.New(client)
+
+	workspace := filepath.Join(home, "work")
+	attachment, err := syncstate.NewAttachment(workspace, service.volumeID, "work", "volume")
+	if err != nil {
+		t.Fatalf("NewAttachment() error = %v", err)
+	}
+	if err := syncstate.SaveAttachment(attachment); err != nil {
+		t.Fatalf("SaveAttachment() error = %v", err)
+	}
+
+	logger := log.New(io.Discard, "", 0)
+	ctx := context.Background()
+
+	service.setBootstrapArchive(buildUnsupportedSymlinkArchive(t))
+	err = reconcileOnce(ctx, api, attachment.ID, logger, true)
+	if err == nil {
+		t.Fatal("reconcileOnce() error = nil, want unsupported bootstrap entry")
+	}
+	var unsupported *UnsupportedBootstrapEntryError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("reconcileOnce() error = %T, want UnsupportedBootstrapEntryError", err)
+	}
+	if unsupported.EntryType != "symlink" {
+		t.Fatalf("unsupported.EntryType = %q, want %q", unsupported.EntryType, "symlink")
+	}
+	if _, statErr := os.Lstat(filepath.Join(workspace, "README.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("workspace README.md exists or unexpected error: %v", statErr)
+	}
+}
+
+func TestReconcileOnceRejectsRemoteWindowsIncompatiblePathForWindowsReplica(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	service := newFakeSyncService()
+	server := httptest.NewServer(service)
+	defer server.Close()
+
+	client, err := syncsdk.NewClient(
+		syncsdk.WithBaseURL(server.URL),
+		syncsdk.WithToken("test-token"),
+	)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	api := syncapi.New(client)
+
+	workspace := filepath.Join(home, "work")
+	attachment, err := syncstate.NewAttachment(workspace, service.volumeID, "work", "volume")
+	if err != nil {
+		t.Fatalf("NewAttachment() error = %v", err)
+	}
+	attachment.Platform = "windows"
+	attachment.Capabilities = syncstate.FilesystemCaps{
+		CaseSensitive:                   false,
+		UnicodeNormalizationInsensitive: true,
+		WindowsCompatiblePaths:          true,
+	}
+	if err := syncstate.SaveAttachment(attachment); err != nil {
+		t.Fatalf("SaveAttachment() error = %v", err)
+	}
+
+	logger := log.New(io.Discard, "", 0)
+	ctx := context.Background()
+
+	if err := reconcileOnce(ctx, api, attachment.ID, logger, true); err != nil {
+		t.Fatalf("initial reconcileOnce() error = %v", err)
+	}
+
+	service.addSandboxWrite("docs/CON.txt", "sandbox payload\n")
+	err = reconcileOnce(ctx, api, attachment.ID, logger, false)
+	if err == nil {
+		t.Fatal("reconcileOnce() error = nil, want compatibility error")
+	}
+	var compatibilityErr *LocalPathCompatibilityError
+	if !errors.As(err, &compatibilityErr) {
+		t.Fatalf("reconcileOnce() error = %T, want LocalPathCompatibilityError", err)
+	}
+	if len(compatibilityErr.Issues) == 0 || compatibilityErr.Issues[0].Code != issueCodeWindowsReservedName {
+		t.Fatalf("compatibility issues = %+v, want first code %q", compatibilityErr.Issues, issueCodeWindowsReservedName)
+	}
+	if _, statErr := os.Lstat(filepath.Join(workspace, "docs", "CON.txt")); !os.IsNotExist(statErr) {
+		t.Fatalf("workspace incompatible path exists or unexpected error: %v", statErr)
+	}
+}
+
 type fakeSyncService struct {
 	mu               sync.Mutex
 	volumeID         string
@@ -137,6 +381,8 @@ type fakeSyncService struct {
 	replicas         map[string]apispec.SyncReplica
 	files            map[string]string
 	journal          []apispec.SyncJournalEntry
+	replayPayloads   map[string][]byte
+	bootstrapArchive []byte
 	conflicts        map[string]apispec.SyncConflict
 	headSeq          int64
 	conflictNextPath string
@@ -150,7 +396,8 @@ func newFakeSyncService() *fakeSyncService {
 		files: map[string]string{
 			"README.md": "hello from volume\n",
 		},
-		conflicts: map[string]apispec.SyncConflict{},
+		replayPayloads: map[string][]byte{},
+		conflicts:      map[string]apispec.SyncConflict{},
 	}
 }
 
@@ -171,6 +418,8 @@ func (s *fakeSyncService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleBootstrapArchive(w, r)
 	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/sync/changes"):
 		s.handleListChanges(w, r)
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/sync/replay-payload"):
+		s.handleReplayPayload(w, r)
 	case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/sync/replicas/") && strings.HasSuffix(r.URL.Path, "/changes"):
 		s.handleAppendChanges(w, r)
 	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/sync/conflicts"):
@@ -245,6 +494,13 @@ func (s *fakeSyncService) handleBootstrap(w http.ResponseWriter, r *http.Request
 func (s *fakeSyncService) handleBootstrapArchive(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if len(s.bootstrapArchive) > 0 {
+		w.Header().Set("Content-Type", "application/gzip")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(s.bootstrapArchive)
+		return
+	}
 
 	archive, err := buildArchive(s.files)
 	if err != nil {
@@ -343,6 +599,21 @@ func (s *fakeSyncService) handleAppendChanges(w http.ResponseWriter, r *http.Req
 	})
 }
 
+func (s *fakeSyncService) handleReplayPayload(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	contentRef := strings.TrimSpace(r.URL.Query().Get("content_ref"))
+	payload, ok := s.replayPayloads[contentRef]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
+}
+
 func (s *fakeSyncService) handleUpdateCursor(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -432,11 +703,28 @@ func (s *fakeSyncService) appendJournalEntryLocked(replicaID string, source apis
 	changePath, _ := change.Path.Get()
 	oldPath, _ := change.OldPath.Get()
 	content, _ := change.ContentBase64.Get()
+	entryKind, _ := change.EntryKind.Get()
+	mode, hasMode := change.Mode.Get()
+	contentSHA256, _ := change.ContentSHA256.Get()
+	sizeBytes, hasSize := change.SizeBytes.Get()
+	var contentRef string
 
 	switch string(eventType) {
 	case string(apispec.SyncEventTypeCreate), string(apispec.SyncEventTypeWrite):
 		payload, _ := base64.StdEncoding.DecodeString(content)
 		s.files[changePath] = string(payload)
+		if len(payload) > 0 {
+			if contentSHA256 == "" {
+				sum := sha256.Sum256(payload)
+				contentSHA256 = hex.EncodeToString(sum[:])
+			}
+			if !hasSize {
+				sizeBytes = int64(len(payload))
+				hasSize = true
+			}
+			contentRef = "sha256:" + contentSHA256
+			s.replayPayloads[contentRef] = append([]byte(nil), payload...)
+		}
 	case string(apispec.SyncEventTypeRemove):
 		delete(s.files, changePath)
 	case string(apispec.SyncEventTypeRename):
@@ -456,6 +744,21 @@ func (s *fakeSyncService) appendJournalEntryLocked(replicaID string, source apis
 		Tombstone:      apispec.NewOptBool(eventType == apispec.SyncEventTypeRemove),
 		CreatedAt:      apispec.NewOptDateTime(time.Now().UTC()),
 	}
+	if entryKind != "" {
+		entry.EntryKind = apispec.NewOptNilSyncJournalEntryEntryKind(apispec.SyncJournalEntryEntryKind(entryKind))
+	}
+	if hasMode {
+		entry.Mode = apispec.NewOptNilInt64(mode)
+	}
+	if contentRef != "" {
+		entry.ContentRef = apispec.NewOptNilString(contentRef)
+	}
+	if contentSHA256 != "" {
+		entry.ContentSHA256 = apispec.NewOptNilString(contentSHA256)
+	}
+	if hasSize {
+		entry.SizeBytes = apispec.NewOptNilInt64(sizeBytes)
+	}
 	if oldPath != "" {
 		entry.OldPath = apispec.NewOptNilString(oldPath)
 		entry.NormalizedOldPath = apispec.NewOptNilString(strings.ToLower(oldPath))
@@ -471,9 +774,41 @@ func (s *fakeSyncService) addSandboxWrite(pathValue, content string) {
 	change := apispec.ChangeRequest{
 		EventType:     apispec.SyncEventTypeWrite,
 		Path:          apispec.NewOptString(pathValue),
+		EntryKind:     apispec.NewOptChangeRequestEntryKind(apispec.ChangeRequestEntryKindFile),
+		Mode:          apispec.NewOptNilInt64(0o644),
 		ContentBase64: apispec.NewOptNilString(base64.StdEncoding.EncodeToString([]byte(content))),
 	}
 	s.appendJournalEntryLocked("", apispec.SyncJournalEntrySourceSandbox, change)
+}
+
+func (s *fakeSyncService) addSandboxCreateWriteChmod(pathValue, content string, createMode, chmodMode int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.appendJournalEntryLocked("", apispec.SyncJournalEntrySourceSandbox, apispec.ChangeRequest{
+		EventType: apispec.SyncEventTypeCreate,
+		Path:      apispec.NewOptString(pathValue),
+		EntryKind: apispec.NewOptChangeRequestEntryKind(apispec.ChangeRequestEntryKindFile),
+		Mode:      apispec.NewOptNilInt64(createMode),
+	})
+	s.appendJournalEntryLocked("", apispec.SyncJournalEntrySourceSandbox, apispec.ChangeRequest{
+		EventType:     apispec.SyncEventTypeWrite,
+		Path:          apispec.NewOptString(pathValue),
+		EntryKind:     apispec.NewOptChangeRequestEntryKind(apispec.ChangeRequestEntryKindFile),
+		Mode:          apispec.NewOptNilInt64(createMode),
+		ContentBase64: apispec.NewOptNilString(base64.StdEncoding.EncodeToString([]byte(content))),
+	})
+	s.appendJournalEntryLocked("", apispec.SyncJournalEntrySourceSandbox, apispec.ChangeRequest{
+		EventType: apispec.SyncEventTypeChmod,
+		Path:      apispec.NewOptString(pathValue),
+		Mode:      apispec.NewOptNilInt64(chmodMode),
+	})
+}
+
+func (s *fakeSyncService) setBootstrapArchive(archive []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.bootstrapArchive = append([]byte(nil), archive...)
 }
 
 func (s *fakeSyncService) setConflictOnNextPath(pathValue string) {
@@ -527,4 +862,42 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("ReadFile(%s) error = %v", path, err)
 	}
 	return string(data)
+}
+
+func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if condition() {
+		return
+	}
+	t.Fatalf("condition not satisfied within %s", timeout)
+}
+
+func buildUnsupportedSymlinkArchive(t *testing.T) []byte {
+	t.Helper()
+
+	var buffer bytes.Buffer
+	gzw := gzip.NewWriter(&buffer)
+	tw := tar.NewWriter(gzw)
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     "latest",
+		Typeflag: tar.TypeSymlink,
+		Linkname: "README.md",
+		Mode:     0o777,
+	}); err != nil {
+		t.Fatalf("WriteHeader(symlink) error = %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("tar.Close() error = %v", err)
+	}
+	if err := gzw.Close(); err != nil {
+		t.Fatalf("gzip.Close() error = %v", err)
+	}
+	return buffer.Bytes()
 }

@@ -119,6 +119,22 @@ func (c *Client) DownloadBootstrapArchive(ctx context.Context, volumeID, snapsho
 	return ioReadAll(okRes.Data)
 }
 
+// DownloadReplayPayload downloads one immutable replay payload by content ref.
+func (c *Client) DownloadReplayPayload(ctx context.Context, volumeID, contentRef string) ([]byte, error) {
+	res, err := c.sdk.API().APIV1SandboxvolumesIDSyncReplayPayloadGet(ctx, apispec.APIV1SandboxvolumesIDSyncReplayPayloadGetParams{
+		ID:         volumeID,
+		ContentRef: contentRef,
+	})
+	if err != nil {
+		return nil, classifySyncError(err)
+	}
+	okRes, ok := res.(*apispec.APIV1SandboxvolumesIDSyncReplayPayloadGetOK)
+	if !ok {
+		return nil, fmt.Errorf("unexpected replay payload response type %T", res)
+	}
+	return ioReadAll(okRes.Data)
+}
+
 // ListChanges lists journal entries after one known sequence.
 func (c *Client) ListChanges(ctx context.Context, volumeID string, after int64, limit int32) (*apispec.ListVolumeSyncChangesResponse, error) {
 	params := apispec.APIV1SandboxvolumesIDSyncChangesGetParams{

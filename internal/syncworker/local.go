@@ -58,7 +58,7 @@ func scanWorkspace(root string) (*syncstate.Manifest, error) {
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("symlinks are not supported yet: %s", relative)
+			return unsupportedWorkspaceEntryError(relative, info.Mode())
 		}
 
 		item := syncstate.ManifestEntry{
@@ -77,7 +77,7 @@ func scanWorkspace(root string) (*syncstate.Manifest, error) {
 			item.Size = size
 			item.SHA256 = sum
 		default:
-			return fmt.Errorf("unsupported workspace entry: %s", relative)
+			return unsupportedWorkspaceEntryError(relative, info.Mode())
 		}
 		manifest.Entries[item.Path] = item
 		return nil
@@ -205,7 +205,10 @@ func createChange(root string, entry syncstate.ManifestEntry) (apispec.ChangeReq
 		change.SizeBytes = apispec.NewOptInt64(entry.Size)
 		return change, nil
 	default:
-		return apispec.ChangeRequest{}, fmt.Errorf("unsupported entry kind %q", entry.Kind)
+		return apispec.ChangeRequest{}, &UnsupportedWorkspaceEntryError{
+			Path:      entry.Path,
+			EntryType: strings.TrimSpace(entry.Kind),
+		}
 	}
 }
 
@@ -292,7 +295,7 @@ func extractBootstrapArchive(root string, archive []byte) error {
 				return err
 			}
 		default:
-			return fmt.Errorf("unsupported bootstrap archive entry %q", header.Name)
+			return unsupportedBootstrapEntryError(relative, header.Typeflag)
 		}
 	}
 }
