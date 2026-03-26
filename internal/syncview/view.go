@@ -3,6 +3,8 @@ package syncview
 import (
 	"encoding/json"
 	"fmt"
+	pathpkg "path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -339,11 +341,25 @@ func conflictPrimaryPath(conflict apispec.SyncConflict) string {
 		optNilString(conflict.IncomingPath),
 		optNilString(conflict.IncomingOldPath),
 	} {
-		if strings.TrimSpace(candidate) != "" {
-			return strings.TrimSpace(candidate)
+		if normalized := normalizeConflictPath(candidate); normalized != "" {
+			return normalized
 		}
 	}
 	return "-"
+}
+
+func normalizeConflictPath(path string) string {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	if path == "" {
+		return ""
+	}
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimPrefix(path, "./")
+	path = pathpkg.Clean(path)
+	if path == "." || path == "/" {
+		return ""
+	}
+	return path
 }
 
 func decodeConflictMetadata(conflict apispec.SyncConflict) conflictMetadata {

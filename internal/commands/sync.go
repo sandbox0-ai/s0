@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -623,7 +624,7 @@ func resolveConflictByPath(ctx context.Context, api *syncapi.Client, attachment 
 	if err != nil {
 		return nil, err
 	}
-	candidate := filepath.ToSlash(strings.TrimSpace(relativePath))
+	candidate := normalizeConflictPath(relativePath)
 	for _, conflict := range conflicts {
 		if conflictMatchesPath(conflict, candidate) {
 			return &conflict, nil
@@ -638,7 +639,7 @@ func conflictMatchesPath(conflict apispec.SyncConflict, candidate string) bool {
 		optNilString(conflict.IncomingPath),
 		optNilString(conflict.IncomingOldPath),
 	} {
-		if path == candidate {
+		if normalizeConflictPath(path) == candidate {
 			return true
 		}
 	}
@@ -653,6 +654,13 @@ func resolveWorkspaceRelativePath(attachment *syncstate.Attachment, value string
 	if candidate == "" {
 		return "", fmt.Errorf("path is empty")
 	}
+	if strings.HasPrefix(candidate, "/") && !isAncestorPath(attachment.WorkspaceRoot, filepath.Clean(candidate)) {
+		logical := normalizeConflictPath(candidate)
+		if logical == "" {
+			return "", fmt.Errorf("%q is outside workspace %s", value, attachment.WorkspaceRoot)
+		}
+		return logical, nil
+	}
 	absolute := candidate
 	if !filepath.IsAbs(absolute) {
 		absolute = filepath.Join(mustGetwd(), candidate)
@@ -666,6 +674,33 @@ func resolveWorkspaceRelativePath(attachment *syncstate.Attachment, value string
 		return "", fmt.Errorf("%q is outside workspace %s", value, attachment.WorkspaceRoot)
 	}
 	return relative, nil
+}
+
+func normalizeConflictPath(path string) string {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	if path == "" {
+		return ""
+	}
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimPrefix(path, "./")
+	path = pathpkg.Clean(path)
+	if path == "." || path == "/" {
+		return ""
+	}
+	return filepath.ToSlash(path)
+}
+
+func isAncestorPath(root, path string) bool {
+	root = filepath.Clean(root)
+	path = filepath.Clean(path)
+	if root == path {
+		return true
+	}
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func optString(value apispec.OptString) string {

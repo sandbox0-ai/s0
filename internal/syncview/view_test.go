@@ -59,8 +59,36 @@ func TestBuildConflictListViewIncludesSandboxActorLabel(t *testing.T) {
 	if len(view.UnmergedPaths) != 1 {
 		t.Fatalf("len(UnmergedPaths) = %d, want 1", len(view.UnmergedPaths))
 	}
+	if got := view.UnmergedPaths[0].Path; got != "src/main.go" {
+		t.Fatalf("path = %q, want src/main.go", got)
+	}
 	if got := view.UnmergedPaths[0].Summary; got != `modified locally, conflicted with sandbox "sandbox-1"` {
 		t.Fatalf("summary = %q", got)
+	}
+}
+
+func TestBuildConflictListViewNormalizesLeadingSlashPaths(t *testing.T) {
+	attachment := &syncstate.Attachment{
+		WorkspaceRoot: "/tmp/work",
+		VolumeID:      "vol-123",
+	}
+	conflicts := []apispec.SyncConflict{
+		{
+			Path:   apispec.NewOptString("/conflict.txt"),
+			Reason: apispec.NewOptString("concurrent_update"),
+			Status: apispec.NewOptString("open"),
+			Metadata: apispec.NewOptNilSyncConflictMetadata(apispec.SyncConflictMetadata{
+				"latest_source": jx.Raw(`"sandbox"`),
+			}),
+		},
+	}
+
+	view := BuildConflictListView(attachment, conflicts, 0)
+	if len(view.UnmergedPaths) != 1 {
+		t.Fatalf("len(UnmergedPaths) = %d, want 1", len(view.UnmergedPaths))
+	}
+	if got := view.UnmergedPaths[0].Path; got != "conflict.txt" {
+		t.Fatalf("path = %q, want conflict.txt", got)
 	}
 }
 
