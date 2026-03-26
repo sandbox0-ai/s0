@@ -149,7 +149,7 @@ func buildUserAgent() string {
 func commandRouteScope(cmd *cobra.Command) client.RouteScope {
 	for current := cmd; current != nil; current = current.Parent() {
 		switch current.Name() {
-		case "sandbox", "template", "volume", "credential", "apikey", "image":
+		case "sandbox", "template", "volume", "sync", "credential", "apikey", "image":
 			return client.RouteScopeHomeRegion
 		case "auth", "team", "user":
 			return client.RouteScopeEntrypoint
