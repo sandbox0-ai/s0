@@ -96,7 +96,7 @@ var userUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		res, err := client.API().TenantActivePut(cmd.Context(), req)
+		res, err := client.API().UsersMePut(cmd.Context(), req)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating user profile: %v\n", err)
 			os.Exit(1)
