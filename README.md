@@ -140,17 +140,15 @@ In `global` mode, `auth`, `user`, `team`, and `admin` commands stay on the confi
 If a newly authenticated global-gateway user has no default team yet, finish first-team onboarding with:
 
 ```bash
-s0 team create --name <name> --home-region <region-id>
+s0 team create --name <name> --home-region <region-id> --activate
 ```
-
-The first team you create is automatically set as your default team.
 
 ## Commands
 
 ### Team
 
 ```bash
-s0 team create --name <name> [--slug <slug>] [--home-region <region-id>]
+s0 team create --name <name> [--slug <slug>] [--home-region <region-id>] [--activate]
 ```
 
 ### Admin Region

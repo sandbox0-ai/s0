@@ -30,3 +30,12 @@ func TestBuildCreateTeamRequestOmitsOptionalFieldsWhenBlank(t *testing.T) {
 		t.Fatal("HomeRegionID should be unset")
 	}
 }
+
+func TestBuildActivateTeamRequest(t *testing.T) {
+	req := buildActivateTeamRequest(" team-1 ")
+
+	defaultTeamID, ok := req.DefaultTeamID.Get()
+	if !ok || defaultTeamID != "team-1" {
+		t.Fatalf("DefaultTeamID = %q, want team-1", defaultTeamID)
+	}
+}
