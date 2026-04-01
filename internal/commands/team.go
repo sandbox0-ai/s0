@@ -487,7 +487,7 @@ func buildActivateTeamRequest(teamID string) *apispec.UpdateUserRequest {
 }
 
 func activateCreatedTeam(ctx context.Context, client *sandbox0.Client, teamID string) error {
-	res, err := client.API().TenantActivePut(ctx, buildActivateTeamRequest(teamID))
+	res, err := client.API().UsersMePut(ctx, buildActivateTeamRequest(teamID))
 	if err != nil {
 		return err
 	}
