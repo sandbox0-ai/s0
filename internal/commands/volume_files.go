@@ -9,30 +9,28 @@ import (
 )
 
 var (
-	filesSandboxID string
-	filesRecursive bool
-	filesParents   bool
-	filesStdin     bool
-	filesData      string
+	volumeFilesRecursive bool
+	volumeFilesParents   bool
+	volumeFilesStdin     bool
+	volumeFilesData      string
 )
 
-// sandboxFilesCmd represents the sandbox files command group.
-var sandboxFilesCmd = &cobra.Command{
+var volumeFilesCmd = &cobra.Command{
 	Use:   "files",
-	Short: "Manage files",
-	Long:  `List, read, write, upload, download, and manage files in a sandbox.`,
+	Short: "Manage files in a volume",
+	Long:  `List, read, write, upload, download, and manage files in a volume directly by volume ID.`,
 }
 
-// sandboxFilesLsCmd lists directory contents.
-var sandboxFilesLsCmd = &cobra.Command{
-	Use:   "ls [path]",
+var volumeFilesLsCmd = &cobra.Command{
+	Use:   "ls <volume-id> [path]",
 	Short: "List directory contents",
-	Long:  `List files and directories in the specified path (default: /).`,
-	Args:  cobra.MaximumNArgs(1),
+	Long:  `List files and directories in the specified volume path (default: /).`,
+	Args:  cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
+		volumeID := args[0]
 		path := "/"
-		if len(args) > 0 {
-			path = args[0]
+		if len(args) == 2 {
+			path = args[1]
 		}
 
 		client, err := getClientRaw(cmd)
@@ -41,7 +39,7 @@ var sandboxFilesLsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		result, err := client.Sandbox(filesSandboxID).ListFiles(cmd.Context(), path)
+		result, err := client.ListVolumeFiles(cmd.Context(), volumeID, path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error listing files: %v\n", err)
 			os.Exit(1)
@@ -54,14 +52,14 @@ var sandboxFilesLsCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesCatCmd reads a file to stdout.
-var sandboxFilesCatCmd = &cobra.Command{
-	Use:   "cat <path>",
+var volumeFilesCatCmd = &cobra.Command{
+	Use:   "cat <volume-id> <path>",
 	Short: "Read file content",
-	Long:  `Read file content and write to stdout.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Read file content from a volume and write to stdout.`,
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		path := args[0]
+		volumeID := args[0]
+		path := args[1]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -69,7 +67,7 @@ var sandboxFilesCatCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		result, err := client.Sandbox(filesSandboxID).ReadFile(cmd.Context(), path)
+		result, err := client.ReadVolumeFile(cmd.Context(), volumeID, path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 			os.Exit(1)
@@ -82,14 +80,14 @@ var sandboxFilesCatCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesStatCmd gets file metadata.
-var sandboxFilesStatCmd = &cobra.Command{
-	Use:   "stat <path>",
+var volumeFilesStatCmd = &cobra.Command{
+	Use:   "stat <volume-id> <path>",
 	Short: "Get file metadata",
-	Long:  `Get file or directory metadata.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Get file or directory metadata from a volume.`,
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		path := args[0]
+		volumeID := args[0]
+		path := args[1]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -97,7 +95,7 @@ var sandboxFilesStatCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		result, err := client.Sandbox(filesSandboxID).StatFile(cmd.Context(), path)
+		result, err := client.StatVolumeFile(cmd.Context(), volumeID, path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting file info: %v\n", err)
 			os.Exit(1)
@@ -110,14 +108,14 @@ var sandboxFilesStatCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesMkdirCmd creates a directory.
-var sandboxFilesMkdirCmd = &cobra.Command{
-	Use:   "mkdir <path>",
+var volumeFilesMkdirCmd = &cobra.Command{
+	Use:   "mkdir <volume-id> <path>",
 	Short: "Create a directory",
-	Long:  `Create a directory. Use --parents to create parent directories as needed.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Create a directory in a volume. Use --parents to create parent directories as needed.`,
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		path := args[0]
+		volumeID := args[0]
+		path := args[1]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -125,7 +123,7 @@ var sandboxFilesMkdirCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.Sandbox(filesSandboxID).Mkdir(cmd.Context(), path, filesParents)
+		_, err = client.MkdirVolumeFile(cmd.Context(), volumeID, path, volumeFilesParents)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
 			os.Exit(1)
@@ -135,14 +133,14 @@ var sandboxFilesMkdirCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesRmCmd deletes a file or directory.
-var sandboxFilesRmCmd = &cobra.Command{
-	Use:   "rm <path>",
+var volumeFilesRmCmd = &cobra.Command{
+	Use:   "rm <volume-id> <path>",
 	Short: "Delete a file or directory",
-	Long:  `Delete a file or directory.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Delete a file or directory from a volume.`,
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		path := args[0]
+		volumeID := args[0]
+		path := args[1]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -150,7 +148,7 @@ var sandboxFilesRmCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.Sandbox(filesSandboxID).DeleteFile(cmd.Context(), path)
+		_, err = client.DeleteVolumeFile(cmd.Context(), volumeID, path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error deleting file: %v\n", err)
 			os.Exit(1)
@@ -160,15 +158,15 @@ var sandboxFilesRmCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesMvCmd moves or renames a file.
-var sandboxFilesMvCmd = &cobra.Command{
-	Use:   "mv <source> <destination>",
+var volumeFilesMvCmd = &cobra.Command{
+	Use:   "mv <volume-id> <source> <destination>",
 	Short: "Move or rename a file",
-	Long:  `Move or rename a file or directory.`,
-	Args:  cobra.ExactArgs(2),
+	Long:  `Move or rename a file or directory inside a volume.`,
+	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
-		source := args[0]
-		destination := args[1]
+		volumeID := args[0]
+		source := args[1]
+		destination := args[2]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -176,7 +174,7 @@ var sandboxFilesMvCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.Sandbox(filesSandboxID).MoveFile(cmd.Context(), source, destination)
+		_, err = client.MoveVolumeFile(cmd.Context(), volumeID, source, destination)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error moving file: %v\n", err)
 			os.Exit(1)
@@ -186,15 +184,15 @@ var sandboxFilesMvCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesUploadCmd uploads a local file.
-var sandboxFilesUploadCmd = &cobra.Command{
-	Use:   "upload <local-path> <remote-path>",
+var volumeFilesUploadCmd = &cobra.Command{
+	Use:   "upload <volume-id> <local-path> <remote-path>",
 	Short: "Upload a local file",
-	Long:  `Upload a local file to the sandbox.`,
-	Args:  cobra.ExactArgs(2),
+	Long:  `Upload a local file to a volume path.`,
+	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
-		localPath := args[0]
-		remotePath := args[1]
+		volumeID := args[0]
+		localPath := args[1]
+		remotePath := args[2]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -208,7 +206,7 @@ var sandboxFilesUploadCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.Sandbox(filesSandboxID).WriteFile(cmd.Context(), remotePath, data)
+		_, err = client.WriteVolumeFile(cmd.Context(), volumeID, remotePath, data)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error uploading file: %v\n", err)
 			os.Exit(1)
@@ -218,15 +216,15 @@ var sandboxFilesUploadCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesDownloadCmd downloads a file to local.
-var sandboxFilesDownloadCmd = &cobra.Command{
-	Use:   "download <remote-path> <local-path>",
+var volumeFilesDownloadCmd = &cobra.Command{
+	Use:   "download <volume-id> <remote-path> <local-path>",
 	Short: "Download a file",
-	Long:  `Download a file from the sandbox to local filesystem.`,
-	Args:  cobra.ExactArgs(2),
+	Long:  `Download a file from a volume to the local filesystem.`,
+	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
-		remotePath := args[0]
-		localPath := args[1]
+		volumeID := args[0]
+		remotePath := args[1]
+		localPath := args[2]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -234,14 +232,13 @@ var sandboxFilesDownloadCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, err := client.Sandbox(filesSandboxID).ReadFile(cmd.Context(), remotePath)
+		data, err := client.ReadVolumeFile(cmd.Context(), volumeID, remotePath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error downloading file: %v\n", err)
 			os.Exit(1)
 		}
 
-		err = os.WriteFile(localPath, data, 0644)
-		if err != nil {
+		if err := os.WriteFile(localPath, data, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing local file: %v\n", err)
 			os.Exit(1)
 		}
@@ -250,16 +247,16 @@ var sandboxFilesDownloadCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesWriteCmd writes content to a file.
-var sandboxFilesWriteCmd = &cobra.Command{
-	Use:   "write <path>",
+var volumeFilesWriteCmd = &cobra.Command{
+	Use:   "write <volume-id> <path>",
 	Short: "Write content to a file",
-	Long:  `Write content to a file. Use --stdin to read from stdin or --data to provide content directly.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Write content to a volume file. Use --stdin to read from stdin or --data to provide content directly.`,
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		path := args[0]
+		volumeID := args[0]
+		path := args[1]
 
-		data, err := readCommandContent(filesStdin, filesData, os.Stdin)
+		data, err := readCommandContent(volumeFilesStdin, volumeFilesData, os.Stdin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -271,7 +268,7 @@ var sandboxFilesWriteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.Sandbox(filesSandboxID).WriteFile(cmd.Context(), path, data)
+		_, err = client.WriteVolumeFile(cmd.Context(), volumeID, path, data)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 			os.Exit(1)
@@ -281,14 +278,14 @@ var sandboxFilesWriteCmd = &cobra.Command{
 	},
 }
 
-// sandboxFilesWatchCmd watches for file changes.
-var sandboxFilesWatchCmd = &cobra.Command{
-	Use:   "watch <path>",
+var volumeFilesWatchCmd = &cobra.Command{
+	Use:   "watch <volume-id> <path>",
 	Short: "Watch for file changes",
-	Long:  `Watch for file changes in the specified path. Use -r for recursive watching.`,
-	Args:  cobra.ExactArgs(1),
+	Long:  `Watch for file changes in the specified volume path. Use -r for recursive watching.`,
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		path := args[0]
+		volumeID := args[0]
+		path := args[1]
 
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -299,14 +296,14 @@ var sandboxFilesWatchCmd = &cobra.Command{
 		ctx, cancel := signal.NotifyContext(cmd.Context(), forwardingSignals()...)
 		defer cancel()
 
-		events, errs, unsubscribe, err := client.Sandbox(filesSandboxID).WatchFiles(ctx, path, filesRecursive)
+		events, errs, unsubscribe, err := client.WatchVolumeFiles(ctx, volumeID, path, volumeFilesRecursive)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error watching files: %v\n", err)
 			os.Exit(1)
 		}
 		defer func() { _ = unsubscribe() }()
 
-		fmt.Printf("Watching %s (recursive: %v). Press Ctrl+C to stop.\n", path, filesRecursive)
+		fmt.Printf("Watching %s (recursive: %v). Press Ctrl+C to stop.\n", path, volumeFilesRecursive)
 
 		for {
 			select {
@@ -334,30 +331,21 @@ var sandboxFilesWatchCmd = &cobra.Command{
 }
 
 func init() {
-	sandboxFilesCmd.AddCommand(sandboxFilesLsCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesCatCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesStatCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesMkdirCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesRmCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesMvCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesUploadCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesDownloadCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesWriteCmd)
-	sandboxFilesCmd.AddCommand(sandboxFilesWatchCmd)
+	volumeFilesCmd.AddCommand(volumeFilesLsCmd)
+	volumeFilesCmd.AddCommand(volumeFilesCatCmd)
+	volumeFilesCmd.AddCommand(volumeFilesStatCmd)
+	volumeFilesCmd.AddCommand(volumeFilesMkdirCmd)
+	volumeFilesCmd.AddCommand(volumeFilesRmCmd)
+	volumeFilesCmd.AddCommand(volumeFilesMvCmd)
+	volumeFilesCmd.AddCommand(volumeFilesUploadCmd)
+	volumeFilesCmd.AddCommand(volumeFilesDownloadCmd)
+	volumeFilesCmd.AddCommand(volumeFilesWriteCmd)
+	volumeFilesCmd.AddCommand(volumeFilesWatchCmd)
 
-	// Sandbox ID flag (required for all subcommands)
-	sandboxFilesCmd.PersistentFlags().StringVarP(&filesSandboxID, "sandbox-id", "s", "", "sandbox ID (required)")
-	_ = sandboxFilesCmd.MarkPersistentFlagRequired("sandbox-id")
+	volumeFilesMkdirCmd.Flags().BoolVar(&volumeFilesParents, "parents", false, "create parent directories as needed")
+	volumeFilesWatchCmd.Flags().BoolVarP(&volumeFilesRecursive, "recursive", "r", false, "watch recursively")
+	volumeFilesWriteCmd.Flags().BoolVar(&volumeFilesStdin, "stdin", false, "read content from stdin")
+	volumeFilesWriteCmd.Flags().StringVar(&volumeFilesData, "data", "", "content to write directly")
 
-	// Mkdir flags
-	sandboxFilesMkdirCmd.Flags().BoolVar(&filesParents, "parents", false, "create parent directories as needed")
-
-	// Watch flags
-	sandboxFilesWatchCmd.Flags().BoolVarP(&filesRecursive, "recursive", "r", false, "watch recursively")
-
-	// Write flags
-	sandboxFilesWriteCmd.Flags().BoolVar(&filesStdin, "stdin", false, "read content from stdin")
-	sandboxFilesWriteCmd.Flags().StringVar(&filesData, "data", "", "content to write directly")
-
-	sandboxCmd.AddCommand(sandboxFilesCmd)
+	volumeCmd.AddCommand(volumeFilesCmd)
 }
