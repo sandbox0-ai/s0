@@ -307,6 +307,21 @@ s0 volume create [--access-mode RWO|RWX] [--cache-size <size>] [--prefetch <coun
 s0 volume delete <volume-id> [--force]
 ```
 
+### Volume Files
+
+```bash
+s0 volume files ls <volume-id> [path]
+s0 volume files cat <volume-id> <path>
+s0 volume files stat <volume-id> <path>
+s0 volume files mkdir <volume-id> <path> [--parents]
+s0 volume files rm <volume-id> <path>
+s0 volume files mv <volume-id> <src> <dst>
+s0 volume files upload <volume-id> <local> <remote>
+s0 volume files download <volume-id> <remote> <local>
+s0 volume files write <volume-id> <path> --stdin|--data <content>
+s0 volume files watch <volume-id> <path> --recursive
+```
+
 ### Volume Snapshot
 
 ```bash
@@ -346,6 +361,11 @@ s0 sandbox create -t my-template --ttl 3600
 
 # List files in sandbox
 s0 sandbox files ls /home/user -s <sandbox-id>
+
+# Operate on volume files directly without mounting into a sandbox first
+s0 volume files write <volume-id> /docs/readme.txt --data "Hello from s0"
+s0 volume files cat <volume-id> /docs/readme.txt
+s0 volume files watch <volume-id> /docs --recursive
 
 # Execute code in sandbox
 s0 sandbox context create --type repl --alias python -s <sandbox-id>
