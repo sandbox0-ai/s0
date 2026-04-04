@@ -20,9 +20,11 @@ import (
 )
 
 type authProvider struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"type"`
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	Type                string `json:"type"`
+	BrowserLoginEnabled bool   `json:"browser_login_enabled"`
+	DeviceLoginEnabled  bool   `json:"device_login_enabled"`
 }
 
 type authLoginData struct {
@@ -45,6 +47,15 @@ type authEnvelope struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
 }
+
+type authLoginMode string
+
+const (
+	authLoginModeAuto    authLoginMode = "auto"
+	authLoginModeDevice  authLoginMode = "device"
+	authLoginModeBrowser authLoginMode = "browser"
+	authLoginModeBuiltin authLoginMode = "builtin"
+)
 
 func authRequest(ctx context.Context, method, endpoint, token string, requestBody any, responseData any) error {
 	var body io.Reader
@@ -108,6 +119,56 @@ func fetchAuthProviders(ctx context.Context, baseURL string) ([]authProvider, er
 		return nil, err
 	}
 	return data.Providers, nil
+}
+
+func selectAuthProvider(providers []authProvider, requestedMode string) (*authProvider, authLoginMode, error) {
+	mode := authLoginMode(strings.TrimSpace(strings.ToLower(requestedMode)))
+	if mode == "" {
+		mode = authLoginModeAuto
+	}
+
+	switch mode {
+	case authLoginModeAuto:
+		for i := range providers {
+			provider := &providers[i]
+			if provider.Type == "oidc" && provider.DeviceLoginEnabled {
+				return provider, authLoginModeDevice, nil
+			}
+			if provider.Type == "oidc" && provider.BrowserLoginEnabled {
+				return provider, authLoginModeBrowser, nil
+			}
+			if provider.Type == "builtin" {
+				return provider, authLoginModeBuiltin, nil
+			}
+		}
+		return nil, "", fmt.Errorf("no supported auth provider found")
+	case authLoginModeDevice:
+		for i := range providers {
+			provider := &providers[i]
+			if provider.Type == "oidc" && provider.DeviceLoginEnabled {
+				return provider, authLoginModeDevice, nil
+			}
+		}
+		return nil, "", fmt.Errorf("no OIDC provider with device login is enabled on server")
+	case authLoginModeBrowser:
+		for i := range providers {
+			provider := &providers[i]
+			if provider.Type == "oidc" && provider.BrowserLoginEnabled {
+				return provider, authLoginModeBrowser, nil
+			}
+		}
+		return nil, "", fmt.Errorf("no OIDC provider with browser login is enabled on server")
+	case authLoginModeBuiltin:
+		for i := range providers {
+			provider := &providers[i]
+			if provider.Type == "builtin" {
+				return provider, authLoginModeBuiltin, nil
+			}
+		}
+		return nil, "", fmt.Errorf("built-in auth is not enabled on server")
+	default:
+		return nil, "", fmt.Errorf("unsupported auth mode %q", requestedMode)
+	}
 }
 
 func fetchGatewayMode(ctx context.Context, baseURL string) (config.GatewayMode, bool) {
@@ -307,6 +368,91 @@ func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*auth
 	case <-time.After(3 * time.Minute):
 		_ = server.Shutdown(context.Background())
 		return nil, fmt.Errorf("oidc login timed out")
+	}
+}
+
+func oidcLoginViaDeviceFlow(ctx context.Context, baseURL, providerID string) (*authLoginData, error) {
+	type startResponse struct {
+		DeviceLoginID           string `json:"device_login_id"`
+		UserCode                string `json:"user_code"`
+		VerificationURI         string `json:"verification_uri"`
+		VerificationURIComplete string `json:"verification_uri_complete"`
+		ExpiresAt               int64  `json:"expires_at"`
+		IntervalSeconds         int    `json:"interval_seconds"`
+	}
+	var start startResponse
+	if err := authRequest(
+		ctx,
+		http.MethodPost,
+		strings.TrimRight(baseURL, "/")+"/auth/oidc/"+url.PathEscape(providerID)+"/device/start",
+		"",
+		nil,
+		&start,
+	); err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Open %s and enter code %s to continue login.\n", start.VerificationURI, start.UserCode)
+	if start.VerificationURIComplete != "" {
+		if err := openBrowser(start.VerificationURIComplete); err != nil {
+			fmt.Printf("Open browser failed, please open manually:\n%s\n", start.VerificationURIComplete)
+		}
+	}
+
+	type pollResponse struct {
+		Status          string         `json:"status"`
+		IntervalSeconds int            `json:"interval_seconds"`
+		ExpiresAt       int64          `json:"expires_at"`
+		Login           *authLoginData `json:"login"`
+	}
+
+	interval := start.IntervalSeconds
+	if interval <= 0 {
+		interval = 5
+	}
+
+	for {
+		if start.ExpiresAt > 0 && time.Now().Unix() >= start.ExpiresAt {
+			return nil, fmt.Errorf("device login expired before completion")
+		}
+
+		var poll pollResponse
+		if err := authRequest(
+			ctx,
+			http.MethodPost,
+			strings.TrimRight(baseURL, "/")+"/auth/oidc/"+url.PathEscape(providerID)+"/device/poll",
+			"",
+			map[string]string{"device_login_id": start.DeviceLoginID},
+			&poll,
+		); err != nil {
+			return nil, err
+		}
+
+		switch poll.Status {
+		case "completed":
+			if poll.Login == nil {
+				return nil, fmt.Errorf("device login completed without login data")
+			}
+			return poll.Login, nil
+		case "slow_down":
+			if poll.IntervalSeconds > interval {
+				interval = poll.IntervalSeconds
+			} else {
+				interval += 5
+			}
+		case "pending":
+			if poll.IntervalSeconds > 0 {
+				interval = poll.IntervalSeconds
+			}
+		default:
+			return nil, fmt.Errorf("unexpected device login status %q", poll.Status)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(time.Duration(interval) * time.Second):
+		}
 	}
 }
 

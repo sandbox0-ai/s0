@@ -13,6 +13,7 @@ import (
 var (
 	authEmail    string
 	authPassword string
+	authMode     string
 )
 
 var authCmd = &cobra.Command{
@@ -49,16 +50,27 @@ var authLoginCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		provider := providers[0]
+		provider, effectiveMode, err := selectAuthProvider(providers, authMode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error selecting auth provider: %v\n", err)
+			os.Exit(1)
+		}
+
 		var loginData *authLoginData
-		switch provider.Type {
-		case "oidc":
-			loginData, err = oidcLoginViaBrowser(cmd.Context(), baseURL, provider.ID)
+		switch effectiveMode {
+		case authLoginModeDevice:
+			loginData, err = oidcLoginViaDeviceFlow(cmd.Context(), baseURL, provider.ID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "OIDC login failed: %v\n", err)
+				fmt.Fprintf(os.Stderr, "OIDC device login failed: %v\n", err)
 				os.Exit(1)
 			}
-		case "builtin":
+		case authLoginModeBrowser:
+			loginData, err = oidcLoginViaBrowser(cmd.Context(), baseURL, provider.ID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "OIDC browser login failed: %v\n", err)
+				os.Exit(1)
+			}
+		case authLoginModeBuiltin:
 			email, password := resolveBuiltinCredentials()
 			loginData, err = builtinLogin(cmd.Context(), baseURL, email, password)
 			if err != nil {
@@ -66,7 +78,7 @@ var authLoginCmd = &cobra.Command{
 				os.Exit(1)
 			}
 		default:
-			fmt.Fprintf(os.Stderr, "Error: unsupported provider type %q\n", provider.Type)
+			fmt.Fprintf(os.Stderr, "Error: unsupported login mode %q\n", effectiveMode)
 			os.Exit(1)
 		}
 
@@ -83,7 +95,7 @@ var authLoginCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Login successful via provider %q (profile: %s)\n", provider.ID, profileName)
+		fmt.Printf("Login successful via provider %q using %s mode (profile: %s)\n", provider.ID, effectiveMode, profileName)
 		if shouldShowFirstTeamOnboardingHint(cmd.Context(), baseURL, loginData) {
 			fmt.Println("No active team is configured yet. Create and activate your first team with:")
 			fmt.Println("  s0 team create --name <name> --home-region <region-id> --activate")
@@ -167,5 +179,6 @@ func init() {
 
 	authLoginCmd.Flags().StringVar(&authEmail, "email", "", "email for built-in provider login")
 	authLoginCmd.Flags().StringVar(&authPassword, "password", "", "password for built-in provider login")
+	authLoginCmd.Flags().StringVar(&authMode, "mode", string(authLoginModeAuto), "login mode: auto, device, browser, builtin")
 	authLoginCmd.MarkFlagsRequiredTogether("email", "password")
 }
