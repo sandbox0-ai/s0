@@ -70,3 +70,28 @@ func TestAuthLoginCommandDoesNotExposeHomeRegionFlag(t *testing.T) {
 		t.Fatalf("home-region flag should be removed, got %v", flag)
 	}
 }
+
+func TestSelectAuthProviderAutoPrefersDeviceOIDC(t *testing.T) {
+	provider, mode, err := selectAuthProvider([]authProvider{
+		{ID: "auth0", Type: "oidc", BrowserLoginEnabled: true, DeviceLoginEnabled: true},
+		{ID: "builtin", Type: "builtin"},
+	}, "auto")
+	if err != nil {
+		t.Fatalf("selectAuthProvider() error = %v", err)
+	}
+	if provider.ID != "auth0" {
+		t.Fatalf("provider = %q, want auth0", provider.ID)
+	}
+	if mode != authLoginModeDevice {
+		t.Fatalf("mode = %q, want %q", mode, authLoginModeDevice)
+	}
+}
+
+func TestSelectAuthProviderBuiltinModeRequiresBuiltinProvider(t *testing.T) {
+	_, _, err := selectAuthProvider([]authProvider{
+		{ID: "auth0", Type: "oidc", BrowserLoginEnabled: true, DeviceLoginEnabled: true},
+	}, "builtin")
+	if err == nil {
+		t.Fatal("expected error when builtin provider is absent")
+	}
+}
