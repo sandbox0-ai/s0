@@ -21,6 +21,44 @@ var templateCmd = &cobra.Command{
 	Long:  `List, get, create, update, and delete sandbox templates.`,
 }
 
+func loadTemplateSpecFile(path string) (templateSpec, error) {
+	var spec templateSpec
+
+	specData, err := os.ReadFile(path)
+	if err != nil {
+		return spec, err
+	}
+
+	if err := yaml.Unmarshal(specData, &spec); err != nil {
+		return spec, err
+	}
+
+	return spec, nil
+}
+
+func buildTemplateCreateRequest(templateID, specFile string) (apispec.TemplateCreateRequest, error) {
+	spec, err := loadTemplateSpecFile(specFile)
+	if err != nil {
+		return apispec.TemplateCreateRequest{}, err
+	}
+
+	return apispec.TemplateCreateRequest{
+		TemplateID: templateID,
+		Spec:       spec.Spec,
+	}, nil
+}
+
+func buildTemplateUpdateRequest(specFile string) (apispec.TemplateUpdateRequest, error) {
+	spec, err := loadTemplateSpecFile(specFile)
+	if err != nil {
+		return apispec.TemplateUpdateRequest{}, err
+	}
+
+	return apispec.TemplateUpdateRequest{
+		Spec: spec.Spec,
+	}, nil
+}
+
 // templateListCmd lists all templates.
 var templateListCmd = &cobra.Command{
 	Use:   "list",
@@ -89,15 +127,8 @@ var templateCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Read spec file
-		specData, err := os.ReadFile(templateSpecFile)
+		req, err := buildTemplateCreateRequest(templateID, templateSpecFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading spec file: %v\n", err)
-			os.Exit(1)
-		}
-
-		var spec templateSpec
-		if err := yaml.Unmarshal(specData, &spec); err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing spec file: %v\n", err)
 			os.Exit(1)
 		}
@@ -106,11 +137,6 @@ var templateCreateCmd = &cobra.Command{
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
-		}
-
-		req := apispec.TemplateCreateRequest{
-			TemplateID: templateID,
-			Spec:       spec.Spec,
 		}
 
 		template, err := client.CreateTemplate(cmd.Context(), req)
@@ -140,15 +166,8 @@ var templateUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Read spec file
-		specData, err := os.ReadFile(templateSpecFile)
+		req, err := buildTemplateUpdateRequest(templateSpecFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading spec file: %v\n", err)
-			os.Exit(1)
-		}
-
-		var spec templateSpec
-		if err := yaml.Unmarshal(specData, &spec); err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing spec file: %v\n", err)
 			os.Exit(1)
 		}
@@ -157,10 +176,6 @@ var templateUpdateCmd = &cobra.Command{
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
-		}
-
-		req := apispec.TemplateUpdateRequest{
-			Spec: spec.Spec,
 		}
 
 		template, err := client.UpdateTemplate(cmd.Context(), templateID, req)
