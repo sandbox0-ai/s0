@@ -26,15 +26,9 @@ type authProvider struct {
 }
 
 type authLoginData struct {
-	AccessToken     string `json:"access_token"`
-	RefreshToken    string `json:"refresh_token"`
-	ExpiresAt       int64  `json:"expires_at"`
-	RegionalSession *struct {
-		RegionID           string `json:"region_id"`
-		RegionalGatewayURL string `json:"regional_gateway_url"`
-		Token              string `json:"token"`
-		ExpiresAt          int64  `json:"expires_at"`
-	} `json:"regional_session,omitempty"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresAt    int64  `json:"expires_at"`
 }
 
 type authEnvelope struct {
@@ -238,7 +232,6 @@ func getProfileWithFreshToken() (*config.Profile, error) {
 		refreshed.AccessToken,
 		refreshed.RefreshToken,
 		refreshed.ExpiresAt,
-		toRegionalSessionConfig(refreshed),
 	)
 	if err := cfg.Save(); err != nil {
 		return nil, fmt.Errorf("save refreshed credentials: %w", err)
@@ -335,31 +328,13 @@ func oidcLoginViaDeviceFlow(ctx context.Context, baseURL, providerID string) (*a
 	}
 }
 
-func shouldShowFirstTeamOnboardingHint(ctx context.Context, baseURL string, data *authLoginData) bool {
-	if data == nil || data.RegionalSession != nil {
+func shouldShowCurrentTeamSelectionHint(ctx context.Context, baseURL, currentTeamID string) bool {
+	_ = ctx
+	_ = baseURL
+	if strings.TrimSpace(currentTeamID) != "" {
 		return false
 	}
-
-	mode, ok := fetchGatewayMode(ctx, baseURL)
-	return ok && mode == config.GatewayModeGlobal
-}
-
-func toRegionalSessionConfig(data *authLoginData) *config.RegionalSession {
-	if data == nil || data.RegionalSession == nil {
-		return nil
-	}
-	if data.RegionalSession.Token == "" ||
-		data.RegionalSession.RegionalGatewayURL == "" ||
-		data.RegionalSession.RegionID == "" ||
-		data.RegionalSession.ExpiresAt == 0 {
-		return nil
-	}
-	return &config.RegionalSession{
-		Token:      data.RegionalSession.Token,
-		GatewayURL: data.RegionalSession.RegionalGatewayURL,
-		RegionID:   data.RegionalSession.RegionID,
-		ExpiresAt:  data.RegionalSession.ExpiresAt,
-	}
+	return true
 }
 
 func openBrowser(targetURL string) error {

@@ -2,13 +2,11 @@ package client
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
-	"time"
 
 	"github.com/sandbox0-ai/s0/internal/config"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
-	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
 type RouteScope string
@@ -28,9 +26,17 @@ type ResolveTargetOptions struct {
 	BaseURL               string
 	Token                 string
 	ConfiguredGatewayMode config.GatewayMode
-	RegionalSession       *config.RegionalSession
+	CurrentTeamID         string
+	CurrentTeamTarget     *config.CurrentTeamTarget
 	Scope                 RouteScope
 	UserAgent             string
+}
+
+var ErrCurrentTeamRequired = errors.New("current team is not set; run `s0 team use <team-id>`")
+var ErrCurrentTeamTargetRequired = errors.New("current team region endpoint is not set; run `s0 team use <team-id>`")
+
+func tokenUsesImplicitTeamSelection(token string) bool {
+	return !strings.HasPrefix(strings.TrimSpace(token), "s0_")
 }
 
 // ResolveTarget resolves the correct API target for the current command scope.
@@ -49,78 +55,27 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 		Token:       opts.Token,
 		GatewayMode: mode,
 	}
-	if opts.Scope != RouteScopeHomeRegion || mode != config.GatewayModeGlobal {
+	if opts.Scope != RouteScopeHomeRegion {
 		return target, nil
 	}
-
-	if regionalTarget, ok := resolveStoredRegionalTarget(opts.RegionalSession, mode); ok {
-		return regionalTarget, nil
+	if tokenUsesImplicitTeamSelection(opts.Token) && strings.TrimSpace(opts.CurrentTeamID) == "" {
+		return nil, ErrCurrentTeamRequired
 	}
-
-	globalClient, err := newSDKClient(opts.BaseURL, opts.Token, opts.UserAgent)
-	if err != nil {
-		return nil, err
+	if mode != config.GatewayModeGlobal {
+		return target, nil
 	}
-
-	activeTeamRes, err := globalClient.API().TenantActiveGet(ctx, apispec.TenantActiveGetParams{})
-	if err != nil {
-		return nil, fmt.Errorf("resolve active team: %w", err)
+	if strings.TrimSpace(opts.CurrentTeamID) == "" {
+		return nil, ErrCurrentTeamRequired
 	}
-
-	activeTeamSuccess, ok := activeTeamRes.(*apispec.SuccessActiveTeamResponse)
-	if !ok {
-		return nil, fmt.Errorf("resolve active team: unexpected response type %T", activeTeamRes)
-	}
-
-	activeTeam, ok := activeTeamSuccess.Data.Get()
-	if !ok {
-		return nil, fmt.Errorf("resolve active team: missing response data")
-	}
-
-	regionTokenRes, err := globalClient.API().AuthRegionTokenPost(ctx, apispec.NewOptIssueRegionTokenRequest(apispec.IssueRegionTokenRequest{
-		TeamID: apispec.NewOptString(activeTeam.TeamID),
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("issue region token: %w", err)
-	}
-
-	regionTokenSuccess, ok := regionTokenRes.(*apispec.SuccessIssueRegionTokenResponse)
-	if !ok {
-		return nil, fmt.Errorf("issue region token: unexpected response type %T", regionTokenRes)
-	}
-
-	regionToken, ok := regionTokenSuccess.Data.Get()
-	if !ok {
-		return nil, fmt.Errorf("issue region token: missing response data")
-	}
-
-	regionalGatewayURL, ok := regionToken.RegionalGatewayURL.Get()
-	if !ok || strings.TrimSpace(regionalGatewayURL) == "" {
-		return nil, fmt.Errorf("issue region token: missing regional gateway URL")
+	if opts.CurrentTeamTarget == nil || strings.TrimSpace(opts.CurrentTeamTarget.GatewayURL) == "" {
+		return nil, ErrCurrentTeamTargetRequired
 	}
 
 	return &ResolvedTarget{
-		BaseURL:     regionalGatewayURL,
-		Token:       regionToken.Token,
+		BaseURL:     opts.CurrentTeamTarget.GatewayURL,
+		Token:       opts.Token,
 		GatewayMode: mode,
 	}, nil
-}
-
-func resolveStoredRegionalTarget(session *config.RegionalSession, mode config.GatewayMode) (*ResolvedTarget, bool) {
-	if session == nil {
-		return nil, false
-	}
-	if strings.TrimSpace(session.Token) == "" || strings.TrimSpace(session.GatewayURL) == "" {
-		return nil, false
-	}
-	if session.ExpiresAt != 0 && time.Now().Unix() >= session.ExpiresAt-30 {
-		return nil, false
-	}
-	return &ResolvedTarget{
-		BaseURL:     session.GatewayURL,
-		Token:       session.Token,
-		GatewayMode: mode,
-	}, true
 }
 
 func discoverGatewayMode(ctx context.Context, baseURL, userAgent string) (config.GatewayMode, bool) {

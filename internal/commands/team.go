@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sandbox0-ai/s0/internal/config"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
@@ -15,7 +16,6 @@ var (
 	teamName       string
 	teamSlug       string
 	teamHomeRegion string
-	teamActivate   bool
 
 	teamMemberTeamID string
 	teamMemberEmail  string
@@ -113,7 +113,7 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw(cmd)
+		client, err := getTeamCreateClient(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -139,22 +139,183 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if teamActivate {
-			if err := activateCreatedTeam(cmd.Context(), client, data.ID); err != nil {
-				fmt.Fprintf(os.Stderr, "Error activating team: %v\n", err)
-				os.Exit(1)
-			}
-		}
-
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
 		}
-
-		if teamActivate {
-			fmt.Fprintf(os.Stderr, "Activated team %s as the default team\n", data.ID)
-		}
 	},
+}
+
+func resolveGatewayModeForProfile(ctx context.Context, p *config.Profile) config.GatewayMode {
+	if mode, ok := p.GetConfiguredGatewayMode(); ok {
+		return mode
+	}
+	if detected, detectedOK := fetchGatewayMode(ctx, p.GetAPIURL()); detectedOK {
+		return detected
+	}
+	return config.GatewayModeDirect
+}
+
+func getTeamCreateClient(cmd *cobra.Command) (*sandbox0.Client, error) {
+	p, err := getProfileWithFreshToken()
+	if err != nil {
+		return nil, err
+	}
+	token := p.GetToken()
+	if token == "" {
+		return nil, ErrNoToken
+	}
+	baseURL := p.GetAPIURL()
+	mode := resolveGatewayModeForProfile(cmd.Context(), p)
+	if mode == config.GatewayModeGlobal {
+		if strings.TrimSpace(teamHomeRegion) == "" {
+			return nil, fmt.Errorf("--home-region is required in global mode")
+		}
+	}
+	return newSDKClientForBaseURL(baseURL, token)
+}
+
+func resolveTeamGatewayURL(ctx context.Context, client *sandbox0.Client, teamID string) (string, error) {
+	homeRegionID, err := resolveTeamHomeRegionID(ctx, client, teamID)
+	if err != nil {
+		return "", err
+	}
+	return resolveRegionalGatewayURL(ctx, client, homeRegionID)
+}
+
+func resolveTeamHomeRegionID(ctx context.Context, client *sandbox0.Client, teamID string) (string, error) {
+	res, err := client.API().TeamsIDGet(ctx, apispec.TeamsIDGetParams{ID: teamID})
+	if err != nil {
+		return "", fmt.Errorf("get team %s: %w", teamID, err)
+	}
+	successRes, ok := res.(*apispec.SuccessTeamResponse)
+	if !ok {
+		return "", fmt.Errorf("get team %s: unexpected response type %T", teamID, res)
+	}
+	data, ok := successRes.Data.Get()
+	if !ok {
+		return "", fmt.Errorf("get team %s: missing response data", teamID)
+	}
+	homeRegionID, ok := data.HomeRegionID.Get()
+	if !ok || strings.TrimSpace(homeRegionID) == "" {
+		return "", fmt.Errorf("team %s has no home region", teamID)
+	}
+	return homeRegionID, nil
+}
+
+func newSDKClientForBaseURL(baseURL, token string) (*sandbox0.Client, error) {
+	opts := []sandbox0.Option{
+		sandbox0.WithBaseURL(baseURL),
+		sandbox0.WithToken(token),
+	}
+	if userAgent := buildUserAgent(); userAgent != "" {
+		opts = append(opts, sandbox0.WithUserAgent(userAgent))
+	}
+	return sandbox0.NewClient(opts...)
+}
+
+var teamUseCmd = &cobra.Command{
+	Use:   "use <team-id>",
+	Short: "Set the current team locally",
+	Long:  `Set the current team in local CLI config.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		teamID := strings.TrimSpace(args[0])
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		res, err := client.API().TeamsIDGet(cmd.Context(), apispec.TeamsIDGetParams{
+			ID: teamID,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error validating team: %v\n", err)
+			os.Exit(1)
+		}
+
+		successRes, ok := res.(*apispec.SuccessTeamResponse)
+		if !ok {
+			fmt.Fprintln(os.Stderr, "Error validating team: unexpected response type")
+			os.Exit(1)
+		}
+
+		data, ok := successRes.Data.Get()
+		if !ok {
+			fmt.Fprintln(os.Stderr, "Error validating team: missing response data")
+			os.Exit(1)
+		}
+
+		cfg, err := getConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			os.Exit(1)
+		}
+
+		profileName := cfg.GetActiveProfile()
+		profile, err := cfg.GetProfile(profileName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading profile: %v\n", err)
+			os.Exit(1)
+		}
+		homeRegionID, regionalGatewayURL, err := resolveCurrentTeamTarget(cmd.Context(), profile, client, data)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error validating team: %v\n", err)
+			os.Exit(1)
+		}
+
+		cfg.SetCurrentTeam(profileName, teamID, homeRegionID, regionalGatewayURL)
+		if err := cfg.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Current team for profile %q set to %s (%s)\n", profileName, data.ID, data.Name)
+	},
+}
+
+func resolveCurrentTeamTarget(ctx context.Context, profile *config.Profile, client *sandbox0.Client, team apispec.Team) (string, string, error) {
+	if resolveGatewayModeForProfile(ctx, profile) == config.GatewayModeDirect {
+		return "", "", nil
+	}
+	homeRegionID, ok := team.HomeRegionID.Get()
+	if !ok || strings.TrimSpace(homeRegionID) == "" {
+		return "", "", fmt.Errorf("team has no home region")
+	}
+	regionalGatewayURL, err := resolveRegionalGatewayURL(ctx, client, homeRegionID)
+	if err != nil {
+		return "", "", fmt.Errorf("resolving team region endpoint: %w", err)
+	}
+	return homeRegionID, regionalGatewayURL, nil
+}
+
+func resolveRegionalGatewayURL(ctx context.Context, client *sandbox0.Client, regionID string) (string, error) {
+	res, err := client.API().RegionsGet(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list regions: %w", err)
+	}
+	successRes, ok := res.(*apispec.SuccessRegionListResponse)
+	if !ok {
+		return "", fmt.Errorf("list regions: unexpected response type %T", res)
+	}
+	data, ok := successRes.Data.Get()
+	if !ok {
+		return "", fmt.Errorf("list regions: missing response data")
+	}
+	for _, region := range data.Regions {
+		if strings.TrimSpace(region.ID) != strings.TrimSpace(regionID) {
+			continue
+		}
+		if !region.Enabled {
+			return "", fmt.Errorf("region %s is disabled", regionID)
+		}
+		if strings.TrimSpace(region.RegionalGatewayURL) == "" {
+			return "", fmt.Errorf("region %s has no regional gateway URL", regionID)
+		}
+		return region.RegionalGatewayURL, nil
+	}
+	return "", fmt.Errorf("region %s not found", regionID)
 }
 
 var teamUpdateCmd = &cobra.Command{
@@ -480,36 +641,13 @@ func buildCreateTeamRequest(name, slug, homeRegion string) *apispec.CreateTeamRe
 	return req
 }
 
-func buildActivateTeamRequest(teamID string) *apispec.UpdateUserRequest {
-	req := &apispec.UpdateUserRequest{}
-	req.DefaultTeamID = apispec.NewOptNilString(strings.TrimSpace(teamID))
-	return req
-}
-
-func activateCreatedTeam(ctx context.Context, client *sandbox0.Client, teamID string) error {
-	res, err := client.API().UsersMePut(ctx, buildActivateTeamRequest(teamID))
-	if err != nil {
-		return err
-	}
-
-	successRes, ok := res.(*apispec.SuccessUserResponse)
-	if !ok {
-		return fmt.Errorf("unexpected response type %T", res)
-	}
-
-	if _, ok := successRes.Data.Get(); !ok {
-		return fmt.Errorf("missing response data")
-	}
-
-	return nil
-}
-
 func init() {
 	rootCmd.AddCommand(teamCmd)
 
 	teamCmd.AddCommand(teamListCmd)
 	teamCmd.AddCommand(teamGetCmd)
 	teamCmd.AddCommand(teamCreateCmd)
+	teamCmd.AddCommand(teamUseCmd)
 	teamCmd.AddCommand(teamUpdateCmd)
 	teamCmd.AddCommand(teamDeleteCmd)
 	teamCmd.AddCommand(teamMemberCmd)
@@ -524,7 +662,6 @@ func init() {
 	teamCreateCmd.Flags().StringVar(&teamName, "name", "", "team name (required)")
 	teamCreateCmd.Flags().StringVar(&teamSlug, "slug", "", "team slug")
 	teamCreateCmd.Flags().StringVar(&teamHomeRegion, "home-region", "", "team home region ID")
-	teamCreateCmd.Flags().BoolVar(&teamActivate, "activate", false, "set the created team as the default active team")
 
 	teamUpdateCmd.Flags().StringVar(&teamName, "name", "", "new team name")
 	teamUpdateCmd.Flags().StringVar(&teamSlug, "slug", "", "new team slug")

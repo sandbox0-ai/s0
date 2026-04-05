@@ -82,7 +82,6 @@ var authLoginCmd = &cobra.Command{
 			loginData.AccessToken,
 			loginData.RefreshToken,
 			loginData.ExpiresAt,
-			toRegionalSessionConfig(loginData),
 		)
 		if err := cfg.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving credentials: %v\n", err)
@@ -90,9 +89,10 @@ var authLoginCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Login successful via provider %q using %s mode (profile: %s)\n", provider.ID, effectiveMode, profileName)
-		if shouldShowFirstTeamOnboardingHint(cmd.Context(), baseURL, loginData) {
-			fmt.Println("No active team is configured yet. Create and activate your first team with:")
-			fmt.Println("  s0 team create --name <name> --home-region <region-id> --activate")
+		if shouldShowCurrentTeamSelectionHint(cmd.Context(), baseURL, p.GetCurrentTeamID()) {
+			fmt.Println("Global routing requires a locally selected current team for workload commands.")
+			fmt.Println("Set it with: s0 team use <team-id>")
+			fmt.Println("If you do not have a team yet, create one with: s0 team create --name <name> --home-region <region-id>")
 		}
 	},
 }
