@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -66,7 +68,7 @@ func getConfig() (*config.Config, error) {
 
 // getClient creates a new wrapped SDK client from the configuration.
 func getClient(cmd *cobra.Command) (*client.Client, error) {
-	resolved, userAgent, err := resolveClientTarget(cmd)
+	resolved, userAgent, currentTeamID, scope, err := resolveClientTarget(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -78,13 +80,14 @@ func getClient(cmd *cobra.Command) (*client.Client, error) {
 	if userAgent != "" {
 		opts = append(opts, sandbox0.WithUserAgent(userAgent))
 	}
+	appendCurrentTeamHeader(&opts, currentTeamID, scope)
 
 	return client.NewClient(opts...)
 }
 
 // getClientRaw creates a raw SDK client for operations that don't need the wrapper.
 func getClientRaw(cmd *cobra.Command) (*sandbox0.Client, error) {
-	resolved, userAgent, err := resolveClientTarget(cmd)
+	resolved, userAgent, currentTeamID, scope, err := resolveClientTarget(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -96,19 +99,20 @@ func getClientRaw(cmd *cobra.Command) (*sandbox0.Client, error) {
 	if userAgent != "" {
 		opts = append(opts, sandbox0.WithUserAgent(userAgent))
 	}
+	appendCurrentTeamHeader(&opts, currentTeamID, scope)
 
 	return sandbox0.NewClient(opts...)
 }
 
-func resolveClientTarget(cmd *cobra.Command) (*client.ResolvedTarget, string, error) {
+func resolveClientTarget(cmd *cobra.Command) (*client.ResolvedTarget, string, string, client.RouteScope, error) {
 	p, err := getProfileWithFreshToken()
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", "", err
 	}
 
 	token := p.GetToken()
 	if token == "" {
-		return nil, "", ErrNoToken
+		return nil, "", "", "", ErrNoToken
 	}
 
 	var configuredMode config.GatewayMode
@@ -116,6 +120,7 @@ func resolveClientTarget(cmd *cobra.Command) (*client.ResolvedTarget, string, er
 		configuredMode = mode
 	}
 
+	scope := commandRouteScope(cmd)
 	resolved, err := client.ResolveTarget(
 		cmd.Context(),
 		client.ResolveTargetOptions{
@@ -123,21 +128,31 @@ func resolveClientTarget(cmd *cobra.Command) (*client.ResolvedTarget, string, er
 			Token:                 token,
 			ConfiguredGatewayMode: configuredMode,
 			CurrentTeamID:         p.GetCurrentTeamID(),
-			RegionalSession: func() *config.RegionalSession {
-				if session, ok := p.GetRegionalSession(p.GetCurrentTeamID()); ok {
-					return session
+			CurrentTeamTarget: func() *config.CurrentTeamTarget {
+				if target, ok := p.GetCurrentTeamTarget(); ok {
+					return target
 				}
 				return nil
 			}(),
-			Scope:     commandRouteScope(cmd),
+			Scope:     scope,
 			UserAgent: buildUserAgent(),
 		},
 	)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", "", err
 	}
 
-	return resolved, buildUserAgent(), nil
+	return resolved, buildUserAgent(), p.GetCurrentTeamID(), scope, nil
+}
+
+func appendCurrentTeamHeader(opts *[]sandbox0.Option, currentTeamID string, scope client.RouteScope) {
+	if scope != client.RouteScopeHomeRegion || currentTeamID == "" {
+		return
+	}
+	*opts = append(*opts, sandbox0.WithRequestEditor(func(_ context.Context, req *http.Request) error {
+		req.Header.Set("X-Team-ID", currentTeamID)
+		return nil
+	}))
 }
 
 func buildUserAgent() string {

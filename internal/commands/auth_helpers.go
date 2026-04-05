@@ -232,7 +232,6 @@ func getProfileWithFreshToken() (*config.Profile, error) {
 		refreshed.AccessToken,
 		refreshed.RefreshToken,
 		refreshed.ExpiresAt,
-		nil,
 	)
 	if err := cfg.Save(); err != nil {
 		return nil, fmt.Errorf("save refreshed credentials: %w", err)
@@ -336,10 +335,6 @@ func shouldShowCurrentTeamSelectionHint(ctx context.Context, baseURL, currentTea
 
 	mode, ok := fetchGatewayMode(ctx, baseURL)
 	return ok && mode == config.GatewayModeGlobal
-}
-
-func toRegionalSessionConfig(data *authLoginData) *config.RegionalSession {
-	return nil
 }
 
 func openBrowser(targetURL string) error {

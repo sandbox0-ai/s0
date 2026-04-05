@@ -82,7 +82,6 @@ var authLoginCmd = &cobra.Command{
 			loginData.AccessToken,
 			loginData.RefreshToken,
 			loginData.ExpiresAt,
-			toRegionalSessionConfig(loginData),
 		)
 		if err := cfg.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving credentials: %v\n", err)

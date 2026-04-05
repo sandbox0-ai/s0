@@ -1,10 +1,13 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/sandbox0-ai/s0/internal/config"
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
@@ -110,7 +113,7 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client, err := getClientRaw(cmd)
+		client, err := getTeamCreateClient(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
@@ -141,6 +144,74 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
+}
+
+func resolveGatewayModeForProfile(ctx context.Context, p *config.Profile) config.GatewayMode {
+	if mode, ok := p.GetConfiguredGatewayMode(); ok {
+		return mode
+	}
+	if detected, detectedOK := fetchGatewayMode(ctx, p.GetAPIURL()); detectedOK {
+		return detected
+	}
+	return config.GatewayModeDirect
+}
+
+func getTeamCreateClient(cmd *cobra.Command) (*sandbox0.Client, error) {
+	p, err := getProfileWithFreshToken()
+	if err != nil {
+		return nil, err
+	}
+	token := p.GetToken()
+	if token == "" {
+		return nil, ErrNoToken
+	}
+	baseURL := p.GetAPIURL()
+	mode := resolveGatewayModeForProfile(cmd.Context(), p)
+	if mode == config.GatewayModeGlobal {
+		if strings.TrimSpace(teamHomeRegion) == "" {
+			return nil, fmt.Errorf("--home-region is required in global mode")
+		}
+	}
+	return newSDKClientForBaseURL(baseURL, token)
+}
+
+func resolveTeamGatewayURL(ctx context.Context, client *sandbox0.Client, teamID string) (string, error) {
+	homeRegionID, err := resolveTeamHomeRegionID(ctx, client, teamID)
+	if err != nil {
+		return "", err
+	}
+	return resolveRegionalGatewayURL(ctx, client, homeRegionID)
+}
+
+func resolveTeamHomeRegionID(ctx context.Context, client *sandbox0.Client, teamID string) (string, error) {
+	res, err := client.API().TeamsIDGet(ctx, apispec.TeamsIDGetParams{ID: teamID})
+	if err != nil {
+		return "", fmt.Errorf("get team %s: %w", teamID, err)
+	}
+	successRes, ok := res.(*apispec.SuccessTeamResponse)
+	if !ok {
+		return "", fmt.Errorf("get team %s: unexpected response type %T", teamID, res)
+	}
+	data, ok := successRes.Data.Get()
+	if !ok {
+		return "", fmt.Errorf("get team %s: missing response data", teamID)
+	}
+	homeRegionID, ok := data.HomeRegionID.Get()
+	if !ok || strings.TrimSpace(homeRegionID) == "" {
+		return "", fmt.Errorf("team %s has no home region", teamID)
+	}
+	return homeRegionID, nil
+}
+
+func newSDKClientForBaseURL(baseURL, token string) (*sandbox0.Client, error) {
+	opts := []sandbox0.Option{
+		sandbox0.WithBaseURL(baseURL),
+		sandbox0.WithToken(token),
+	}
+	if userAgent := buildUserAgent(); userAgent != "" {
+		opts = append(opts, sandbox0.WithUserAgent(userAgent))
+	}
+	return sandbox0.NewClient(opts...)
 }
 
 var teamUseCmd = &cobra.Command{
@@ -175,6 +246,17 @@ var teamUseCmd = &cobra.Command{
 			fmt.Fprintln(os.Stderr, "Error validating team: missing response data")
 			os.Exit(1)
 		}
+		homeRegionID, ok := data.HomeRegionID.Get()
+		if !ok || strings.TrimSpace(homeRegionID) == "" {
+			fmt.Fprintln(os.Stderr, "Error validating team: team has no home region")
+			os.Exit(1)
+		}
+
+		regionalGatewayURL, err := resolveRegionalGatewayURL(cmd.Context(), client, homeRegionID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error resolving team region endpoint: %v\n", err)
+			os.Exit(1)
+		}
 
 		cfg, err := getConfig()
 		if err != nil {
@@ -183,7 +265,7 @@ var teamUseCmd = &cobra.Command{
 		}
 
 		profileName := cfg.GetActiveProfile()
-		cfg.SetCurrentTeam(profileName, teamID)
+		cfg.SetCurrentTeam(profileName, teamID, homeRegionID, regionalGatewayURL)
 		if err := cfg.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
 			os.Exit(1)
@@ -191,6 +273,34 @@ var teamUseCmd = &cobra.Command{
 
 		fmt.Printf("Current team for profile %q set to %s (%s)\n", profileName, data.ID, data.Name)
 	},
+}
+
+func resolveRegionalGatewayURL(ctx context.Context, client *sandbox0.Client, regionID string) (string, error) {
+	res, err := client.API().RegionsGet(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list regions: %w", err)
+	}
+	successRes, ok := res.(*apispec.SuccessRegionListResponse)
+	if !ok {
+		return "", fmt.Errorf("list regions: unexpected response type %T", res)
+	}
+	data, ok := successRes.Data.Get()
+	if !ok {
+		return "", fmt.Errorf("list regions: missing response data")
+	}
+	for _, region := range data.Regions {
+		if strings.TrimSpace(region.ID) != strings.TrimSpace(regionID) {
+			continue
+		}
+		if !region.Enabled {
+			return "", fmt.Errorf("region %s is disabled", regionID)
+		}
+		if strings.TrimSpace(region.RegionalGatewayURL) == "" {
+			return "", fmt.Errorf("region %s has no regional gateway URL", regionID)
+		}
+		return region.RegionalGatewayURL, nil
+	}
+	return "", fmt.Errorf("region %s not found", regionID)
 }
 
 var teamUpdateCmd = &cobra.Command{
