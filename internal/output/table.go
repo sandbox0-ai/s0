@@ -1086,7 +1086,6 @@ func (f *TableFormatter) formatUser(w io.Writer, u *apispec.User) error {
 	_ = t.Append([]string{"Email:", u.Email})
 	_ = t.Append([]string{"Name:", u.Name})
 	_ = t.Append([]string{"Avatar URL:", formatOptNilString(u.AvatarURL)})
-	_ = t.Append([]string{"Default Team ID:", formatOptNilString(u.DefaultTeamID)})
 	_ = t.Append([]string{"Email Verified:", fmt.Sprintf("%v", u.EmailVerified)})
 	_ = t.Append([]string{"Is Admin:", fmt.Sprintf("%v", u.IsAdmin)})
 	_ = t.Append([]string{"Created At:", formatTimestamp(u.CreatedAt)})
