@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/sandbox0-ai/s0/internal/config"
+	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
 func TestBuildCreateTeamRequest(t *testing.T) {
@@ -119,5 +122,42 @@ func TestResolveTeamGatewayURL(t *testing.T) {
 	}
 	if regionalGatewayURL != "https://use1.example.com" {
 		t.Fatalf("resolveTeamGatewayURL() = %q, want https://use1.example.com", regionalGatewayURL)
+	}
+}
+
+func TestResolveCurrentTeamTargetDirectModeAllowsTeamWithoutHomeRegion(t *testing.T) {
+	client, err := newSDKClientForBaseURL("https://api.example.com", "token-1")
+	if err != nil {
+		t.Fatalf("newSDKClientForBaseURL() error = %v", err)
+	}
+
+	homeRegionID, regionalGatewayURL, err := resolveCurrentTeamTarget(
+		context.Background(),
+		&config.Profile{GatewayMode: string(config.GatewayModeDirect)},
+		client,
+		apispec.Team{ID: "team-1", Name: "Team One"},
+	)
+	if err != nil {
+		t.Fatalf("resolveCurrentTeamTarget() error = %v", err)
+	}
+	if homeRegionID != "" || regionalGatewayURL != "" {
+		t.Fatalf("resolveCurrentTeamTarget() = (%q, %q), want empty target for direct mode", homeRegionID, regionalGatewayURL)
+	}
+}
+
+func TestResolveCurrentTeamTargetGlobalModeRequiresHomeRegion(t *testing.T) {
+	client, err := newSDKClientForBaseURL("https://api.example.com", "token-1")
+	if err != nil {
+		t.Fatalf("newSDKClientForBaseURL() error = %v", err)
+	}
+
+	_, _, err = resolveCurrentTeamTarget(
+		context.Background(),
+		&config.Profile{GatewayMode: string(config.GatewayModeGlobal)},
+		client,
+		apispec.Team{ID: "team-1", Name: "Team One"},
+	)
+	if err == nil || !strings.Contains(err.Error(), "team has no home region") {
+		t.Fatalf("expected missing home region error, got %v", err)
 	}
 }

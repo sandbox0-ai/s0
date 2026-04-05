@@ -246,17 +246,6 @@ var teamUseCmd = &cobra.Command{
 			fmt.Fprintln(os.Stderr, "Error validating team: missing response data")
 			os.Exit(1)
 		}
-		homeRegionID, ok := data.HomeRegionID.Get()
-		if !ok || strings.TrimSpace(homeRegionID) == "" {
-			fmt.Fprintln(os.Stderr, "Error validating team: team has no home region")
-			os.Exit(1)
-		}
-
-		regionalGatewayURL, err := resolveRegionalGatewayURL(cmd.Context(), client, homeRegionID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error resolving team region endpoint: %v\n", err)
-			os.Exit(1)
-		}
 
 		cfg, err := getConfig()
 		if err != nil {
@@ -265,6 +254,17 @@ var teamUseCmd = &cobra.Command{
 		}
 
 		profileName := cfg.GetActiveProfile()
+		profile, err := cfg.GetProfile(profileName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading profile: %v\n", err)
+			os.Exit(1)
+		}
+		homeRegionID, regionalGatewayURL, err := resolveCurrentTeamTarget(cmd.Context(), profile, client, data)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error validating team: %v\n", err)
+			os.Exit(1)
+		}
+
 		cfg.SetCurrentTeam(profileName, teamID, homeRegionID, regionalGatewayURL)
 		if err := cfg.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
@@ -273,6 +273,21 @@ var teamUseCmd = &cobra.Command{
 
 		fmt.Printf("Current team for profile %q set to %s (%s)\n", profileName, data.ID, data.Name)
 	},
+}
+
+func resolveCurrentTeamTarget(ctx context.Context, profile *config.Profile, client *sandbox0.Client, team apispec.Team) (string, string, error) {
+	if resolveGatewayModeForProfile(ctx, profile) == config.GatewayModeDirect {
+		return "", "", nil
+	}
+	homeRegionID, ok := team.HomeRegionID.Get()
+	if !ok || strings.TrimSpace(homeRegionID) == "" {
+		return "", "", fmt.Errorf("team has no home region")
+	}
+	regionalGatewayURL, err := resolveRegionalGatewayURL(ctx, client, homeRegionID)
+	if err != nil {
+		return "", "", fmt.Errorf("resolving team region endpoint: %w", err)
+	}
+	return homeRegionID, regionalGatewayURL, nil
 }
 
 func resolveRegionalGatewayURL(ctx context.Context, client *sandbox0.Client, regionID string) (string, error) {
