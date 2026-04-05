@@ -4,28 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
-
-func TestBuildOIDCLoginURL(t *testing.T) {
-	loginURL := buildOIDCLoginURL("https://global.example.com/", "google", "http://127.0.0.1:38123/callback")
-
-	parsed, err := url.Parse(loginURL)
-	if err != nil {
-		t.Fatalf("Parse() error = %v", err)
-	}
-
-	if parsed.Path != "/auth/oidc/google/login" {
-		t.Fatalf("Path = %q, want /auth/oidc/google/login", parsed.Path)
-	}
-	if got := parsed.Query().Get("return_url"); got != "http://127.0.0.1:38123/callback" {
-		t.Fatalf("return_url = %q, want callback URL", got)
-	}
-	if got := parsed.Query().Get("home_region_id"); got != "" {
-		t.Fatalf("home_region_id = %q, want empty", got)
-	}
-}
 
 func TestShouldShowFirstTeamOnboardingHint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -93,5 +73,15 @@ func TestSelectAuthProviderBuiltinModeRequiresBuiltinProvider(t *testing.T) {
 	}, "builtin")
 	if err == nil {
 		t.Fatal("expected error when builtin provider is absent")
+	}
+}
+
+func TestSelectAuthProviderRejectsBrowserMode(t *testing.T) {
+	_, _, err := selectAuthProvider([]authProvider{{ID: "auth0", Type: "oidc", BrowserLoginEnabled: true, DeviceLoginEnabled: true}}, "browser")
+	if err == nil {
+		t.Fatal("expected browser mode to be rejected")
+	}
+	if got := err.Error(); got != "browser auth mode is no longer supported; use --mode device or --mode builtin" {
+		t.Fatalf("error = %q, want browser mode rejection", got)
 	}
 }

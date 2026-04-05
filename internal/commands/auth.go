@@ -19,7 +19,7 @@ var (
 var authCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Authentication commands",
-	Long:  `Authenticate s0 CLI using OIDC or built-in account login.`,
+	Long:  `Authenticate s0 CLI using OIDC device login or built-in account login.`,
 }
 
 var authLoginCmd = &cobra.Command{
@@ -62,12 +62,6 @@ var authLoginCmd = &cobra.Command{
 			loginData, err = oidcLoginViaDeviceFlow(cmd.Context(), baseURL, provider.ID)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "OIDC device login failed: %v\n", err)
-				os.Exit(1)
-			}
-		case authLoginModeBrowser:
-			loginData, err = oidcLoginViaBrowser(cmd.Context(), baseURL, provider.ID)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "OIDC browser login failed: %v\n", err)
 				os.Exit(1)
 			}
 		case authLoginModeBuiltin:
@@ -179,6 +173,6 @@ func init() {
 
 	authLoginCmd.Flags().StringVar(&authEmail, "email", "", "email for built-in provider login")
 	authLoginCmd.Flags().StringVar(&authPassword, "password", "", "password for built-in provider login")
-	authLoginCmd.Flags().StringVar(&authMode, "mode", string(authLoginModeAuto), "login mode: auto, device, browser, builtin")
+	authLoginCmd.Flags().StringVar(&authMode, "mode", string(authLoginModeAuto), "login mode: auto, device, builtin")
 	authLoginCmd.MarkFlagsRequiredTogether("email", "password")
 }

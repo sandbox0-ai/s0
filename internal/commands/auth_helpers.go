@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -53,7 +51,6 @@ type authLoginMode string
 const (
 	authLoginModeAuto    authLoginMode = "auto"
 	authLoginModeDevice  authLoginMode = "device"
-	authLoginModeBrowser authLoginMode = "browser"
 	authLoginModeBuiltin authLoginMode = "builtin"
 )
 
@@ -134,9 +131,6 @@ func selectAuthProvider(providers []authProvider, requestedMode string) (*authPr
 			if provider.Type == "oidc" && provider.DeviceLoginEnabled {
 				return provider, authLoginModeDevice, nil
 			}
-			if provider.Type == "oidc" && provider.BrowserLoginEnabled {
-				return provider, authLoginModeBrowser, nil
-			}
 			if provider.Type == "builtin" {
 				return provider, authLoginModeBuiltin, nil
 			}
@@ -150,14 +144,6 @@ func selectAuthProvider(providers []authProvider, requestedMode string) (*authPr
 			}
 		}
 		return nil, "", fmt.Errorf("no OIDC provider with device login is enabled on server")
-	case authLoginModeBrowser:
-		for i := range providers {
-			provider := &providers[i]
-			if provider.Type == "oidc" && provider.BrowserLoginEnabled {
-				return provider, authLoginModeBrowser, nil
-			}
-		}
-		return nil, "", fmt.Errorf("no OIDC provider with browser login is enabled on server")
 	case authLoginModeBuiltin:
 		for i := range providers {
 			provider := &providers[i]
@@ -167,6 +153,9 @@ func selectAuthProvider(providers []authProvider, requestedMode string) (*authPr
 		}
 		return nil, "", fmt.Errorf("built-in auth is not enabled on server")
 	default:
+		if strings.EqualFold(requestedMode, "browser") {
+			return nil, "", fmt.Errorf("browser auth mode is no longer supported; use --mode device or --mode builtin")
+		}
 		return nil, "", fmt.Errorf("unsupported auth mode %q", requestedMode)
 	}
 }
@@ -261,116 +250,6 @@ func getProfileWithFreshToken() (*config.Profile, error) {
 	return updated, nil
 }
 
-func oidcLoginViaBrowser(ctx context.Context, baseURL, providerID string) (*authLoginData, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return nil, fmt.Errorf("listen callback: %w", err)
-	}
-	defer func() {
-		_ = ln.Close()
-	}()
-
-	resultCh := make(chan *authLoginData, 1)
-	errCh := make(chan error, 1)
-	mux := http.NewServeMux()
-	server := &http.Server{Handler: mux}
-
-	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if errMsg := q.Get("error"); errMsg != "" {
-			http.Error(w, errMsg, http.StatusBadRequest)
-			select {
-			case errCh <- fmt.Errorf("%s", errMsg):
-			default:
-			}
-			return
-		}
-
-		expiresUnix, err := strconv.ParseInt(q.Get("expires_unix"), 10, 64)
-		if err != nil {
-			http.Error(w, "missing or invalid expires_unix", http.StatusBadRequest)
-			select {
-			case errCh <- fmt.Errorf("missing or invalid expires_unix"):
-			default:
-			}
-			return
-		}
-
-		data := &authLoginData{
-			AccessToken:  q.Get("access_token"),
-			RefreshToken: q.Get("refresh_token"),
-			ExpiresAt:    expiresUnix,
-		}
-		regionalExpiresUnix, err := strconv.ParseInt(q.Get("regional_expires_unix"), 10, 64)
-		if err == nil &&
-			q.Get("regional_access_token") != "" &&
-			q.Get("regional_gateway_url") != "" &&
-			q.Get("region_id") != "" {
-			data.RegionalSession = &struct {
-				RegionID           string `json:"region_id"`
-				RegionalGatewayURL string `json:"regional_gateway_url"`
-				Token              string `json:"token"`
-				ExpiresAt          int64  `json:"expires_at"`
-			}{
-				RegionID:           q.Get("region_id"),
-				RegionalGatewayURL: q.Get("regional_gateway_url"),
-				Token:              q.Get("regional_access_token"),
-				ExpiresAt:          regionalExpiresUnix,
-			}
-		}
-		if data.AccessToken == "" || data.RefreshToken == "" {
-			http.Error(w, "missing tokens in callback", http.StatusBadRequest)
-			select {
-			case errCh <- fmt.Errorf("missing tokens in callback"):
-			default:
-			}
-			return
-		}
-
-		_, _ = w.Write([]byte("Sandbox0 CLI login successful. You can close this window."))
-		select {
-		case resultCh <- data:
-		default:
-		}
-	})
-
-	go func() {
-		if serveErr := server.Serve(ln); serveErr != nil && serveErr != http.ErrServerClosed {
-			select {
-			case errCh <- serveErr:
-			default:
-			}
-		}
-	}()
-
-	returnURL := (&url.URL{
-		Scheme: "http",
-		Host:   ln.Addr().String(),
-		Path:   "/callback",
-	}).String()
-	loginURL := buildOIDCLoginURL(baseURL, providerID, returnURL)
-
-	fmt.Printf("Opening browser for %s login...\n", providerID)
-	if err := openBrowser(loginURL); err != nil {
-		fmt.Printf("Open browser failed, please open manually:\n%s\n", loginURL)
-	}
-
-	select {
-	case <-ctx.Done():
-		_ = server.Shutdown(context.Background())
-		return nil, ctx.Err()
-	case err := <-errCh:
-		_ = server.Shutdown(context.Background())
-		return nil, err
-	case data := <-resultCh:
-		_ = server.Shutdown(context.Background())
-		return data, nil
-	case <-time.After(3 * time.Minute):
-		_ = server.Shutdown(context.Background())
-		return nil, fmt.Errorf("oidc login timed out")
-	}
-}
-
 func oidcLoginViaDeviceFlow(ctx context.Context, baseURL, providerID string) (*authLoginData, error) {
 	type startResponse struct {
 		DeviceLoginID           string `json:"device_login_id"`
@@ -454,14 +333,6 @@ func oidcLoginViaDeviceFlow(ctx context.Context, baseURL, providerID string) (*a
 		case <-time.After(time.Duration(interval) * time.Second):
 		}
 	}
-}
-
-func buildOIDCLoginURL(baseURL, providerID, returnURL string) string {
-	return fmt.Sprintf("%s/auth/oidc/%s/login?return_url=%s",
-		strings.TrimRight(baseURL, "/"),
-		url.PathEscape(providerID),
-		url.QueryEscape(returnURL),
-	)
 }
 
 func shouldShowFirstTeamOnboardingHint(ctx context.Context, baseURL string, data *authLoginData) bool {
