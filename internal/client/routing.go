@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -28,10 +29,13 @@ type ResolveTargetOptions struct {
 	BaseURL               string
 	Token                 string
 	ConfiguredGatewayMode config.GatewayMode
+	CurrentTeamID         string
 	RegionalSession       *config.RegionalSession
 	Scope                 RouteScope
 	UserAgent             string
 }
+
+var ErrCurrentTeamRequired = errors.New("current team is not set; run `s0 team use <team-id>`")
 
 // ResolveTarget resolves the correct API target for the current command scope.
 func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTarget, error) {
@@ -52,6 +56,9 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 	if opts.Scope != RouteScopeHomeRegion || mode != config.GatewayModeGlobal {
 		return target, nil
 	}
+	if strings.TrimSpace(opts.CurrentTeamID) == "" {
+		return nil, ErrCurrentTeamRequired
+	}
 
 	if regionalTarget, ok := resolveStoredRegionalTarget(opts.RegionalSession, mode); ok {
 		return regionalTarget, nil
@@ -62,23 +69,8 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 		return nil, err
 	}
 
-	activeTeamRes, err := globalClient.API().TenantActiveGet(ctx, apispec.TenantActiveGetParams{})
-	if err != nil {
-		return nil, fmt.Errorf("resolve active team: %w", err)
-	}
-
-	activeTeamSuccess, ok := activeTeamRes.(*apispec.SuccessActiveTeamResponse)
-	if !ok {
-		return nil, fmt.Errorf("resolve active team: unexpected response type %T", activeTeamRes)
-	}
-
-	activeTeam, ok := activeTeamSuccess.Data.Get()
-	if !ok {
-		return nil, fmt.Errorf("resolve active team: missing response data")
-	}
-
 	regionTokenRes, err := globalClient.API().AuthRegionTokenPost(ctx, apispec.NewOptIssueRegionTokenRequest(apispec.IssueRegionTokenRequest{
-		TeamID: apispec.NewOptString(activeTeam.TeamID),
+		TeamID: apispec.NewOptString(strings.TrimSpace(opts.CurrentTeamID)),
 	}))
 	if err != nil {
 		return nil, fmt.Errorf("issue region token: %w", err)

@@ -122,8 +122,9 @@ func resolveClientTarget(cmd *cobra.Command) (*client.ResolvedTarget, string, er
 			BaseURL:               p.GetAPIURL(),
 			Token:                 token,
 			ConfiguredGatewayMode: configuredMode,
+			CurrentTeamID:         p.GetCurrentTeamID(),
 			RegionalSession: func() *config.RegionalSession {
-				if session, ok := p.GetRegionalSession(); ok {
+				if session, ok := p.GetRegionalSession(p.GetCurrentTeamID()); ok {
 					return session
 				}
 				return nil

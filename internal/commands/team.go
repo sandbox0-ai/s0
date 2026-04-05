@@ -1,12 +1,10 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
 
-	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +13,6 @@ var (
 	teamName       string
 	teamSlug       string
 	teamHomeRegion string
-	teamActivate   bool
 
 	teamMemberTeamID string
 	teamMemberEmail  string
@@ -139,21 +136,60 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if teamActivate {
-			if err := activateCreatedTeam(cmd.Context(), client, data.ID); err != nil {
-				fmt.Fprintf(os.Stderr, "Error activating team: %v\n", err)
-				os.Exit(1)
-			}
-		}
-
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
 		}
+	},
+}
 
-		if teamActivate {
-			fmt.Fprintf(os.Stderr, "Activated team %s as the default team\n", data.ID)
+var teamUseCmd = &cobra.Command{
+	Use:   "use <team-id>",
+	Short: "Set the current team locally",
+	Long:  `Set the current team in local CLI config.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		teamID := strings.TrimSpace(args[0])
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
 		}
+
+		res, err := client.API().TeamsIDGet(cmd.Context(), apispec.TeamsIDGetParams{
+			ID: teamID,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error validating team: %v\n", err)
+			os.Exit(1)
+		}
+
+		successRes, ok := res.(*apispec.SuccessTeamResponse)
+		if !ok {
+			fmt.Fprintln(os.Stderr, "Error validating team: unexpected response type")
+			os.Exit(1)
+		}
+
+		data, ok := successRes.Data.Get()
+		if !ok {
+			fmt.Fprintln(os.Stderr, "Error validating team: missing response data")
+			os.Exit(1)
+		}
+
+		cfg, err := getConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			os.Exit(1)
+		}
+
+		profileName := cfg.GetActiveProfile()
+		cfg.SetCurrentTeam(profileName, teamID)
+		if err := cfg.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Current team for profile %q set to %s (%s)\n", profileName, data.ID, data.Name)
 	},
 }
 
@@ -480,36 +516,13 @@ func buildCreateTeamRequest(name, slug, homeRegion string) *apispec.CreateTeamRe
 	return req
 }
 
-func buildActivateTeamRequest(teamID string) *apispec.UpdateUserRequest {
-	req := &apispec.UpdateUserRequest{}
-	req.DefaultTeamID = apispec.NewOptNilString(strings.TrimSpace(teamID))
-	return req
-}
-
-func activateCreatedTeam(ctx context.Context, client *sandbox0.Client, teamID string) error {
-	res, err := client.API().UsersMePut(ctx, buildActivateTeamRequest(teamID))
-	if err != nil {
-		return err
-	}
-
-	successRes, ok := res.(*apispec.SuccessUserResponse)
-	if !ok {
-		return fmt.Errorf("unexpected response type %T", res)
-	}
-
-	if _, ok := successRes.Data.Get(); !ok {
-		return fmt.Errorf("missing response data")
-	}
-
-	return nil
-}
-
 func init() {
 	rootCmd.AddCommand(teamCmd)
 
 	teamCmd.AddCommand(teamListCmd)
 	teamCmd.AddCommand(teamGetCmd)
 	teamCmd.AddCommand(teamCreateCmd)
+	teamCmd.AddCommand(teamUseCmd)
 	teamCmd.AddCommand(teamUpdateCmd)
 	teamCmd.AddCommand(teamDeleteCmd)
 	teamCmd.AddCommand(teamMemberCmd)
@@ -524,7 +537,6 @@ func init() {
 	teamCreateCmd.Flags().StringVar(&teamName, "name", "", "team name (required)")
 	teamCreateCmd.Flags().StringVar(&teamSlug, "slug", "", "team slug")
 	teamCreateCmd.Flags().StringVar(&teamHomeRegion, "home-region", "", "team home region ID")
-	teamCreateCmd.Flags().BoolVar(&teamActivate, "activate", false, "set the created team as the default active team")
 
 	teamUpdateCmd.Flags().StringVar(&teamName, "name", "", "new team name")
 	teamUpdateCmd.Flags().StringVar(&teamSlug, "slug", "", "new team slug")

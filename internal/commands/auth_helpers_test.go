@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestShouldShowFirstTeamOnboardingHint(t *testing.T) {
+func TestShouldShowCurrentTeamSelectionHint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/metadata" {
 			http.NotFound(w, r)
@@ -19,29 +19,25 @@ func TestShouldShowFirstTeamOnboardingHint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if !shouldShowFirstTeamOnboardingHint(context.Background(), server.URL, &authLoginData{}) {
-		t.Fatal("shouldShowFirstTeamOnboardingHint() = false, want true")
+	if !shouldShowCurrentTeamSelectionHint(context.Background(), server.URL, "") {
+		t.Fatal("shouldShowCurrentTeamSelectionHint() = false, want true")
 	}
 }
 
-func TestShouldShowFirstTeamOnboardingHintSkipsWhenRegionalSessionExists(t *testing.T) {
-	server := httptest.NewServer(http.NotFoundHandler())
+func TestShouldShowCurrentTeamSelectionHintSkipsWhenCurrentTeamExists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/metadata" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":{"gateway_mode":"global","service":"global-gateway"}}`))
+	}))
 	defer server.Close()
 
-	if shouldShowFirstTeamOnboardingHint(context.Background(), server.URL, &authLoginData{
-		RegionalSession: &struct {
-			RegionID           string `json:"region_id"`
-			RegionalGatewayURL string `json:"regional_gateway_url"`
-			Token              string `json:"token"`
-			ExpiresAt          int64  `json:"expires_at"`
-		}{
-			RegionID:           "aws/us-east-1",
-			RegionalGatewayURL: "https://regional.example.com",
-			Token:              "region-token",
-			ExpiresAt:          1893456000,
-		},
-	}) {
-		t.Fatal("shouldShowFirstTeamOnboardingHint() = true, want false")
+	if shouldShowCurrentTeamSelectionHint(context.Background(), server.URL, "team-1") {
+		t.Fatal("shouldShowCurrentTeamSelectionHint() = true, want false")
 	}
 }
 

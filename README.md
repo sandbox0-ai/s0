@@ -98,6 +98,7 @@ profiles:
   default:
     api-url: https://api.sandbox0.ai
     gateway-mode: direct
+    current-team-id: team_123
     token: ${SANDBOX0_TOKEN}
 output:
   format: table
@@ -106,7 +107,7 @@ output:
 `gateway-mode` supports:
 
 - `direct`: `api-url` is the working control-plane entrypoint.
-- `global`: `api-url` is a Global Gateway entrypoint and workload commands are routed through the active team's home region.
+- `global`: `api-url` is a Global Gateway entrypoint and workload commands are routed through the locally selected current team's home region.
 
 Mode resolution order:
 
@@ -135,12 +136,13 @@ Flags:
   --token string     Override API token
 ```
 
-In `global` mode, `auth`, `user`, `team`, and `admin` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `volume`, `credential`, `apikey`, and registry credential flows resolve the active team and switch to the home-region gateway automatically.
+In `global` mode, `auth`, `user`, `team`, and `admin` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `volume`, `credential`, `apikey`, and registry credential flows use the locally selected current team and switch to the home-region gateway automatically.
 
-If a newly authenticated global-gateway user has no default team yet, finish first-team onboarding with:
+If a global-gateway profile has no current team selected yet, create one if needed and then select it locally:
 
 ```bash
-s0 team create --name <name> --home-region <region-id> --activate
+s0 team create --name <name> --home-region <region-id>
+s0 team use <team-id>
 ```
 
 ## Commands
@@ -148,7 +150,8 @@ s0 team create --name <name> --home-region <region-id> --activate
 ### Team
 
 ```bash
-s0 team create --name <name> [--slug <slug>] [--home-region <region-id>] [--activate]
+s0 team create --name <name> [--slug <slug>] [--home-region <region-id>]
+s0 team use <team-id>
 ```
 
 ### Admin Region

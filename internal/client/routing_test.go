@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,8 +36,35 @@ func TestResolveTargetDefaultsToDirectWhenMetadataIsMissing(t *testing.T) {
 	}
 }
 
+func TestResolveTargetRequiresCurrentTeamForGlobalHomeRegionRouting(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/metadata" {
+			http.NotFound(w, r)
+			return
+		}
+
+		writeJSON(t, w, http.StatusOK, map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"gateway_mode": "global",
+				"service":      "global-gateway",
+			},
+		})
+	}))
+	defer server.Close()
+
+	_, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+		BaseURL:   server.URL,
+		Token:     "global-token",
+		Scope:     RouteScopeHomeRegion,
+		UserAgent: "s0/test",
+	})
+	if err != ErrCurrentTeamRequired {
+		t.Fatalf("ResolveTarget() error = %v, want %v", err, ErrCurrentTeamRequired)
+	}
+}
+
 func TestResolveTargetUsesGlobalHomeRegionRouting(t *testing.T) {
-	var tenantActiveCalls int
 	var regionTokenCalls int
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,21 +77,21 @@ func TestResolveTargetUsesGlobalHomeRegionRouting(t *testing.T) {
 					"service":      "global-gateway",
 				},
 			})
-		case "/tenant/active":
-			tenantActiveCalls++
-			writeJSON(t, w, http.StatusOK, map[string]any{
-				"success": true,
-				"data": map[string]any{
-					"user_id":              "user-1",
-					"team_id":              "team-1",
-					"team_role":            "admin",
-					"home_region_id":       "aws/us-east-1",
-					"default_team":         true,
-					"regional_gateway_url": "https://regional.example.com",
-				},
-			})
 		case "/auth/region-token":
 			regionTokenCalls++
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			var request struct {
+				TeamID string `json:"team_id"`
+			}
+			if err := json.Unmarshal(body, &request); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			if request.TeamID != "team-1" {
+				t.Fatalf("team_id = %q, want team-1", request.TeamID)
+			}
 			writeJSON(t, w, http.StatusOK, map[string]any{
 				"success": true,
 				"data": map[string]any{
@@ -80,10 +108,11 @@ func TestResolveTargetUsesGlobalHomeRegionRouting(t *testing.T) {
 	defer server.Close()
 
 	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
-		BaseURL:   server.URL,
-		Token:     "global-token",
-		Scope:     RouteScopeHomeRegion,
-		UserAgent: "s0/test",
+		BaseURL:       server.URL,
+		Token:         "global-token",
+		CurrentTeamID: "team-1",
+		Scope:         RouteScopeHomeRegion,
+		UserAgent:     "s0/test",
 	})
 	if err != nil {
 		t.Fatalf("ResolveTarget() error = %v", err)
@@ -95,16 +124,12 @@ func TestResolveTargetUsesGlobalHomeRegionRouting(t *testing.T) {
 	if target.Token != "region-token" {
 		t.Fatalf("Token = %q, want region-token", target.Token)
 	}
-	if tenantActiveCalls != 1 {
-		t.Fatalf("tenant/active calls = %d, want 1", tenantActiveCalls)
-	}
 	if regionTokenCalls != 1 {
 		t.Fatalf("auth/region-token calls = %d, want 1", regionTokenCalls)
 	}
 }
 
 func TestResolveTargetUsesStoredRegionalSessionBeforeGlobalExchange(t *testing.T) {
-	var tenantActiveCalls int
 	var regionTokenCalls int
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,9 +142,6 @@ func TestResolveTargetUsesStoredRegionalSessionBeforeGlobalExchange(t *testing.T
 					"service":      "global-gateway",
 				},
 			})
-		case "/tenant/active":
-			tenantActiveCalls++
-			http.Error(w, "unexpected", http.StatusInternalServerError)
 		case "/auth/region-token":
 			regionTokenCalls++
 			http.Error(w, "unexpected", http.StatusInternalServerError)
@@ -130,9 +152,11 @@ func TestResolveTargetUsesStoredRegionalSessionBeforeGlobalExchange(t *testing.T
 	defer server.Close()
 
 	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
-		BaseURL: server.URL,
-		Token:   "global-token",
+		BaseURL:       server.URL,
+		Token:         "global-token",
+		CurrentTeamID: "team-1",
 		RegionalSession: &config.RegionalSession{
+			TeamID:     "team-1",
 			Token:      "regional-token",
 			GatewayURL: "https://regional.example.com",
 			RegionID:   "aws/us-east-1",
@@ -151,16 +175,12 @@ func TestResolveTargetUsesStoredRegionalSessionBeforeGlobalExchange(t *testing.T
 	if target.Token != "regional-token" {
 		t.Fatalf("Token = %q, want regional-token", target.Token)
 	}
-	if tenantActiveCalls != 0 {
-		t.Fatalf("tenant/active calls = %d, want 0", tenantActiveCalls)
-	}
 	if regionTokenCalls != 0 {
 		t.Fatalf("auth/region-token calls = %d, want 0", regionTokenCalls)
 	}
 }
 
 func TestResolveTargetKeepsEntrypointCommandsOnGlobalGateway(t *testing.T) {
-	var tenantActiveCalls int
 	var regionTokenCalls int
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -173,9 +193,6 @@ func TestResolveTargetKeepsEntrypointCommandsOnGlobalGateway(t *testing.T) {
 					"service":      "global-gateway",
 				},
 			})
-		case "/tenant/active":
-			tenantActiveCalls++
-			http.Error(w, "unexpected", http.StatusInternalServerError)
 		case "/auth/region-token":
 			regionTokenCalls++
 			http.Error(w, "unexpected", http.StatusInternalServerError)
@@ -201,9 +218,6 @@ func TestResolveTargetKeepsEntrypointCommandsOnGlobalGateway(t *testing.T) {
 	if target.Token != "global-token" {
 		t.Fatalf("Token = %q, want global-token", target.Token)
 	}
-	if tenantActiveCalls != 0 {
-		t.Fatalf("tenant/active calls = %d, want 0", tenantActiveCalls)
-	}
 	if regionTokenCalls != 0 {
 		t.Fatalf("auth/region-token calls = %d, want 0", regionTokenCalls)
 	}
@@ -214,18 +228,6 @@ func TestResolveTargetHonorsConfiguredGatewayModeWhenMetadataIsUnavailable(t *te
 		switch r.URL.Path {
 		case "/metadata":
 			http.NotFound(w, r)
-		case "/tenant/active":
-			writeJSON(t, w, http.StatusOK, map[string]any{
-				"success": true,
-				"data": map[string]any{
-					"user_id":              "user-1",
-					"team_id":              "team-1",
-					"team_role":            "admin",
-					"home_region_id":       "aws/us-east-1",
-					"default_team":         true,
-					"regional_gateway_url": "https://regional.example.com",
-				},
-			})
 		case "/auth/region-token":
 			writeJSON(t, w, http.StatusOK, map[string]any{
 				"success": true,
@@ -246,6 +248,7 @@ func TestResolveTargetHonorsConfiguredGatewayModeWhenMetadataIsUnavailable(t *te
 		BaseURL:               server.URL,
 		Token:                 "global-token",
 		ConfiguredGatewayMode: config.GatewayModeGlobal,
+		CurrentTeamID:         "team-1",
 		Scope:                 RouteScopeHomeRegion,
 		UserAgent:             "s0/test",
 	})

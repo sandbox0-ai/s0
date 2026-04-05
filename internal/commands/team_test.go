@@ -31,11 +31,8 @@ func TestBuildCreateTeamRequestOmitsOptionalFieldsWhenBlank(t *testing.T) {
 	}
 }
 
-func TestBuildActivateTeamRequest(t *testing.T) {
-	req := buildActivateTeamRequest(" team-1 ")
-
-	defaultTeamID, ok := req.DefaultTeamID.Get()
-	if !ok || defaultTeamID != "team-1" {
-		t.Fatalf("DefaultTeamID = %q, want team-1", defaultTeamID)
+func TestTeamCreateCommandDoesNotExposeActivateFlag(t *testing.T) {
+	if flag := teamCreateCmd.Flags().Lookup("activate"); flag != nil {
+		t.Fatalf("activate flag should be removed, got %v", flag)
 	}
 }

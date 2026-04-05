@@ -10,10 +10,8 @@ import (
 )
 
 var (
-	userName               string
-	userAvatarURL          string
-	userDefaultTeamID      string
-	userClearDefaultTeamID bool
+	userName      string
+	userAvatarURL string
 )
 
 var userCmd = &cobra.Command{
@@ -76,17 +74,9 @@ var userUpdateCmd = &cobra.Command{
 			hasChange = true
 		}
 
-		if userClearDefaultTeamID {
-			req.DefaultTeamID.SetToNull()
-			hasChange = true
-		} else if strings.TrimSpace(userDefaultTeamID) != "" {
-			req.DefaultTeamID = apispec.NewOptNilString(userDefaultTeamID)
-			hasChange = true
-		}
-
 		if !hasChange {
 			fmt.Fprintln(os.Stderr, "Error: at least one field must be set for update")
-			fmt.Fprintln(os.Stderr, "Use --name, --avatar-url, --default-team-id, or --clear-default-team-id")
+			fmt.Fprintln(os.Stderr, "Use --name and/or --avatar-url")
 			os.Exit(1)
 		}
 
@@ -129,6 +119,4 @@ func init() {
 
 	userUpdateCmd.Flags().StringVar(&userName, "name", "", "new display name")
 	userUpdateCmd.Flags().StringVar(&userAvatarURL, "avatar-url", "", "new avatar URL")
-	userUpdateCmd.Flags().StringVar(&userDefaultTeamID, "default-team-id", "", "new default team ID")
-	userUpdateCmd.Flags().BoolVar(&userClearDefaultTeamID, "clear-default-team-id", false, "clear default team ID")
 }

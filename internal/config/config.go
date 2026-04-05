@@ -20,9 +20,11 @@ type Config struct {
 type Profile struct {
 	APIURL             string `yaml:"api-url" mapstructure:"api-url"`
 	GatewayMode        string `yaml:"gateway-mode" mapstructure:"gateway-mode"`
+	CurrentTeamID      string `yaml:"current-team-id" mapstructure:"current-team-id"`
 	Token              string `yaml:"token" mapstructure:"token"`
 	RefreshToken       string `yaml:"refresh-token" mapstructure:"refresh-token"`
 	ExpiresAt          int64  `yaml:"expires-at" mapstructure:"expires-at"`
+	RegionalTeamID     string `yaml:"regional-team-id" mapstructure:"regional-team-id"`
 	RegionalToken      string `yaml:"regional-token" mapstructure:"regional-token"`
 	RegionalGatewayURL string `yaml:"regional-gateway-url" mapstructure:"regional-gateway-url"`
 	RegionalRegionID   string `yaml:"regional-region-id" mapstructure:"regional-region-id"`
@@ -30,6 +32,7 @@ type Profile struct {
 }
 
 type RegionalSession struct {
+	TeamID     string
 	Token      string
 	GatewayURL string
 	RegionID   string
@@ -209,15 +212,25 @@ func (p *Profile) GetRefreshToken() string {
 	return expandEnvVars(p.RefreshToken)
 }
 
+// GetCurrentTeamID returns the locally selected current team ID.
+func (p *Profile) GetCurrentTeamID() string {
+	return strings.TrimSpace(expandEnvVars(p.CurrentTeamID))
+}
+
 // GetRegionalSession returns the stored regional session when all required fields are present.
-func (p *Profile) GetRegionalSession() (*RegionalSession, bool) {
+func (p *Profile) GetRegionalSession(currentTeamID string) (*RegionalSession, bool) {
 	token := expandEnvVars(p.RegionalToken)
 	gatewayURL := expandEnvVars(p.RegionalGatewayURL)
 	regionID := expandEnvVars(p.RegionalRegionID)
-	if token == "" || gatewayURL == "" || regionID == "" || p.RegionalExpiresAt == 0 {
+	teamID := strings.TrimSpace(expandEnvVars(p.RegionalTeamID))
+	if token == "" || gatewayURL == "" || regionID == "" || teamID == "" || p.RegionalExpiresAt == 0 {
+		return nil, false
+	}
+	if strings.TrimSpace(currentTeamID) == "" || teamID != strings.TrimSpace(currentTeamID) {
 		return nil, false
 	}
 	return &RegionalSession{
+		TeamID:     teamID,
 		Token:      token,
 		GatewayURL: gatewayURL,
 		RegionID:   regionID,
@@ -262,11 +275,13 @@ func (c *Config) SetCredentials(
 	p.RefreshToken = refreshToken
 	p.ExpiresAt = expiresAt
 	if regionalSession != nil {
+		p.RegionalTeamID = regionalSession.TeamID
 		p.RegionalToken = regionalSession.Token
 		p.RegionalGatewayURL = regionalSession.GatewayURL
 		p.RegionalRegionID = regionalSession.RegionID
 		p.RegionalExpiresAt = regionalSession.ExpiresAt
 	} else {
+		p.RegionalTeamID = ""
 		p.RegionalToken = ""
 		p.RegionalGatewayURL = ""
 		p.RegionalRegionID = ""
@@ -288,6 +303,25 @@ func (c *Config) ClearCredentials(profileName string) {
 	p.Token = ""
 	p.RefreshToken = ""
 	p.ExpiresAt = 0
+	p.RegionalTeamID = ""
+	p.RegionalToken = ""
+	p.RegionalGatewayURL = ""
+	p.RegionalRegionID = ""
+	p.RegionalExpiresAt = 0
+	c.Profiles[profileName] = p
+}
+
+// SetCurrentTeam updates the locally selected current team and clears any cached regional session.
+func (c *Config) SetCurrentTeam(profileName, teamID string) {
+	if c.Profiles == nil {
+		c.Profiles = make(map[string]Profile)
+	}
+	p, ok := c.Profiles[profileName]
+	if !ok {
+		p = Profile{}
+	}
+	p.CurrentTeamID = strings.TrimSpace(teamID)
+	p.RegionalTeamID = ""
 	p.RegionalToken = ""
 	p.RegionalGatewayURL = ""
 	p.RegionalRegionID = ""
