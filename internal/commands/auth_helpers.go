@@ -329,12 +329,12 @@ func oidcLoginViaDeviceFlow(ctx context.Context, baseURL, providerID string) (*a
 }
 
 func shouldShowCurrentTeamSelectionHint(ctx context.Context, baseURL, currentTeamID string) bool {
+	_ = ctx
+	_ = baseURL
 	if strings.TrimSpace(currentTeamID) != "" {
 		return false
 	}
-
-	mode, ok := fetchGatewayMode(ctx, baseURL)
-	return ok && mode == config.GatewayModeGlobal
+	return true
 }
 
 func openBrowser(targetURL string) error {

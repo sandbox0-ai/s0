@@ -35,6 +35,10 @@ type ResolveTargetOptions struct {
 var ErrCurrentTeamRequired = errors.New("current team is not set; run `s0 team use <team-id>`")
 var ErrCurrentTeamTargetRequired = errors.New("current team region endpoint is not set; run `s0 team use <team-id>`")
 
+func tokenUsesImplicitTeamSelection(token string) bool {
+	return !strings.HasPrefix(strings.TrimSpace(token), "s0_")
+}
+
 // ResolveTarget resolves the correct API target for the current command scope.
 func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTarget, error) {
 	mode := opts.ConfiguredGatewayMode
@@ -51,7 +55,13 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 		Token:       opts.Token,
 		GatewayMode: mode,
 	}
-	if opts.Scope != RouteScopeHomeRegion || mode != config.GatewayModeGlobal {
+	if opts.Scope != RouteScopeHomeRegion {
+		return target, nil
+	}
+	if tokenUsesImplicitTeamSelection(opts.Token) && strings.TrimSpace(opts.CurrentTeamID) == "" {
+		return nil, ErrCurrentTeamRequired
+	}
+	if mode != config.GatewayModeGlobal {
 		return target, nil
 	}
 	if strings.TrimSpace(opts.CurrentTeamID) == "" {

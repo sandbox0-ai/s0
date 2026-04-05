@@ -16,7 +16,7 @@ func TestResolveTargetDefaultsToDirectWhenMetadataIsMissing(t *testing.T) {
 
 	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
 		BaseURL:   server.URL,
-		Token:     "token-1",
+		Token:     "s0_api_key_1",
 		Scope:     RouteScopeHomeRegion,
 		UserAgent: "s0/test",
 	})
@@ -27,11 +27,44 @@ func TestResolveTargetDefaultsToDirectWhenMetadataIsMissing(t *testing.T) {
 	if target.BaseURL != server.URL {
 		t.Fatalf("BaseURL = %q, want %q", target.BaseURL, server.URL)
 	}
-	if target.Token != "token-1" {
-		t.Fatalf("Token = %q, want token-1", target.Token)
+	if target.Token != "s0_api_key_1" {
+		t.Fatalf("Token = %q, want s0_api_key_1", target.Token)
 	}
 	if target.GatewayMode != config.GatewayModeDirect {
 		t.Fatalf("GatewayMode = %q, want %q", target.GatewayMode, config.GatewayModeDirect)
+	}
+}
+
+func TestResolveTargetRequiresCurrentTeamForDirectHomeRegionRoutingWithUserToken(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	_, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+		BaseURL:   server.URL,
+		Token:     "user-token",
+		Scope:     RouteScopeHomeRegion,
+		UserAgent: "s0/test",
+	})
+	if err != ErrCurrentTeamRequired {
+		t.Fatalf("ResolveTarget() error = %v, want %v", err, ErrCurrentTeamRequired)
+	}
+}
+
+func TestResolveTargetAllowsDirectHomeRegionRoutingWithAPIKeyWithoutCurrentTeam(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+		BaseURL:   server.URL,
+		Token:     "s0_api_key_1",
+		Scope:     RouteScopeHomeRegion,
+		UserAgent: "s0/test",
+	})
+	if err != nil {
+		t.Fatalf("ResolveTarget() error = %v", err)
+	}
+	if target.BaseURL != server.URL {
+		t.Fatalf("BaseURL = %q, want %q", target.BaseURL, server.URL)
 	}
 }
 

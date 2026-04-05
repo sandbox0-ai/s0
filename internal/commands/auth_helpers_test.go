@@ -2,41 +2,17 @@ package commands
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
 func TestShouldShowCurrentTeamSelectionHint(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/metadata" {
-			http.NotFound(w, r)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"data":{"gateway_mode":"global","service":"global-gateway"}}`))
-	}))
-	defer server.Close()
-
-	if !shouldShowCurrentTeamSelectionHint(context.Background(), server.URL, "") {
+	if !shouldShowCurrentTeamSelectionHint(context.Background(), "http://127.0.0.1:0", "") {
 		t.Fatal("shouldShowCurrentTeamSelectionHint() = false, want true")
 	}
 }
 
 func TestShouldShowCurrentTeamSelectionHintSkipsWhenCurrentTeamExists(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/metadata" {
-			http.NotFound(w, r)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"data":{"gateway_mode":"global","service":"global-gateway"}}`))
-	}))
-	defer server.Close()
-
-	if shouldShowCurrentTeamSelectionHint(context.Background(), server.URL, "team-1") {
+	if shouldShowCurrentTeamSelectionHint(context.Background(), "http://127.0.0.1:0", "team-1") {
 		t.Fatal("shouldShowCurrentTeamSelectionHint() = true, want false")
 	}
 }
