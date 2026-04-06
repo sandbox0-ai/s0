@@ -139,7 +139,7 @@ var imagePushCmd = &cobra.Command{
 var imageCredentialsCmd = &cobra.Command{
 	Use:   "credentials",
 	Short: "Show temporary registry credentials",
-	Long:  `Show temporary registry credentials used by s0 template image push.`,
+	Long:  `Show temporary registry credentials used by s0 template image push. Secrets are redacted by default; use --show-secret to print the full password.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient(cmd)
 		if err != nil {

@@ -10,6 +10,7 @@ const (
 	visibleSecretPrefix = 3
 	visibleSecretSuffix = 3
 	minSecretMaskLength = 8
+	fixedSecretMaskBody = "********"
 )
 
 func redactSensitiveData(data any, showSecrets bool) any {
@@ -37,9 +38,5 @@ func maskSecret(raw string) string {
 
 	prefix := raw[:visibleSecretPrefix]
 	suffix := raw[len(raw)-visibleSecretSuffix:]
-	maskedLen := len(raw) - visibleSecretPrefix - visibleSecretSuffix
-	if maskedLen < 1 {
-		maskedLen = 1
-	}
-	return prefix + strings.Repeat("*", maskedLen) + suffix
+	return prefix + fixedSecretMaskBody + suffix
 }
