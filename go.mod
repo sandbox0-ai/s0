@@ -9,15 +9,13 @@ require (
 	github.com/go-faster/jx v1.2.0
 	github.com/gorilla/websocket v1.5.1
 	github.com/olekukonko/tablewriter v1.1.3
-	github.com/sandbox0-ai/sdk-go v0.2.2
+	github.com/sandbox0-ai/sdk-go v0.2.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	golang.org/x/text v0.33.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.47.0
 )
-
-replace github.com/sandbox0-ai/sdk-go => ../sdk-go
 
 require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect
