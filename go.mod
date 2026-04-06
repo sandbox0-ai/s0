@@ -17,6 +17,8 @@ require (
 	modernc.org/sqlite v1.47.0
 )
 
+replace github.com/sandbox0-ai/sdk-go => ../sdk-go
+
 require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

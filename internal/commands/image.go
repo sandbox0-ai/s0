@@ -92,7 +92,7 @@ var imagePushCmd = &cobra.Command{
 		}
 
 		// Get registry credentials
-		creds, err := client.GetRegistryCredentials(cmd.Context())
+		creds, err := client.GetRegistryCredentials(cmd.Context(), imageTag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting registry credentials: %v\n", err)
 			os.Exit(1)
@@ -147,7 +147,7 @@ var imageCredentialsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		creds, err := client.GetRegistryCredentials(cmd.Context())
+		creds, err := client.GetRegistryCredentials(cmd.Context(), imageTag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting registry credentials: %v\n", err)
 			os.Exit(1)
@@ -173,6 +173,7 @@ func init() {
 
 	// Push command flags
 	imagePushCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "target image name:tag (required)")
+	imageCredentialsCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "target image name:tag (optional, enables repository provisioning checks)")
 	imageCredentialsCmd.Flags().BoolVar(&imageShowSecret, "show-secret", false, "show full password in output")
 
 	imageCmd.AddCommand(imageBuildCmd)

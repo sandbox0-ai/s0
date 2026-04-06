@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"strings"
 
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
@@ -32,8 +33,13 @@ type RegistryCredentials struct {
 }
 
 // GetRegistryCredentials retrieves temporary registry credentials for image push.
-func (c *Client) GetRegistryCredentials(ctx context.Context) (*RegistryCredentials, error) {
-	resp, err := c.API().APIV1RegistryCredentialsPost(ctx)
+func (c *Client) GetRegistryCredentials(ctx context.Context, targetImage string) (*RegistryCredentials, error) {
+	req := apispec.OptRegistryCredentialsRequest{}
+	if strings.TrimSpace(targetImage) != "" {
+		req.SetTo(apispec.RegistryCredentialsRequest{TargetImage: apispec.NewOptString(targetImage)})
+	}
+
+	resp, err := c.API().APIV1RegistryCredentialsPost(ctx, req)
 	if err != nil {
 		return nil, err
 	}
