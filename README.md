@@ -170,7 +170,7 @@ s0 admin region delete <region-id>
 
 ```bash
 s0 sandbox run <sandbox-id> <input> [--alias <alias>] [--context-id <ctx-id>]
-s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200]
+s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200] [--mount <volume-id>:/absolute/path] [--wait-for-mounts] [--mount-wait-timeout-ms 45000]
 s0 sandbox get <sandbox-id>
 s0 sandbox update <sandbox-id> [-f sandbox-update.yaml] [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
 s0 sandbox delete <sandbox-id>
@@ -179,6 +179,29 @@ s0 sandbox resume <sandbox-id>
 s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
+```
+
+Bootstrap mounts can be requested as part of sandbox creation:
+
+```bash
+s0 volume create
+s0 sandbox create -t default \
+  --mount <volume-id>:/workspace/data \
+  --wait-for-mounts \
+  --mount-wait-timeout-ms 45000
+
+# Or provide a full claim request file.
+cat <<'EOF' > sandbox-claim.yaml
+template: default
+mounts:
+  - sandboxvolume_id: <volume-id>
+    mount_point: /workspace/data
+wait_for_mounts: true
+mount_wait_timeout_ms: 45000
+config:
+  ttl: 3600
+EOF
+s0 sandbox create -f sandbox-claim.yaml
 ```
 
 ### Sandbox Files
