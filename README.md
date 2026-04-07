@@ -185,6 +185,19 @@ jobs:
 
 Pin `@main` to a release tag after the first s0 release that includes these GitHub Actions assets.
 
+### Next Steps
+
+1. Merge the GitHub Actions changes into `main`.
+2. Publish the next `s0` release tag, for example `v0.2.3`, through the normal `s0` release flow.
+3. Replace `@main` in workflow files with that release tag:
+
+```yaml
+- uses: sandbox0-ai/s0/.github/actions/setup-s0@v0.2.3
+- uses: sandbox0-ai/s0/.github/workflows/template-image.yml@v0.2.3
+```
+
+If you want a floating major tag later, add and maintain `v0` after the tagged release is published.
+
 ## Usage
 
 ```bash
