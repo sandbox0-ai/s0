@@ -1,0 +1,104 @@
+name: Setup s0
+description: Install s0 and optionally export Sandbox0 authentication environment variables.
+
+inputs:
+  version:
+    description: Release tag to install, for example v0.2.2. Defaults to the latest release.
+    required: false
+    default: ""
+  install-dir:
+    description: Directory where the s0 binary should be installed.
+    required: false
+    default: ""
+  token:
+    description: Sandbox0 API token to export as SANDBOX0_TOKEN.
+    required: false
+    default: ""
+  api-url:
+    description: Sandbox0 API URL to export as SANDBOX0_BASE_URL.
+    required: false
+    default: https://api.sandbox0.ai
+
+runs:
+  using: composite
+  steps:
+    - name: Install s0 on Unix runners
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        S0_VERSION: ${{ inputs.version }}
+        INSTALL_DIR: ${{ inputs.install-dir }}
+      run: |
+        set -euo pipefail
+
+        bash "${{ github.action_path }}/../../../scripts/install.sh"
+
+        install_dir="${INSTALL_DIR}"
+        if [ -z "${install_dir}" ]; then
+          if [ -w "/usr/local/bin" ]; then
+            install_dir="/usr/local/bin"
+          else
+            install_dir="${HOME}/.local/bin"
+          fi
+        fi
+
+        echo "${install_dir}" >> "${GITHUB_PATH}"
+
+    - name: Install s0 on Windows runners
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        S0_VERSION: ${{ inputs.version }}
+        INSTALL_DIR: ${{ inputs.install-dir }}
+      run: |
+        $scriptPath = Join-Path '${{ github.action_path }}' '..\..\..\scripts\install.ps1'
+        $scriptPath = [System.IO.Path]::GetFullPath($scriptPath)
+        & $scriptPath
+
+        $installDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
+        $installDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Export Sandbox0 auth on Unix runners
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        SANDBOX0_ACTION_API_URL: ${{ inputs.api-url }}
+        SANDBOX0_ACTION_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        if [ -n "${SANDBOX0_ACTION_API_URL}" ]; then
+          echo "SANDBOX0_BASE_URL=${SANDBOX0_ACTION_API_URL}" >> "${GITHUB_ENV}"
+        fi
+
+        if [ -n "${SANDBOX0_ACTION_TOKEN}" ]; then
+          echo "SANDBOX0_TOKEN=${SANDBOX0_ACTION_TOKEN}" >> "${GITHUB_ENV}"
+        fi
+
+    - name: Export Sandbox0 auth on Windows runners
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SANDBOX0_ACTION_API_URL: ${{ inputs.api-url }}
+        SANDBOX0_ACTION_TOKEN: ${{ inputs.token }}
+      run: |
+        if ($env:SANDBOX0_ACTION_API_URL) {
+          "SANDBOX0_BASE_URL=$env:SANDBOX0_ACTION_API_URL" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        }
+
+        if ($env:SANDBOX0_ACTION_TOKEN) {
+          "SANDBOX0_TOKEN=$env:SANDBOX0_ACTION_TOKEN" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        }
+
+    - name: Verify install on Unix runners
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        s0 --help >/dev/null
+
+    - name: Verify install on Windows runners
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        s0 --help | Out-Null

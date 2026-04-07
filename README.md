@@ -122,6 +122,82 @@ Mode resolution order:
 | `SANDBOX0_TOKEN` | API authentication token | - |
 | `SANDBOX0_BASE_URL` | API base URL | `https://api.sandbox0.ai` |
 
+## GitHub Actions
+
+`s0 template image build` and `s0 template image push` shell out to Docker.
+Use a GitHub-hosted runner with Docker available, or a self-hosted runner with a working Docker daemon.
+
+For CI, prefer a Sandbox0 API key scoped to automation. For image pushes, the recommended team role is `builder`.
+
+### Setup Action
+
+Install `s0`, add it to `PATH`, and optionally export `SANDBOX0_TOKEN` and `SANDBOX0_BASE_URL`:
+
+```yaml
+jobs:
+  verify-s0:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: sandbox0-ai/s0/.github/actions/setup-s0@main
+        with:
+          token: ${{ secrets.SANDBOX0_TOKEN }}
+          api-url: ${{ secrets.SANDBOX0_BASE_URL }}
+
+      - run: s0 template list
+```
+
+### Reusable Workflow
+
+Build and push a template image with the official reusable workflow:
+
+```yaml
+jobs:
+  template-image:
+    uses: sandbox0-ai/s0/.github/workflows/template-image.yml@main
+    with:
+      api-url: ${{ vars.SANDBOX0_BASE_URL }}
+      image-tag: my-app:${{ github.sha }}
+      context: .
+      dockerfile: Dockerfile
+    secrets:
+      sandbox0_token: ${{ secrets.SANDBOX0_TOKEN }}
+```
+
+Consume the pushed template image reference from workflow outputs:
+
+```yaml
+jobs:
+  publish:
+    uses: sandbox0-ai/s0/.github/workflows/template-image.yml@main
+    with:
+      image-tag: my-app:${{ github.sha }}
+    secrets:
+      sandbox0_token: ${{ secrets.SANDBOX0_TOKEN }}
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.publish.outputs.template-image }}"
+```
+
+Pin `@main` to a release tag after the first s0 release that includes these GitHub Actions assets.
+
+### Next Steps
+
+1. Merge the GitHub Actions changes into `main`.
+2. Publish the next `s0` release tag, for example `v0.2.3`, through the normal `s0` release flow.
+3. Replace `@main` in workflow files with that release tag:
+
+```yaml
+- uses: sandbox0-ai/s0/.github/actions/setup-s0@v0.2.3
+- uses: sandbox0-ai/s0/.github/workflows/template-image.yml@v0.2.3
+```
+
+The release workflow also updates the floating major tag automatically, so after `v0.2.3` is published, users can choose either `@v0.2.3` or `@v0`.
+
 ## Usage
 
 ```bash

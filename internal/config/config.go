@@ -296,6 +296,19 @@ func (c *Config) SetCurrentTeam(profileName, teamID, regionID, gatewayURL string
 	c.Profiles[profileName] = p
 }
 
+// SetGatewayMode updates the configured gateway mode for a profile.
+func (c *Config) SetGatewayMode(profileName string, mode GatewayMode) {
+	if c.Profiles == nil {
+		c.Profiles = make(map[string]Profile)
+	}
+	p, ok := c.Profiles[profileName]
+	if !ok {
+		p = Profile{}
+	}
+	p.GatewayMode = strings.TrimSpace(string(mode))
+	c.Profiles[profileName] = p
+}
+
 // Save writes config to disk.
 func (c *Config) Save() error {
 	configPath := expandPath(cfgFile)

@@ -161,3 +161,14 @@ func TestResolveCurrentTeamTargetGlobalModeRequiresHomeRegion(t *testing.T) {
 		t.Fatalf("expected missing home region error, got %v", err)
 	}
 }
+
+func TestResolveGatewayModeForProfileUsesConfiguredMode(t *testing.T) {
+	profile := &config.Profile{
+		APIURL:      "https://api.example.com",
+		GatewayMode: string(config.GatewayModeGlobal),
+	}
+
+	if got := resolveGatewayModeForProfile(context.Background(), profile); got != config.GatewayModeGlobal {
+		t.Fatalf("resolveGatewayModeForProfile() = %q, want %q", got, config.GatewayModeGlobal)
+	}
+}

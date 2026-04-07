@@ -1,0 +1,140 @@
+name: Sandbox0 Template Image
+
+on:
+  workflow_call:
+    inputs:
+      api-url:
+        description: Sandbox0 API URL.
+        required: false
+        default: https://api.sandbox0.ai
+        type: string
+      s0-version:
+        description: Release tag to install before running s0. Defaults to the latest release.
+        required: false
+        default: ""
+        type: string
+      image-tag:
+        description: Template image tag, without the registry prefix.
+        required: true
+        type: string
+      context:
+        description: Docker build context.
+        required: false
+        default: .
+        type: string
+      dockerfile:
+        description: Dockerfile path passed to s0 template image build.
+        required: false
+        default: Dockerfile
+        type: string
+      platform:
+        description: Optional Docker build platform such as linux/amd64.
+        required: false
+        default: ""
+        type: string
+      pull:
+        description: Always attempt to pull a newer version of base images.
+        required: false
+        default: false
+        type: boolean
+      no-cache:
+        description: Disable Docker build cache.
+        required: false
+        default: false
+        type: boolean
+      checkout:
+        description: Whether to checkout the caller repository before building.
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      sandbox0_token:
+        description: Sandbox0 API token.
+        required: true
+    outputs:
+      image-tag:
+        description: Canonical template image tag without the registry prefix.
+        value: ${{ jobs.build-and-push.outputs.image-tag }}
+      template-image:
+        description: Pullable template image reference for Sandbox0 templates.
+        value: ${{ jobs.build-and-push.outputs.template-image }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.image-ref.outputs.image_tag }}
+      template-image: ${{ steps.image-ref.outputs.template_image }}
+    env:
+      SANDBOX0_BASE_URL: ${{ inputs.api-url }}
+      SANDBOX0_TOKEN: ${{ secrets.sandbox0_token }}
+    steps:
+      - name: Checkout caller repository
+        if: ${{ inputs.checkout }}
+        uses: actions/checkout@v6
+
+      - name: Install s0
+        shell: bash
+        env:
+          S0_VERSION: ${{ inputs.s0-version }}
+          INSTALL_DIR: ${{ runner.temp }}/s0-bin
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/sandbox0-ai/s0/main/scripts/install.sh | bash
+          echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
+
+      - name: Verify Docker availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version
+
+      - name: Build template image
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image-tag }}
+          BUILD_CONTEXT: ${{ inputs.context }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          PLATFORM: ${{ inputs.platform }}
+          BUILD_PULL: ${{ inputs.pull }}
+          NO_CACHE: ${{ inputs.no-cache }}
+        run: |
+          set -euo pipefail
+
+          args=(template image build -f "${DOCKERFILE}" -t "${IMAGE_TAG}")
+          if [ -n "${PLATFORM}" ]; then
+            args+=(--platform "${PLATFORM}")
+          fi
+          if [ "${BUILD_PULL}" = "true" ]; then
+            args+=(--pull)
+          fi
+          if [ "${NO_CACHE}" = "true" ]; then
+            args+=(--no-cache)
+          fi
+          args+=("${BUILD_CONTEXT}")
+
+          s0 "${args[@]}"
+
+      - name: Push template image
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image-tag }}
+        run: |
+          set -euo pipefail
+          s0 template image push "${IMAGE_TAG}" -t "${IMAGE_TAG}"
+
+      - name: Resolve pushed template image reference
+        id: image-ref
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image-tag }}
+        run: |
+          set -euo pipefail
+
+          creds_json="$(s0 -o json template image credentials -t "${IMAGE_TAG}")"
+
+          echo "image_tag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
+          CREDS_JSON="${creds_json}" python -c 'import json, os; creds = json.loads(os.environ["CREDS_JSON"]); image_tag = os.environ["IMAGE_TAG"]; pull_registry = creds.get("PullRegistry") or ""; template_image = f"{pull_registry}/{image_tag}" if pull_registry else image_tag; print(f"template_image={template_image}")' >> "${GITHUB_OUTPUT}"

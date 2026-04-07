@@ -76,12 +76,18 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 archive="s0-${os}-${arch}.tar.gz"
 url="https://github.com/${repo}/releases/download/${version}/${archive}"
+binary="${archive%.tar.gz}"
 
 mkdir -p "${install_dir}"
 
 curl -fsSL "${url}" -o "${tmpdir}/${archive}"
 tar -xzf "${tmpdir}/${archive}" -C "${tmpdir}"
-install -m 0755 "${tmpdir}/s0" "${install_dir}/s0"
+
+if [ ! -f "${tmpdir}/${binary}" ] && [ -f "${tmpdir}/s0" ]; then
+  binary="s0"
+fi
+
+install -m 0755 "${tmpdir}/${binary}" "${install_dir}/s0"
 
 echo "installed s0 to ${install_dir}/s0"
 
