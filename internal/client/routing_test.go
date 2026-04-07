@@ -35,18 +35,24 @@ func TestResolveTargetDefaultsToDirectWhenMetadataIsMissing(t *testing.T) {
 	}
 }
 
-func TestResolveTargetRequiresCurrentTeamForDirectHomeRegionRoutingWithUserToken(t *testing.T) {
+func TestResolveTargetAllowsDirectHomeRegionRoutingWithUserTokenWithoutCurrentTeam(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
 
-	_, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
 		BaseURL:   server.URL,
 		Token:     "user-token",
 		Scope:     RouteScopeHomeRegion,
 		UserAgent: "s0/test",
 	})
-	if err != ErrCurrentTeamRequired {
-		t.Fatalf("ResolveTarget() error = %v, want %v", err, ErrCurrentTeamRequired)
+	if err != nil {
+		t.Fatalf("ResolveTarget() error = %v", err)
+	}
+	if target.BaseURL != server.URL {
+		t.Fatalf("BaseURL = %q, want %q", target.BaseURL, server.URL)
+	}
+	if target.Token != "user-token" {
+		t.Fatalf("Token = %q, want user-token", target.Token)
 	}
 }
 
