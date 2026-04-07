@@ -27,6 +27,7 @@ $Arch = Resolve-Arch
 $InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $HOME ".local\bin" }
 $Archive = "s0-windows-$Arch.zip"
 $Url = "https://github.com/$Repo/releases/download/$Version/$Archive"
+$BinaryName = "s0-windows-$Arch.exe"
 
 $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("s0-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $TempDir | Out-Null
@@ -38,7 +39,12 @@ try {
   Invoke-WebRequest -Uri $Url -OutFile $ZipPath
   Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
 
-  Copy-Item -Path (Join-Path $TempDir "s0.exe") -Destination (Join-Path $InstallDir "s0.exe") -Force
+  $SourceBinary = Join-Path $TempDir $BinaryName
+  if (-not (Test-Path $SourceBinary)) {
+    $SourceBinary = Join-Path $TempDir "s0.exe"
+  }
+
+  Copy-Item -Path $SourceBinary -Destination (Join-Path $InstallDir "s0.exe") -Force
   Write-Host "installed s0 to $(Join-Path $InstallDir 's0.exe')"
 
   $currentUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
