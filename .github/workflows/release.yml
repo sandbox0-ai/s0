@@ -146,3 +146,31 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           files: release-assets/*
+
+  update-major-tag:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref_name, '-') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update major version tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_TAG}" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+            echo "skip unsupported release tag: ${RELEASE_TAG}"
+            exit 0
+          fi
+
+          major_tag="v${BASH_REMATCH[1]}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -fa "${major_tag}" -m "Update ${major_tag} to ${RELEASE_TAG}" "refs/tags/${RELEASE_TAG}"
+          git push origin "refs/tags/${major_tag}" --force

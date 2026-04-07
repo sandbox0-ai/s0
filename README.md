@@ -196,7 +196,7 @@ Pin `@main` to a release tag after the first s0 release that includes these GitH
 - uses: sandbox0-ai/s0/.github/workflows/template-image.yml@v0.2.3
 ```
 
-If you want a floating major tag later, add and maintain `v0` after the tagged release is published.
+The release workflow also updates the floating major tag automatically, so after `v0.2.3` is published, users can choose either `@v0.2.3` or `@v0`.
 
 ## Usage
 
