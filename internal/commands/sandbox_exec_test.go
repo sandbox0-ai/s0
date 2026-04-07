@@ -86,3 +86,31 @@ func TestIsInteractiveCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldUseStreamingExec(t *testing.T) {
+	t.Parallel()
+
+	prevNoWait := execNoWait
+	prevStream := execStream
+	prevInteractive := execInteractive
+	prevTTY := execTTY
+	t.Cleanup(func() {
+		execNoWait = prevNoWait
+		execStream = prevStream
+		execInteractive = prevInteractive
+		execTTY = prevTTY
+	})
+
+	execNoWait = false
+	execStream = true
+	execInteractive = false
+	execTTY = false
+	if !shouldUseStreamingExec([]string{"python", "-c", "print(1)"}) {
+		t.Fatal("shouldUseStreamingExec() = false, want true when --stream is enabled")
+	}
+
+	execNoWait = true
+	if shouldUseStreamingExec([]string{"python", "-c", "print(1)"}) {
+		t.Fatal("shouldUseStreamingExec() = true, want false when --no-wait is enabled")
+	}
+}
