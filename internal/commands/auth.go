@@ -83,13 +83,25 @@ var authLoginCmd = &cobra.Command{
 			loginData.RefreshToken,
 			loginData.ExpiresAt,
 		)
+		autoSelectedTeam, autoSelected, autoSelectErr := maybeAutoSelectCurrentTeam(cmd.Context(), cfg, profileName)
 		if err := cfg.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving credentials: %v\n", err)
 			os.Exit(1)
 		}
 
 		fmt.Printf("Login successful via provider %q using %s mode (profile: %s)\n", provider.ID, effectiveMode, profileName)
-		if shouldShowCurrentTeamSelectionHint(cmd.Context(), baseURL, p.GetCurrentTeamID()) {
+		if autoSelectErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not auto-select current team: %v\n", autoSelectErr)
+		}
+		if autoSelected {
+			fmt.Printf("Auto-selected current team %s (%s)\n", autoSelectedTeam.ID, autoSelectedTeam.Name)
+		}
+		updatedProfile, err := cfg.GetProfile(profileName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading updated profile: %v\n", err)
+			os.Exit(1)
+		}
+		if shouldShowCurrentTeamSelectionHint(resolveGatewayModeForProfile(cmd.Context(), updatedProfile), updatedProfile.GetCurrentTeamID()) {
 			fmt.Println("Global routing requires a locally selected current team for workload commands.")
 			fmt.Println("Set it with: s0 team use <team-id>")
 			fmt.Println("If you do not have a team yet, create one with: s0 team create --name <name> --home-region <region-id>")

@@ -2,18 +2,143 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/sandbox0-ai/s0/internal/config"
 )
 
 func TestShouldShowCurrentTeamSelectionHint(t *testing.T) {
-	if !shouldShowCurrentTeamSelectionHint(context.Background(), "http://127.0.0.1:0", "") {
+	if !shouldShowCurrentTeamSelectionHint(config.GatewayModeGlobal, "") {
 		t.Fatal("shouldShowCurrentTeamSelectionHint() = false, want true")
 	}
 }
 
 func TestShouldShowCurrentTeamSelectionHintSkipsWhenCurrentTeamExists(t *testing.T) {
-	if shouldShowCurrentTeamSelectionHint(context.Background(), "http://127.0.0.1:0", "team-1") {
+	if shouldShowCurrentTeamSelectionHint(config.GatewayModeGlobal, "team-1") {
 		t.Fatal("shouldShowCurrentTeamSelectionHint() = true, want false")
+	}
+}
+
+func TestShouldShowCurrentTeamSelectionHintSkipsInDirectMode(t *testing.T) {
+	if shouldShowCurrentTeamSelectionHint(config.GatewayModeDirect, "") {
+		t.Fatal("shouldShowCurrentTeamSelectionHint() = true, want false")
+	}
+}
+
+func TestMaybeAutoSelectCurrentTeamSelectsOnlyTeamInDirectMode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/teams":
+			writeAuthJSON(t, w, http.StatusOK, map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"teams": []map[string]any{{
+						"id":         "team-1",
+						"name":       "Personal Team",
+						"slug":       "personal-team",
+						"created_at": "2026-01-01T00:00:00Z",
+						"updated_at": "2026-01-01T00:00:00Z",
+					}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		CurrentProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				APIURL: server.URL,
+				Token:  "user-token",
+			},
+		},
+	}
+
+	team, ok, err := maybeAutoSelectCurrentTeam(context.Background(), cfg, "default")
+	if err != nil {
+		t.Fatalf("maybeAutoSelectCurrentTeam() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("maybeAutoSelectCurrentTeam() did not auto-select team")
+	}
+	if team.ID != "team-1" {
+		t.Fatalf("team.ID = %q, want team-1", team.ID)
+	}
+
+	profile, err := cfg.GetProfile("default")
+	if err != nil {
+		t.Fatalf("GetProfile() error = %v", err)
+	}
+	if got := profile.GetCurrentTeamID(); got != "team-1" {
+		t.Fatalf("CurrentTeamID = %q, want team-1", got)
+	}
+	if target, ok := profile.GetCurrentTeamTarget(); ok {
+		t.Fatalf("CurrentTeamTarget should be unset in direct mode, got %+v", target)
+	}
+}
+
+func TestMaybeAutoSelectCurrentTeamDoesNotSelectWhenMultipleTeamsExist(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/teams":
+			writeAuthJSON(t, w, http.StatusOK, map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"teams": []map[string]any{
+						{
+							"id": "team-1", "name": "One", "slug": "one", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+						},
+						{
+							"id": "team-2", "name": "Two", "slug": "two", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+						},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		CurrentProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				APIURL: server.URL,
+				Token:  "user-token",
+			},
+		},
+	}
+
+	team, ok, err := maybeAutoSelectCurrentTeam(context.Background(), cfg, "default")
+	if err != nil {
+		t.Fatalf("maybeAutoSelectCurrentTeam() error = %v", err)
+	}
+	if ok {
+		t.Fatalf("maybeAutoSelectCurrentTeam() selected unexpected team %+v", team)
+	}
+
+	profile, err := cfg.GetProfile("default")
+	if err != nil {
+		t.Fatalf("GetProfile() error = %v", err)
+	}
+	if got := profile.GetCurrentTeamID(); got != "" {
+		t.Fatalf("CurrentTeamID = %q, want empty", got)
+	}
+}
+
+func writeAuthJSON(t *testing.T, w http.ResponseWriter, status int, payload any) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		t.Fatalf("encode response: %v", err)
 	}
 }
 

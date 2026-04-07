@@ -72,9 +72,6 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 			GatewayMode: mode,
 		}, nil
 	}
-	if tokenUsesImplicitTeamSelection(opts.Token) && strings.TrimSpace(opts.CurrentTeamID) == "" {
-		return nil, ErrCurrentTeamRequired
-	}
 	if mode != config.GatewayModeGlobal {
 		return target, nil
 	}

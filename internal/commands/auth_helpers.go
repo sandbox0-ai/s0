@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sandbox0-ai/s0/internal/config"
+	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
 type authProvider struct {
@@ -328,9 +329,56 @@ func oidcLoginViaDeviceFlow(ctx context.Context, baseURL, providerID string) (*a
 	}
 }
 
-func shouldShowCurrentTeamSelectionHint(ctx context.Context, baseURL, currentTeamID string) bool {
-	_ = ctx
-	_ = baseURL
+func maybeAutoSelectCurrentTeam(ctx context.Context, cfg *config.Config, profileName string) (*apispec.Team, bool, error) {
+	if cfg == nil {
+		return nil, false, nil
+	}
+
+	profile, err := cfg.GetProfile(profileName)
+	if err != nil {
+		return nil, false, err
+	}
+	if strings.TrimSpace(profile.GetCurrentTeamID()) != "" {
+		return nil, false, nil
+	}
+	if strings.TrimSpace(profile.GetToken()) == "" {
+		return nil, false, nil
+	}
+
+	client, err := newSDKClientForBaseURL(profile.GetAPIURL(), profile.GetToken())
+	if err != nil {
+		return nil, false, err
+	}
+
+	res, err := client.API().TeamsGet(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("list teams: %w", err)
+	}
+	successRes, ok := res.(*apispec.SuccessTeamListResponse)
+	if !ok {
+		return nil, false, fmt.Errorf("list teams: unexpected response type %T", res)
+	}
+	data, ok := successRes.Data.Get()
+	if !ok {
+		return nil, false, fmt.Errorf("list teams: missing response data")
+	}
+	if len(data.Teams) != 1 {
+		return nil, false, nil
+	}
+
+	team := data.Teams[0]
+	homeRegionID, regionalGatewayURL, err := resolveCurrentTeamTarget(ctx, profile, client, team)
+	if err != nil {
+		return nil, false, err
+	}
+	cfg.SetCurrentTeam(profileName, team.ID, homeRegionID, regionalGatewayURL)
+	return &team, true, nil
+}
+
+func shouldShowCurrentTeamSelectionHint(mode config.GatewayMode, currentTeamID string) bool {
+	if mode != config.GatewayModeGlobal {
+		return false
+	}
 	if strings.TrimSpace(currentTeamID) != "" {
 		return false
 	}
