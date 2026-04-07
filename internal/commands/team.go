@@ -259,12 +259,14 @@ var teamUseCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error loading profile: %v\n", err)
 			os.Exit(1)
 		}
+		gatewayMode := resolveGatewayModeForProfile(cmd.Context(), profile)
 		homeRegionID, regionalGatewayURL, err := resolveCurrentTeamTarget(cmd.Context(), profile, client, data)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error validating team: %v\n", err)
 			os.Exit(1)
 		}
 
+		cfg.SetGatewayMode(profileName, gatewayMode)
 		cfg.SetCurrentTeam(profileName, teamID, homeRegionID, regionalGatewayURL)
 		if err := cfg.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
