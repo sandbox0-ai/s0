@@ -120,9 +120,16 @@ Mode resolution order:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SANDBOX0_TOKEN` | API authentication token | - |
-| `SANDBOX0_BASE_URL` | API base URL | `https://api.sandbox0.ai` |
+| `SANDBOX0_BASE_URL` | Optional API base URL override for self-hosted or private deployments | `https://api.sandbox0.ai` |
 
 ## GitHub Actions
+
+The GitHub Actions entrypoints in this repository are part of the public integration surface. Keep these paths stable for consumers:
+
+- `.github/actions/setup-s0/action.yml`
+- `.github/workflows/template-image.yml`
+
+If the implementation changes internally, keep a compatibility stub or wrapper at the same path.
 
 `s0 template image build` and `s0 template image push` shell out to Docker.
 Use a GitHub-hosted runner with Docker available, or a self-hosted runner with a working Docker daemon.
@@ -143,10 +150,11 @@ jobs:
       - uses: sandbox0-ai/s0/.github/actions/setup-s0@main
         with:
           token: ${{ secrets.SANDBOX0_TOKEN }}
-          api-url: ${{ secrets.SANDBOX0_BASE_URL }}
 
       - run: s0 template list
 ```
+
+For self-hosted or private Sandbox0 deployments, also pass `api-url: ${{ vars.SANDBOX0_BASE_URL }}`.
 
 ### Reusable Workflow
 
@@ -157,13 +165,14 @@ jobs:
   template-image:
     uses: sandbox0-ai/s0/.github/workflows/template-image.yml@main
     with:
-      api-url: ${{ vars.SANDBOX0_BASE_URL }}
       image-tag: my-app:${{ github.sha }}
       context: .
       dockerfile: Dockerfile
     secrets:
       sandbox0_token: ${{ secrets.SANDBOX0_TOKEN }}
 ```
+
+For self-hosted or private Sandbox0 deployments, also pass `api-url: ${{ vars.SANDBOX0_BASE_URL }}`.
 
 Consume the pushed template image reference from workflow outputs:
 
@@ -183,20 +192,9 @@ jobs:
       - run: echo "${{ needs.publish.outputs.template-image }}"
 ```
 
-Pin `@main` to a release tag after the first s0 release that includes these GitHub Actions assets.
+For production workflows, pin `@main` to a published `s0` release tag such as `@v0.2.4` or `@v0`.
 
-### Next Steps
-
-1. Merge the GitHub Actions changes into `main`.
-2. Publish the next `s0` release tag, for example `v0.2.3`, through the normal `s0` release flow.
-3. Replace `@main` in workflow files with that release tag:
-
-```yaml
-- uses: sandbox0-ai/s0/.github/actions/setup-s0@v0.2.3
-- uses: sandbox0-ai/s0/.github/workflows/template-image.yml@v0.2.3
-```
-
-The release workflow also updates the floating major tag automatically, so after `v0.2.3` is published, users can choose either `@v0.2.3` or `@v0`.
+For Sandbox0 SaaS, you usually only need `SANDBOX0_TOKEN`. Set `SANDBOX0_BASE_URL` when your workflow talks to a self-hosted or private Sandbox0 deployment.
 
 ## Usage
 
