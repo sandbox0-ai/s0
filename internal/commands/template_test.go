@@ -21,7 +21,6 @@ func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
       memory: 256Mi
   sharedVolumes:
     - name: workspace
-      sandboxVolumeId: vol_123
       mountPath: /workspace/shared
   sidecars:
     - name: claude-code
@@ -72,6 +71,9 @@ func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
 	}
 	if req.Spec.SharedVolumes[0].MountPath != "/workspace/shared" {
 		t.Fatalf("SharedVolumes[0].MountPath = %q, want /workspace/shared", req.Spec.SharedVolumes[0].MountPath)
+	}
+	if _, ok := req.Spec.SharedVolumes[0].SandboxVolumeId.Get(); ok {
+		t.Fatal("SharedVolumes[0].SandboxVolumeId should be unset for claim-bound shared volumes")
 	}
 
 	sidecar := req.Spec.Sidecars[0]
