@@ -1,3 +1,7 @@
+# Public GitHub Actions entrypoint.
+# Keep this file path stable for consumers using:
+# sandbox0-ai/s0/.github/actions/setup-s0@<ref>
+# If the implementation moves, leave a compatibility stub at this path.
 name: Setup s0
 description: Install s0 and optionally export Sandbox0 authentication environment variables.
 

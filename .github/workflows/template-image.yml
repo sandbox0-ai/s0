@@ -1,3 +1,7 @@
+# Public reusable workflow entrypoint.
+# Keep this file path stable for consumers using:
+# sandbox0-ai/s0/.github/workflows/template-image.yml@<ref>
+# If the implementation moves, leave a compatibility wrapper at this path.
 name: Sandbox0 Template Image
 
 on:
