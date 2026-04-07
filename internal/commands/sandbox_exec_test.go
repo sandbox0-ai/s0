@@ -114,3 +114,15 @@ func TestShouldUseStreamingExec(t *testing.T) {
 		t.Fatal("shouldUseStreamingExec() = true, want false when --no-wait is enabled")
 	}
 }
+
+func TestIsTerminalDoneExecMessage(t *testing.T) {
+	t.Parallel()
+
+	code := 0
+	if isTerminalDoneExecMessage(execWSMessage{Type: "done", RequestID: "req-1"}) {
+		t.Fatal("request-scoped done should not terminate exec stream")
+	}
+	if !isTerminalDoneExecMessage(execWSMessage{Type: "done", ExitCode: &code, State: "stopped"}) {
+		t.Fatal("process done should terminate exec stream")
+	}
+}

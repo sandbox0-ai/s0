@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,12 +30,23 @@ var (
 )
 
 type execWSMessage struct {
-	Type   string `json:"type,omitempty"`
-	Source string `json:"source,omitempty"`
-	Data   string `json:"data,omitempty"`
-	Rows   int    `json:"rows,omitempty"`
-	Cols   int    `json:"cols,omitempty"`
-	Signal string `json:"signal,omitempty"`
+	Type      string `json:"type,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Data      string `json:"data,omitempty"`
+	Rows      int    `json:"rows,omitempty"`
+	Cols      int    `json:"cols,omitempty"`
+	Signal    string `json:"signal,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	ExitCode  *int   `json:"exit_code,omitempty"`
+	State     string `json:"state,omitempty"`
+}
+
+type execExitCodeError struct {
+	code int
+}
+
+func (e *execExitCodeError) Error() string {
+	return fmt.Sprintf("remote command exited with code %d", e.code)
 }
 
 // sandboxExecCmd executes a command in a sandbox.
@@ -77,6 +89,10 @@ Examples:
 
 		if shouldUseStreamingExec(command) {
 			if err := runStreamingExec(cmd.Context(), client, sandboxID, command, envMap); err != nil {
+				var exitErr *execExitCodeError
+				if errors.As(err, &exitErr) {
+					os.Exit(exitErr.code)
+				}
 				fmt.Fprintf(os.Stderr, "Error executing command: %v\n", err)
 				os.Exit(1)
 			}
@@ -242,6 +258,12 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 			}
 			return err
 		}
+		if isTerminalDoneExecMessage(msg) {
+			if msg.ExitCode != nil && *msg.ExitCode != 0 {
+				return &execExitCodeError{code: *msg.ExitCode}
+			}
+			return nil
+		}
 		if msg.Type != "" && msg.Type != "output" {
 			continue
 		}
@@ -256,6 +278,13 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 			}
 		}
 	}
+}
+
+func isTerminalDoneExecMessage(msg execWSMessage) bool {
+	if msg.Type != "done" {
+		return false
+	}
+	return msg.RequestID == "" || msg.ExitCode != nil || msg.State != ""
 }
 
 func prepareTerminalForStreaming(allocateTTY bool) (func(), error) {
