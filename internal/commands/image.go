@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/sandbox0-ai/s0/internal/docker"
-	"github.com/sandbox0-ai/s0/internal/output"
 
 	"github.com/spf13/cobra"
 )
@@ -16,7 +15,6 @@ var (
 	imagePlatform   string
 	imageNoCache    bool
 	imagePull       bool
-	imageShowSecret bool
 )
 
 // imageCmd represents the image command.
@@ -139,7 +137,7 @@ var imagePushCmd = &cobra.Command{
 var imageCredentialsCmd = &cobra.Command{
 	Use:   "credentials",
 	Short: "Show temporary registry credentials",
-	Long:  `Show temporary registry credentials used by s0 template image push. Secrets are redacted by default; use --show-secret to print the full password.`,
+	Long:  `Show temporary registry credentials used by s0 template image push. Secrets are redacted in output.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClient(cmd)
 		if err != nil {
@@ -153,9 +151,7 @@ var imageCredentialsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		formatter := getFormatterWithOptions(output.Options{
-			ShowSecrets: imageShowSecret,
-		})
+		formatter := getFormatter()
 		if err := formatter.Format(os.Stdout, creds); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
@@ -174,7 +170,6 @@ func init() {
 	// Push command flags
 	imagePushCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "target image name:tag (required)")
 	imageCredentialsCmd.Flags().StringVarP(&imageTag, "tag", "t", "", "target image name:tag (optional, enables repository provisioning checks)")
-	imageCredentialsCmd.Flags().BoolVar(&imageShowSecret, "show-secret", false, "show full password in output")
 
 	imageCmd.AddCommand(imageBuildCmd)
 	imageCmd.AddCommand(imagePushCmd)
