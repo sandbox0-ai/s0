@@ -905,24 +905,37 @@ func (f *TableFormatter) formatMountStatusList(w io.Writer, mounts []apispec.Mou
 	}
 
 	t := newTable(w)
-	t.Header([]string{"VOLUME ID", "MOUNT POINT", "MOUNTED AT", "DURATION", "SESSION ID"})
+	t.Header([]string{"VOLUME ID", "MOUNT POINT", "STATE", "MOUNTED AT", "DURATION", "SESSION ID", "ERROR"})
 
 	for _, m := range mounts {
-		volumeID, _ := m.SandboxvolumeID.Get()
-		mountPoint, _ := m.MountPoint.Get()
+		volumeID := m.SandboxvolumeID
+		mountPoint := m.MountPoint
 		mountedAt, _ := m.MountedAt.Get()
 		duration := "-"
 		if d, ok := m.MountedDurationSec.Get(); ok {
 			duration = formatDuration(d)
 		}
 		sessionID, _ := m.MountSessionID.Get()
+		errorText := "-"
+		errorCode, hasErrorCode := m.ErrorCode.Get()
+		errorMessage, hasErrorMessage := m.ErrorMessage.Get()
+		switch {
+		case hasErrorCode && hasErrorMessage:
+			errorText = fmt.Sprintf("%s: %s", errorCode, errorMessage)
+		case hasErrorMessage:
+			errorText = errorMessage
+		case hasErrorCode:
+			errorText = errorCode
+		}
 
 		_ = t.Append([]string{
 			volumeID,
 			mountPoint,
+			string(m.State),
 			formatTimestampText(mountedAt),
 			duration,
 			sessionID,
+			errorText,
 		})
 	}
 	return t.Render()
