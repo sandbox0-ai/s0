@@ -58,24 +58,27 @@ func ResolveTarget(ctx context.Context, opts ResolveTargetOptions) (*ResolvedTar
 	if opts.Scope != RouteScopeHomeRegion {
 		return target, nil
 	}
+	if mode == config.GatewayModeGlobal {
+		if strings.TrimSpace(opts.CurrentTeamID) == "" {
+			return target, nil
+		}
+		if opts.CurrentTeamTarget == nil || strings.TrimSpace(opts.CurrentTeamTarget.GatewayURL) == "" {
+			return target, nil
+		}
+
+		return &ResolvedTarget{
+			BaseURL:     opts.CurrentTeamTarget.GatewayURL,
+			Token:       opts.Token,
+			GatewayMode: mode,
+		}, nil
+	}
 	if tokenUsesImplicitTeamSelection(opts.Token) && strings.TrimSpace(opts.CurrentTeamID) == "" {
 		return nil, ErrCurrentTeamRequired
 	}
 	if mode != config.GatewayModeGlobal {
 		return target, nil
 	}
-	if strings.TrimSpace(opts.CurrentTeamID) == "" {
-		return nil, ErrCurrentTeamRequired
-	}
-	if opts.CurrentTeamTarget == nil || strings.TrimSpace(opts.CurrentTeamTarget.GatewayURL) == "" {
-		return nil, ErrCurrentTeamTargetRequired
-	}
-
-	return &ResolvedTarget{
-		BaseURL:     opts.CurrentTeamTarget.GatewayURL,
-		Token:       opts.Token,
-		GatewayMode: mode,
-	}, nil
+	return target, nil
 }
 
 func discoverGatewayMode(ctx context.Context, baseURL, userAgent string) (config.GatewayMode, bool) {

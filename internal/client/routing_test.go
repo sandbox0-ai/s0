@@ -68,7 +68,7 @@ func TestResolveTargetAllowsDirectHomeRegionRoutingWithAPIKeyWithoutCurrentTeam(
 	}
 }
 
-func TestResolveTargetRequiresCurrentTeamForGlobalHomeRegionRouting(t *testing.T) {
+func TestResolveTargetFallsBackToEntrypointForGlobalHomeRegionRoutingWithoutCurrentTeam(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/metadata" {
 			http.NotFound(w, r)
@@ -85,14 +85,20 @@ func TestResolveTargetRequiresCurrentTeamForGlobalHomeRegionRouting(t *testing.T
 	}))
 	defer server.Close()
 
-	_, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
 		BaseURL:   server.URL,
 		Token:     "global-token",
 		Scope:     RouteScopeHomeRegion,
 		UserAgent: "s0/test",
 	})
-	if err != ErrCurrentTeamRequired {
-		t.Fatalf("ResolveTarget() error = %v, want %v", err, ErrCurrentTeamRequired)
+	if err != nil {
+		t.Fatalf("ResolveTarget() error = %v", err)
+	}
+	if target.BaseURL != server.URL {
+		t.Fatalf("BaseURL = %q, want %q", target.BaseURL, server.URL)
+	}
+	if target.Token != "global-token" {
+		t.Fatalf("Token = %q, want global-token", target.Token)
 	}
 }
 
@@ -137,7 +143,7 @@ func TestResolveTargetUsesCachedCurrentTeamGatewayForGlobalHomeRegionRouting(t *
 	}
 }
 
-func TestResolveTargetRequiresCurrentTeamTargetForGlobalHomeRegionRouting(t *testing.T) {
+func TestResolveTargetFallsBackToEntrypointForGlobalHomeRegionRoutingWithoutCachedTarget(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/metadata":
@@ -154,15 +160,43 @@ func TestResolveTargetRequiresCurrentTeamTargetForGlobalHomeRegionRouting(t *tes
 	}))
 	defer server.Close()
 
-	_, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
 		BaseURL:       server.URL,
 		Token:         "global-token",
 		CurrentTeamID: "team-1",
 		Scope:         RouteScopeHomeRegion,
 		UserAgent:     "s0/test",
 	})
-	if err != ErrCurrentTeamTargetRequired {
-		t.Fatalf("ResolveTarget() error = %v, want %v", err, ErrCurrentTeamTargetRequired)
+	if err != nil {
+		t.Fatalf("ResolveTarget() error = %v", err)
+	}
+	if target.BaseURL != server.URL {
+		t.Fatalf("BaseURL = %q, want %q", target.BaseURL, server.URL)
+	}
+	if target.Token != "global-token" {
+		t.Fatalf("Token = %q, want global-token", target.Token)
+	}
+}
+
+func TestResolveTargetHonorsConfiguredGlobalGatewayModeWithoutCurrentTeam(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	target, err := ResolveTarget(context.Background(), ResolveTargetOptions{
+		BaseURL:               server.URL,
+		Token:                 "global-token",
+		ConfiguredGatewayMode: config.GatewayModeGlobal,
+		Scope:                 RouteScopeHomeRegion,
+		UserAgent:             "s0/test",
+	})
+	if err != nil {
+		t.Fatalf("ResolveTarget() error = %v", err)
+	}
+	if target.BaseURL != server.URL {
+		t.Fatalf("BaseURL = %q, want %q", target.BaseURL, server.URL)
+	}
+	if target.Token != "global-token" {
+		t.Fatalf("Token = %q, want global-token", target.Token)
 	}
 }
 
