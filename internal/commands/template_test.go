@@ -19,12 +19,18 @@ func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
     resources:
       cpu: "250m"
       memory: 256Mi
+  sharedVolumes:
+    - name: workspace
+      mountPath: /workspace/shared
   sidecars:
     - name: claude-code
       image: cc-demo:test
       resources:
         cpu: "500m"
         memory: 512Mi
+      mounts:
+        - name: workspace
+          mountPath: /shared
       env:
         - name: PORT
           value: "8081"
@@ -57,6 +63,18 @@ func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
 	if len(req.Spec.Sidecars) != 1 {
 		t.Fatalf("len(Spec.Sidecars) = %d, want 1", len(req.Spec.Sidecars))
 	}
+	if len(req.Spec.SharedVolumes) != 1 {
+		t.Fatalf("len(Spec.SharedVolumes) = %d, want 1", len(req.Spec.SharedVolumes))
+	}
+	if req.Spec.SharedVolumes[0].Name != "workspace" {
+		t.Fatalf("SharedVolumes[0].Name = %q, want workspace", req.Spec.SharedVolumes[0].Name)
+	}
+	if req.Spec.SharedVolumes[0].MountPath != "/workspace/shared" {
+		t.Fatalf("SharedVolumes[0].MountPath = %q, want /workspace/shared", req.Spec.SharedVolumes[0].MountPath)
+	}
+	if _, ok := req.Spec.SharedVolumes[0].SandboxVolumeId.Get(); ok {
+		t.Fatal("SharedVolumes[0].SandboxVolumeId should be unset for claim-bound shared volumes")
+	}
 
 	sidecar := req.Spec.Sidecars[0]
 	if sidecar.Name != "claude-code" {
@@ -67,6 +85,12 @@ func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
 	}
 	if len(sidecar.Env) != 2 {
 		t.Fatalf("len(Sidecars[0].Env) = %d, want 2", len(sidecar.Env))
+	}
+	if len(sidecar.Mounts) != 1 {
+		t.Fatalf("len(Sidecars[0].Mounts) = %d, want 1", len(sidecar.Mounts))
+	}
+	if sidecar.Mounts[0].Name != "workspace" || sidecar.Mounts[0].MountPath != "/shared" {
+		t.Fatalf("Sidecars[0].Mounts[0] = %+v, want workspace:/shared", sidecar.Mounts[0])
 	}
 	if !sidecar.ReadinessProbe.IsSet() {
 		t.Fatal("Sidecars[0].ReadinessProbe should be set")
@@ -86,15 +110,11 @@ func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
 		t.Fatalf("len(Sidecars[0].ReadinessProbe.Exec.Command) = %d, want 3", len(execAction.Command))
 	}
 
-	resources, ok := sidecar.Resources.Get()
-	if !ok {
-		t.Fatal("Sidecars[0].Resources should be set")
-	}
-	cpu, ok := resources.CPU.Get()
+	cpu, ok := sidecar.Resources.CPU.Get()
 	if !ok || cpu != "500m" {
 		t.Fatalf("Sidecars[0].Resources.CPU = %q, want 500m", cpu)
 	}
-	memory, ok := resources.Memory.Get()
+	memory, ok := sidecar.Resources.Memory.Get()
 	if !ok || memory != "512Mi" {
 		t.Fatalf("Sidecars[0].Resources.Memory = %q, want 512Mi", memory)
 	}
