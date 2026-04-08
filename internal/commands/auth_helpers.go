@@ -338,12 +338,10 @@ func maybeAutoSelectCurrentTeam(ctx context.Context, cfg *config.Config, profile
 	if err != nil {
 		return nil, false, err
 	}
-	if strings.TrimSpace(profile.GetCurrentTeamID()) != "" {
-		return nil, false, nil
-	}
 	if strings.TrimSpace(profile.GetToken()) == "" {
 		return nil, false, nil
 	}
+	currentTeamID := strings.TrimSpace(profile.GetCurrentTeamID())
 
 	client, err := newSDKClientForBaseURL(profile.GetAPIURL(), profile.GetToken())
 	if err != nil {
@@ -362,7 +360,17 @@ func maybeAutoSelectCurrentTeam(ctx context.Context, cfg *config.Config, profile
 	if !ok {
 		return nil, false, fmt.Errorf("list teams: missing response data")
 	}
+
+	for _, team := range data.Teams {
+		if strings.TrimSpace(team.ID) == currentTeamID && currentTeamID != "" {
+			return nil, false, nil
+		}
+	}
+
 	if len(data.Teams) != 1 {
+		if currentTeamID != "" {
+			cfg.ClearCurrentTeam(profileName)
+		}
 		return nil, false, nil
 	}
 
