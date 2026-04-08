@@ -310,6 +310,13 @@ s0 sandbox context stats <ctx-id> -s <sandbox-id>
 reusing a matching running REPL context when there is exactly one match for the
 requested alias. `s0 sandbox exec` remains the one-shot command path.
 
+Use `--stream` when you want non-TTY commands to stream stdout/stderr live. The command exits when the remote process emits its terminal `done` event, and the CLI returns the remote exit code.
+
+```bash
+s0 sandbox exec <sandbox-id> --stream -- sh -c 'echo hello && sleep 1 && exit 7'
+# exits locally with status 7
+```
+
 ### Sandbox Network
 
 ```bash

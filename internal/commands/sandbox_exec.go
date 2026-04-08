@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -10,7 +11,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -24,17 +24,29 @@ var (
 	execEnv         []string
 	execNoWait      bool
 	execTTL         int32
+	execStream      bool
 	execInteractive bool
 	execTTY         bool
 )
 
 type execWSMessage struct {
-	Type   string `json:"type,omitempty"`
-	Source string `json:"source,omitempty"`
-	Data   string `json:"data,omitempty"`
-	Rows   int    `json:"rows,omitempty"`
-	Cols   int    `json:"cols,omitempty"`
-	Signal string `json:"signal,omitempty"`
+	Type      string `json:"type,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Data      string `json:"data,omitempty"`
+	Rows      int    `json:"rows,omitempty"`
+	Cols      int    `json:"cols,omitempty"`
+	Signal    string `json:"signal,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	ExitCode  *int   `json:"exit_code,omitempty"`
+	State     string `json:"state,omitempty"`
+}
+
+type execExitCodeError struct {
+	code int
+}
+
+func (e *execExitCodeError) Error() string {
+	return fmt.Sprintf("remote command exited with code %d", e.code)
 }
 
 // sandboxExecCmd executes a command in a sandbox.
@@ -70,13 +82,17 @@ Examples:
 			os.Exit(1)
 		}
 
-		if execNoWait && (execInteractive || execTTY) {
-			fmt.Fprintln(os.Stderr, "Error: --no-wait cannot be used with interactive or TTY exec")
+		if execNoWait && (execStream || execInteractive || execTTY) {
+			fmt.Fprintln(os.Stderr, "Error: --no-wait cannot be used with streaming, interactive, or TTY exec")
 			os.Exit(1)
 		}
 
 		if shouldUseStreamingExec(command) {
 			if err := runStreamingExec(cmd.Context(), client, sandboxID, command, envMap); err != nil {
+				var exitErr *execExitCodeError
+				if errors.As(err, &exitErr) {
+					os.Exit(exitErr.code)
+				}
 				fmt.Fprintf(os.Stderr, "Error executing command: %v\n", err)
 				os.Exit(1)
 			}
@@ -148,7 +164,7 @@ func shouldUseStreamingExec(command []string) bool {
 	if execNoWait {
 		return false
 	}
-	if execInteractive || execTTY {
+	if execStream || execInteractive || execTTY {
 		return true
 	}
 	return shouldAutoInteractiveExec(command)
@@ -174,6 +190,8 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	allocateTTY := execTTY || execInteractive || shouldAutoInteractiveExec(command)
+
 	req := apispec.CreateContextRequest{
 		Type:          apispec.NewOptProcessType(apispec.ProcessTypeCmd),
 		Cmd:           apispec.NewOptCreateCMDContextRequest(apispec.CreateCMDContextRequest{Command: command}),
@@ -189,7 +207,6 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 		req.TTLSec = apispec.NewOptInt32(execTTL)
 	}
 
-	allocateTTY := execTTY || execInteractive || shouldAutoInteractiveExec(command)
 	if allocateTTY {
 		rows, cols := currentTerminalSize()
 		req.PtySize = apispec.NewOptPTYSize(apispec.PTYSize{
@@ -201,6 +218,9 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 	contextResp, err := client.Sandbox(sandboxID).CreateContext(ctx, req)
 	if err != nil {
 		return err
+	}
+	if contextResp == nil {
+		return fmt.Errorf("create context returned nil response")
 	}
 
 	conn, _, err := client.Sandbox(sandboxID).ConnectWSContext(ctx, contextResp.ID)
@@ -217,15 +237,8 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 	}
 	defer restoreTerminal()
 
-	var writeMu sync.Mutex
-	writeJSON := func(msg execWSMessage) error {
-		writeMu.Lock()
-		defer writeMu.Unlock()
-		return conn.WriteJSON(msg)
-	}
+	writeJSON := func(msg execWSMessage) error { return conn.WriteJSON(msg) }
 	writeControl := func(messageType int, data []byte) error {
-		writeMu.Lock()
-		defer writeMu.Unlock()
 		return conn.WriteControl(messageType, data, time.Now().Add(time.Second))
 	}
 
@@ -238,11 +251,21 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 
 	for {
 		var msg execWSMessage
-		if err := conn.ReadJSON(&msg); err != nil {
+		err := conn.ReadJSON(&msg)
+		if err != nil {
 			if isNormalWSClose(err) || ctx.Err() != nil {
 				return nil
 			}
 			return err
+		}
+		if isTerminalDoneExecMessage(msg) {
+			if msg.ExitCode != nil && *msg.ExitCode != 0 {
+				return &execExitCodeError{code: *msg.ExitCode}
+			}
+			return nil
+		}
+		if msg.Type != "" && msg.Type != "output" {
+			continue
 		}
 		switch msg.Source {
 		case "stderr":
@@ -255,6 +278,13 @@ func runStreamingExec(ctx context.Context, client *sandbox0.Client, sandboxID st
 			}
 		}
 	}
+}
+
+func isTerminalDoneExecMessage(msg execWSMessage) bool {
+	if msg.Type != "done" {
+		return false
+	}
+	return msg.RequestID == "" || msg.ExitCode != nil || msg.State != ""
 }
 
 func prepareTerminalForStreaming(allocateTTY bool) (func(), error) {
@@ -430,6 +460,7 @@ func init() {
 	sandboxExecCmd.Flags().StringArrayVar(&execEnv, "env", nil, "environment variables (KEY=VALUE, can be repeated)")
 	sandboxExecCmd.Flags().BoolVar(&execNoWait, "no-wait", false, "don't wait for command completion")
 	sandboxExecCmd.Flags().Int32Var(&execTTL, "ttl", 0, "context TTL in seconds")
+	sandboxExecCmd.Flags().BoolVar(&execStream, "stream", false, "stream stdout/stderr without allocating a TTY")
 	sandboxExecCmd.Flags().BoolVarP(&execInteractive, "interactive", "i", false, "keep stdin attached and stream exec I/O (implies TTY)")
 	sandboxExecCmd.Flags().BoolVarP(&execTTY, "tty", "t", false, "allocate a TTY and stream exec I/O")
 
