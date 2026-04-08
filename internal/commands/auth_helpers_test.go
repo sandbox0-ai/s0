@@ -133,6 +133,122 @@ func TestMaybeAutoSelectCurrentTeamDoesNotSelectWhenMultipleTeamsExist(t *testin
 	}
 }
 
+func TestMaybeAutoSelectCurrentTeamReplacesStaleTeamWhenOnlyOneTeamExists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/teams":
+			writeAuthJSON(t, w, http.StatusOK, map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"teams": []map[string]any{{
+						"id":         "team-2",
+						"name":       "New Team",
+						"slug":       "new-team",
+						"created_at": "2026-01-01T00:00:00Z",
+						"updated_at": "2026-01-01T00:00:00Z",
+					}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		CurrentProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				APIURL:        server.URL,
+				Token:         "user-token",
+				CurrentTeamID: "team-1",
+			},
+		},
+	}
+
+	team, ok, err := maybeAutoSelectCurrentTeam(context.Background(), cfg, "default")
+	if err != nil {
+		t.Fatalf("maybeAutoSelectCurrentTeam() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("maybeAutoSelectCurrentTeam() did not replace stale team")
+	}
+	if team == nil || team.ID != "team-2" {
+		t.Fatalf("team = %+v, want team-2", team)
+	}
+
+	profile, err := cfg.GetProfile("default")
+	if err != nil {
+		t.Fatalf("GetProfile() error = %v", err)
+	}
+	if got := profile.GetCurrentTeamID(); got != "team-2" {
+		t.Fatalf("CurrentTeamID = %q, want team-2", got)
+	}
+}
+
+func TestMaybeAutoSelectCurrentTeamClearsStaleTeamWhenMultipleTeamsExist(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/teams":
+			writeAuthJSON(t, w, http.StatusOK, map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"teams": []map[string]any{
+						{
+							"id":         "team-2",
+							"name":       "Two",
+							"slug":       "two",
+							"created_at": "2026-01-01T00:00:00Z",
+							"updated_at": "2026-01-01T00:00:00Z",
+						},
+						{
+							"id":         "team-3",
+							"name":       "Three",
+							"slug":       "three",
+							"created_at": "2026-01-01T00:00:00Z",
+							"updated_at": "2026-01-01T00:00:00Z",
+						},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		CurrentProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				APIURL:              server.URL,
+				Token:               "user-token",
+				CurrentTeamID:       "team-1",
+				CurrentTeamRegionID: "aws-us-east-1",
+			},
+		},
+	}
+
+	team, ok, err := maybeAutoSelectCurrentTeam(context.Background(), cfg, "default")
+	if err != nil {
+		t.Fatalf("maybeAutoSelectCurrentTeam() error = %v", err)
+	}
+	if ok || team != nil {
+		t.Fatalf("maybeAutoSelectCurrentTeam() = (%+v, %v), want no auto-selection", team, ok)
+	}
+
+	profile, err := cfg.GetProfile("default")
+	if err != nil {
+		t.Fatalf("GetProfile() error = %v", err)
+	}
+	if got := profile.GetCurrentTeamID(); got != "" {
+		t.Fatalf("CurrentTeamID = %q, want empty", got)
+	}
+	if _, ok := profile.GetCurrentTeamTarget(); ok {
+		t.Fatal("CurrentTeamTarget should be cleared when current team is stale")
+	}
+}
+
 func writeAuthJSON(t *testing.T, w http.ResponseWriter, status int, payload any) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")

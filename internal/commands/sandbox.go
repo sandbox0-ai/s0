@@ -145,7 +145,7 @@ var sandboxPauseCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Sandbox %s paused successfully\n", sandboxID)
+		fmt.Printf("Pause requested for sandbox %s\n", sandboxID)
 	},
 }
 
@@ -170,7 +170,7 @@ var sandboxResumeCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Sandbox %s resumed successfully\n", sandboxID)
+		fmt.Printf("Resume requested for sandbox %s\n", sandboxID)
 	},
 }
 

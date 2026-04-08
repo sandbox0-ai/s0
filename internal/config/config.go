@@ -296,6 +296,21 @@ func (c *Config) SetCurrentTeam(profileName, teamID, regionID, gatewayURL string
 	c.Profiles[profileName] = p
 }
 
+// ClearCurrentTeam removes the locally selected current team and cached region target.
+func (c *Config) ClearCurrentTeam(profileName string) {
+	if c.Profiles == nil {
+		return
+	}
+	p, ok := c.Profiles[profileName]
+	if !ok {
+		return
+	}
+	p.CurrentTeamID = ""
+	p.CurrentTeamRegionID = ""
+	p.CurrentTeamGatewayURL = ""
+	c.Profiles[profileName] = p
+}
+
 // SetGatewayMode updates the configured gateway mode for a profile.
 func (c *Config) SetGatewayMode(profileName string, mode GatewayMode) {
 	if c.Profiles == nil {
