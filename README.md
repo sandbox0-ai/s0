@@ -255,6 +255,16 @@ s0 sandbox status <sandbox-id>
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
 ```
 
+`s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
+
+Manage the current user's SSH public keys with:
+
+```bash
+s0 user ssh-key list
+s0 user ssh-key add --public-key-file ~/.ssh/id_ed25519.pub
+s0 user ssh-key delete <ssh-key-id>
+```
+
 Bootstrap mounts can be requested as part of sandbox creation:
 
 ```bash
