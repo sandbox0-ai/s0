@@ -255,6 +255,8 @@ s0 sandbox status <sandbox-id>
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
 ```
 
+`s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
+
 Bootstrap mounts can be requested as part of sandbox creation:
 
 ```bash

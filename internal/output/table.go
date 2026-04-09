@@ -492,6 +492,11 @@ func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format(timeLayout)})
 	_ = t.Append([]string{"Soft Expires At:", formatTimestamp(s.ExpiresAt)})
 	_ = t.Append([]string{"Hard Expires At:", formatTimestamp(s.HardExpiresAt)})
+	if ssh, ok := s.SSH.Get(); ok {
+		_ = t.Append([]string{"SSH Host:", valueOrDash(ssh.Host)})
+		_ = t.Append([]string{"SSH Port:", intOrDash(ssh.Port)})
+		_ = t.Append([]string{"SSH Username:", valueOrDash(ssh.Username)})
+	}
 	return t.Render()
 }
 
