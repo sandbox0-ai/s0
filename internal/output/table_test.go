@@ -202,6 +202,74 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 	}
 }
 
+func TestTableFormatterFormatSSHPublicKeyList(t *testing.T) {
+	formatter := &TableFormatter{}
+	keys := []apispec.SSHPublicKey{
+		{
+			ID:                "key_123",
+			Name:              "macbook",
+			PublicKey:         "ssh-ed25519 AAAA test@example",
+			KeyType:           "ssh-ed25519",
+			FingerprintSHA256: "SHA256:abc",
+			CreatedAt:         time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC),
+			UpdatedAt:         time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, keys); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID",
+		"NAME",
+		"KEY TYPE",
+		"FINGERPRINT",
+		"macbook",
+		"ssh-ed25519",
+		"SHA256:abc",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatSSHPublicKey(t *testing.T) {
+	formatter := &TableFormatter{}
+	key := &apispec.SSHPublicKey{
+		ID:                "key_123",
+		Name:              "macbook",
+		PublicKey:         "ssh-ed25519 AAAA test@example",
+		KeyType:           "ssh-ed25519",
+		FingerprintSHA256: "SHA256:abc",
+		Comment:           apispec.NewOptString("test@example"),
+		CreatedAt:         time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC),
+		UpdatedAt:         time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, key); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Name:",
+		"macbook",
+		"Fingerprint:",
+		"SHA256:abc",
+		"Public Key:",
+		"ssh-ed25519 AAAA test@example",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
 func TestTableFormatterFormatSyncStatusView(t *testing.T) {
 	formatter := &TableFormatter{}
 	view := &syncview.StatusView{

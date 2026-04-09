@@ -107,6 +107,12 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatUser(w, &v)
 	case *apispec.User:
 		return f.formatUser(w, v)
+	case []apispec.SSHPublicKey:
+		return f.formatSSHPublicKeyList(w, v)
+	case apispec.SSHPublicKey:
+		return f.formatSSHPublicKey(w, &v)
+	case *apispec.SSHPublicKey:
+		return f.formatSSHPublicKey(w, v)
 	case []syncstate.Attachment:
 		return f.formatSyncAttachments(w, v)
 	case *syncstate.Attachment:
@@ -497,6 +503,39 @@ func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 		_ = t.Append([]string{"SSH Port:", intOrDash(ssh.Port)})
 		_ = t.Append([]string{"SSH Username:", valueOrDash(ssh.Username)})
 	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSSHPublicKeyList(w io.Writer, keys []apispec.SSHPublicKey) error {
+	if len(keys) == 0 {
+		_, _ = fmt.Fprintln(w, "No SSH public keys found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "NAME", "KEY TYPE", "FINGERPRINT", "CREATED AT"})
+	for _, key := range keys {
+		_ = t.Append([]string{
+			key.ID,
+			key.Name,
+			key.KeyType,
+			key.FingerprintSHA256,
+			key.CreatedAt.Format(timeLayout),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSSHPublicKey(w io.Writer, key *apispec.SSHPublicKey) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", key.ID})
+	_ = t.Append([]string{"Name:", key.Name})
+	_ = t.Append([]string{"Key Type:", key.KeyType})
+	_ = t.Append([]string{"Fingerprint:", key.FingerprintSHA256})
+	_ = t.Append([]string{"Comment:", formatOptString(key.Comment)})
+	_ = t.Append([]string{"Public Key:", key.PublicKey})
+	_ = t.Append([]string{"Created At:", key.CreatedAt.Format(timeLayout)})
+	_ = t.Append([]string{"Updated At:", key.UpdatedAt.Format(timeLayout)})
 	return t.Render()
 }
 
