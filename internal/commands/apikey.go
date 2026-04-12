@@ -13,7 +13,6 @@ import (
 
 var (
 	apiKeyName      string
-	apiKeyType      string
 	apiKeyRoles     []string
 	apiKeyExpiresIn string
 	apiKeyRaw       bool
@@ -64,7 +63,7 @@ var apiKeyListCmd = &cobra.Command{
 var apiKeyCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create an API key",
-	Long:  `Create a new API key for user or service access.`,
+	Long:  `Create a new API key for machine access.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if strings.TrimSpace(apiKeyName) == "" {
 			fmt.Fprintln(os.Stderr, "Error: --name is required")
@@ -72,12 +71,6 @@ var apiKeyCreateCmd = &cobra.Command{
 		}
 		if len(apiKeyRoles) == 0 {
 			fmt.Fprintln(os.Stderr, "Error: at least one --role is required")
-			os.Exit(1)
-		}
-
-		keyType, err := parseAPIKeyType(apiKeyType)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -89,7 +82,6 @@ var apiKeyCreateCmd = &cobra.Command{
 
 		req := &apispec.CreateAPIKeyRequest{
 			Name:  apiKeyName,
-			Type:  keyType,
 			Roles: apiKeyRoles,
 		}
 		if strings.TrimSpace(apiKeyExpiresIn) != "" {
@@ -204,17 +196,6 @@ var apiKeyDeleteCmd = &cobra.Command{
 	},
 }
 
-func parseAPIKeyType(s string) (apispec.CreateAPIKeyRequestType, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", string(apispec.CreateAPIKeyRequestTypeUser):
-		return apispec.CreateAPIKeyRequestTypeUser, nil
-	case string(apispec.CreateAPIKeyRequestTypeService):
-		return apispec.CreateAPIKeyRequestTypeService, nil
-	default:
-		return "", fmt.Errorf("invalid --type %q, must be one of: user, service", s)
-	}
-}
-
 func printCreatedAPIKeyRaw(w io.Writer, data *apispec.CreateAPIKeyResponse) error {
 	if data == nil {
 		return fmt.Errorf("missing API key data")
@@ -236,7 +217,6 @@ func init() {
 	apiKeyCmd.AddCommand(apiKeyDeleteCmd)
 
 	apiKeyCreateCmd.Flags().StringVar(&apiKeyName, "name", "", "API key name (required)")
-	apiKeyCreateCmd.Flags().StringVar(&apiKeyType, "type", "user", "API key type (user or service)")
 	apiKeyCreateCmd.Flags().StringArrayVar(&apiKeyRoles, "role", nil, "role to grant (admin, developer, viewer; can be repeated, required)")
 	apiKeyCreateCmd.Flags().StringVar(&apiKeyExpiresIn, "expires-in", "", "key expiry (30d, 90d, 180d, 365d, or never)")
 	apiKeyCreateCmd.Flags().BoolVar(&apiKeyRaw, "raw", false, "print only the API key value (for scripts/pipes)")
