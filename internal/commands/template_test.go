@@ -4,44 +4,31 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
-func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
+func TestBuildTemplateCreateRequestPreservesWarmProcessSpec(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	specFile := filepath.Join(dir, "template.yaml")
 	specYAML := `spec:
-  displayName: "Claude Code Sidecar Kind Test"
-  description: "Minimal template for verifying sidecar startup and direct exposed-port routing"
+  displayName: "Claude Code Warm Process Kind Test"
+  description: "Minimal template for verifying warm process startup"
   mainContainer:
-    image: nginx:1.27-alpine
+    image: cc-demo:test
     resources:
       cpu: "250m"
       memory: 256Mi
-  sharedVolumes:
-    - name: workspace
-      mountPath: /workspace/shared
-  sidecars:
-    - name: claude-code
-      image: cc-demo:test
-      resources:
-        cpu: "500m"
-        memory: 512Mi
-      mounts:
-        - name: workspace
-          mountPath: /shared
-      env:
-        - name: PORT
-          value: "8081"
-        - name: WORKSPACE_DIR
-          value: /workspace
-      readinessProbe:
-        exec:
-          command: ["test", "-f", "/tmp/cc-sidecar-ready"]
-        initialDelaySeconds: 1
-        periodSeconds: 2
-        failureThreshold: 30
+  warmProcesses:
+    - type: cmd
+      alias: claude-code
+      command: ["sh", "-lc", "touch /tmp/cc-warm-ready; tail -f /dev/null"]
+      cwd: /workspace
+      envVars:
+        PORT: "8081"
+        WORKSPACE_DIR: /workspace
   network:
     mode: allow-all
   pool:
@@ -60,62 +47,33 @@ func TestBuildTemplateCreateRequestPreservesSidecarSpec(t *testing.T) {
 	if req.TemplateID != "cc-demo-kind-test" {
 		t.Fatalf("TemplateID = %q, want cc-demo-kind-test", req.TemplateID)
 	}
-	if len(req.Spec.Sidecars) != 1 {
-		t.Fatalf("len(Spec.Sidecars) = %d, want 1", len(req.Spec.Sidecars))
-	}
-	if len(req.Spec.SharedVolumes) != 1 {
-		t.Fatalf("len(Spec.SharedVolumes) = %d, want 1", len(req.Spec.SharedVolumes))
-	}
-	if req.Spec.SharedVolumes[0].Name != "workspace" {
-		t.Fatalf("SharedVolumes[0].Name = %q, want workspace", req.Spec.SharedVolumes[0].Name)
-	}
-	if req.Spec.SharedVolumes[0].MountPath != "/workspace/shared" {
-		t.Fatalf("SharedVolumes[0].MountPath = %q, want /workspace/shared", req.Spec.SharedVolumes[0].MountPath)
-	}
-	if _, ok := req.Spec.SharedVolumes[0].SandboxVolumeId.Get(); ok {
-		t.Fatal("SharedVolumes[0].SandboxVolumeId should be unset for claim-bound shared volumes")
+	if len(req.Spec.WarmProcesses) != 1 {
+		t.Fatalf("len(Spec.WarmProcesses) = %d, want 1", len(req.Spec.WarmProcesses))
 	}
 
-	sidecar := req.Spec.Sidecars[0]
-	if sidecar.Name != "claude-code" {
-		t.Fatalf("Sidecars[0].Name = %q, want claude-code", sidecar.Name)
+	process := req.Spec.WarmProcesses[0]
+	if process.Type != apispec.WarmProcessSpecTypeCmd {
+		t.Fatalf("WarmProcesses[0].Type = %q, want cmd", process.Type)
 	}
-	if sidecar.Image != "cc-demo:test" {
-		t.Fatalf("Sidecars[0].Image = %q, want cc-demo:test", sidecar.Image)
+	alias, ok := process.Alias.Get()
+	if !ok || alias != "claude-code" {
+		t.Fatalf("WarmProcesses[0].Alias = %q, want claude-code", alias)
 	}
-	if len(sidecar.Env) != 2 {
-		t.Fatalf("len(Sidecars[0].Env) = %d, want 2", len(sidecar.Env))
+	if len(process.Command) != 3 {
+		t.Fatalf("len(WarmProcesses[0].Command) = %d, want 3", len(process.Command))
 	}
-	if len(sidecar.Mounts) != 1 {
-		t.Fatalf("len(Sidecars[0].Mounts) = %d, want 1", len(sidecar.Mounts))
+	if process.Command[2] != "touch /tmp/cc-warm-ready; tail -f /dev/null" {
+		t.Fatalf("WarmProcesses[0].Command[2] = %q, want warm command", process.Command[2])
 	}
-	if sidecar.Mounts[0].Name != "workspace" || sidecar.Mounts[0].MountPath != "/shared" {
-		t.Fatalf("Sidecars[0].Mounts[0] = %+v, want workspace:/shared", sidecar.Mounts[0])
+	cwd, ok := process.Cwd.Get()
+	if !ok || cwd != "/workspace" {
+		t.Fatalf("WarmProcesses[0].Cwd = %q, want /workspace", cwd)
 	}
-	if !sidecar.ReadinessProbe.IsSet() {
-		t.Fatal("Sidecars[0].ReadinessProbe should be set")
-	}
-	probe, ok := sidecar.ReadinessProbe.Get()
+	envVars, ok := process.EnvVars.Get()
 	if !ok {
-		t.Fatal("Sidecars[0].ReadinessProbe.Get() should return value")
+		t.Fatal("WarmProcesses[0].EnvVars should be set")
 	}
-	if !probe.Exec.IsSet() {
-		t.Fatal("Sidecars[0].ReadinessProbe.Exec should be set")
-	}
-	execAction, ok := probe.Exec.Get()
-	if !ok {
-		t.Fatal("Sidecars[0].ReadinessProbe.Exec.Get() should return value")
-	}
-	if len(execAction.Command) != 3 {
-		t.Fatalf("len(Sidecars[0].ReadinessProbe.Exec.Command) = %d, want 3", len(execAction.Command))
-	}
-
-	cpu, ok := sidecar.Resources.CPU.Get()
-	if !ok || cpu != "500m" {
-		t.Fatalf("Sidecars[0].Resources.CPU = %q, want 500m", cpu)
-	}
-	memory, ok := sidecar.Resources.Memory.Get()
-	if !ok || memory != "512Mi" {
-		t.Fatalf("Sidecars[0].Resources.Memory = %q, want 512Mi", memory)
+	if envVars["PORT"] != "8081" || envVars["WORKSPACE_DIR"] != "/workspace" {
+		t.Fatalf("WarmProcesses[0].EnvVars = %+v, want PORT and WORKSPACE_DIR", envVars)
 	}
 }
