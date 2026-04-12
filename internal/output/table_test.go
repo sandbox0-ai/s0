@@ -261,11 +261,17 @@ func TestTableFormatterFormatSSHPublicKey(t *testing.T) {
 		"macbook",
 		"Fingerprint:",
 		"SHA256:abc",
-		"Public Key:",
-		"ssh-ed25519 AAAA test@example",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+	for _, unwanted := range []string{
+		"Public Key:",
+		"ssh-ed25519 AAAA test@example",
+	} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("output contains %q:\n%s", unwanted, output)
 		}
 	}
 }

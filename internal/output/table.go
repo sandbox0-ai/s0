@@ -533,7 +533,6 @@ func (f *TableFormatter) formatSSHPublicKey(w io.Writer, key *apispec.SSHPublicK
 	_ = t.Append([]string{"Key Type:", key.KeyType})
 	_ = t.Append([]string{"Fingerprint:", key.FingerprintSHA256})
 	_ = t.Append([]string{"Comment:", formatOptString(key.Comment)})
-	_ = t.Append([]string{"Public Key:", key.PublicKey})
 	_ = t.Append([]string{"Created At:", key.CreatedAt.Format(timeLayout)})
 	_ = t.Append([]string{"Updated At:", key.UpdatedAt.Format(timeLayout)})
 	return t.Render()
