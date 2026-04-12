@@ -173,7 +173,7 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		AutoResume: true,
 		PodName:    "sb-123-pod",
 		SSH: apispec.NewOptSandboxSSHConnection(apispec.SandboxSSHConnection{
-			Host:     "ssh.aws-us-east-1.sandbox0.app",
+			Host:     "aws-us-east-1.ssh.sandbox0.app",
 			Port:     30222,
 			Username: "sb_123",
 		}),
@@ -190,7 +190,7 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 	output := buf.String()
 	for _, want := range []string{
 		"SSH Host:",
-		"ssh.aws-us-east-1.sandbox0.app",
+		"aws-us-east-1.ssh.sandbox0.app",
 		"SSH Port:",
 		"30222",
 		"SSH Username:",
