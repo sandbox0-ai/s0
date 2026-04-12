@@ -1012,12 +1012,11 @@ func (f *TableFormatter) formatAPIKeyList(w io.Writer, keys []apispec.APIKey) er
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "NAME", "TYPE", "TEAM ID", "USER ID", "ROLES", "ACTIVE", "EXPIRES AT", "LAST USED"})
+	t.Header([]string{"ID", "NAME", "TEAM ID", "USER ID", "ROLES", "ACTIVE", "EXPIRES AT", "LAST USED"})
 	for _, k := range keys {
 		_ = t.Append([]string{
 			k.ID,
 			k.Name,
-			k.Type,
 			k.TeamID,
 			formatOptNilString(k.UserID),
 			formatStringSlice(k.Roles),
@@ -1033,7 +1032,6 @@ func (f *TableFormatter) formatCreatedAPIKey(w io.Writer, k *apispec.CreateAPIKe
 	t := newTable(w)
 	_ = t.Append([]string{"ID:", k.ID})
 	_ = t.Append([]string{"Name:", k.Name})
-	_ = t.Append([]string{"Type:", k.Type})
 	_ = t.Append([]string{"Team ID:", k.TeamID})
 	_ = t.Append([]string{"Roles:", formatStringSlice(k.Roles)})
 	_ = t.Append([]string{"Expires At:", formatTimestamp(k.ExpiresAt)})
