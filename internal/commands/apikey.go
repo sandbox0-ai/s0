@@ -37,7 +37,7 @@ var apiKeyListCmd = &cobra.Command{
 
 		res, err := client.API().APIKeysGet(cmd.Context())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing API keys: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error listing API keys: %v\n", withSelectedTeamAuthHint(err))
 			os.Exit(1)
 		}
 
@@ -90,7 +90,7 @@ var apiKeyCreateCmd = &cobra.Command{
 
 		res, err := client.API().APIKeysPost(cmd.Context(), req)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating API key: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error creating API key: %v\n", withSelectedTeamAuthHint(err))
 			os.Exit(1)
 		}
 
@@ -140,7 +140,7 @@ var apiKeyDeactivateCmd = &cobra.Command{
 			ID: args[0],
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error deactivating API key: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error deactivating API key: %v\n", withSelectedTeamAuthHint(err))
 			os.Exit(1)
 		}
 
@@ -176,7 +176,7 @@ var apiKeyDeleteCmd = &cobra.Command{
 			ID: args[0],
 		})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error deleting API key: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error deleting API key: %v\n", withSelectedTeamAuthHint(err))
 			os.Exit(1)
 		}
 

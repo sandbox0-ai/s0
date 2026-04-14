@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/sandbox0-ai/s0/internal/config"
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 )
 
 func TestShouldShowCurrentTeamSelectionHint(t *testing.T) {
@@ -246,6 +248,120 @@ func TestMaybeAutoSelectCurrentTeamClearsStaleTeamWhenMultipleTeamsExist(t *test
 	}
 	if _, ok := profile.GetCurrentTeamTarget(); ok {
 		t.Fatal("CurrentTeamTarget should be cleared when current team is stale")
+	}
+}
+
+func TestRefreshProfileTeamGrantsRefreshesToken(t *testing.T) {
+	oldToken := *config.GetTokenVar()
+	*config.GetTokenVar() = ""
+	t.Cleanup(func() { *config.GetTokenVar() = oldToken })
+	t.Setenv(config.EnvToken, "")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		writeAuthJSON(t, w, http.StatusOK, map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"access_token":  "new-access-token",
+				"refresh_token": "new-refresh-token",
+				"expires_at":    int64(1893456000),
+			},
+		})
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		CurrentProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				APIURL:       server.URL,
+				Token:        "old-access-token",
+				RefreshToken: "old-refresh-token",
+				ExpiresAt:    100,
+			},
+		},
+	}
+
+	refreshed, err := refreshProfileTeamGrants(context.Background(), cfg, "default")
+	if err != nil {
+		t.Fatalf("refreshProfileTeamGrants() error = %v", err)
+	}
+	if !refreshed {
+		t.Fatal("refreshProfileTeamGrants() did not refresh")
+	}
+	profile, err := cfg.GetProfile("default")
+	if err != nil {
+		t.Fatalf("GetProfile() error = %v", err)
+	}
+	if profile.Token != "new-access-token" {
+		t.Fatalf("Token = %q, want new-access-token", profile.Token)
+	}
+	if profile.RefreshToken != "new-refresh-token" {
+		t.Fatalf("RefreshToken = %q, want new-refresh-token", profile.RefreshToken)
+	}
+	if profile.ExpiresAt != 1893456000 {
+		t.Fatalf("ExpiresAt = %d, want 1893456000", profile.ExpiresAt)
+	}
+}
+
+func TestRefreshProfileTeamGrantsSkipsWithoutRefreshToken(t *testing.T) {
+	oldToken := *config.GetTokenVar()
+	*config.GetTokenVar() = ""
+	t.Cleanup(func() { *config.GetTokenVar() = oldToken })
+	t.Setenv(config.EnvToken, "")
+
+	cfg := &config.Config{
+		CurrentProfile: "default",
+		Profiles: map[string]config.Profile{
+			"default": {
+				APIURL: "https://api.example.test",
+				Token:  "access-token",
+			},
+		},
+	}
+
+	refreshed, err := refreshProfileTeamGrants(context.Background(), cfg, "default")
+	if err != nil {
+		t.Fatalf("refreshProfileTeamGrants() error = %v", err)
+	}
+	if refreshed {
+		t.Fatal("refreshProfileTeamGrants() refreshed without a refresh token")
+	}
+}
+
+func TestWithSelectedTeamAuthHintAddsTokenStaleHint(t *testing.T) {
+	err := withSelectedTeamAuthHint(&sandbox0.APIError{
+		StatusCode: http.StatusUnauthorized,
+		Message:    "not a member of selected team",
+	})
+	if err == nil {
+		t.Fatal("withSelectedTeamAuthHint() returned nil")
+	}
+	got := err.Error()
+	if !strings.Contains(got, "not a member of selected team") {
+		t.Fatalf("error = %q, want original message", got)
+	}
+	if !strings.Contains(got, "token stale, run `s0 auth login` or refresh token") {
+		t.Fatalf("error = %q, want stale token hint", got)
+	}
+}
+
+func TestWithSelectedTeamAuthHintHandlesCompactJSONError(t *testing.T) {
+	err := withSelectedTeamAuthHint(&sandbox0.APIError{
+		StatusCode: http.StatusUnauthorized,
+		Message:    `{"error":"not a member of selected team"}`,
+	})
+	if err == nil {
+		t.Fatal("withSelectedTeamAuthHint() returned nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "token stale, run `s0 auth login` or refresh token") {
+		t.Fatalf("error = %q, want stale token hint", got)
 	}
 }
 
