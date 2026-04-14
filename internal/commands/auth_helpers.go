@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/sandbox0-ai/s0/internal/config"
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
@@ -47,6 +49,8 @@ const (
 	authLoginModeAuto    authLoginMode = "auto"
 	authLoginModeDevice  authLoginMode = "device"
 	authLoginModeBuiltin authLoginMode = "builtin"
+
+	staleSelectedTeamGrantHint = "token stale, run `s0 auth login` or refresh token, then run `s0 team use <team-id>` and retry"
 )
 
 func authRequest(ctx context.Context, method, endpoint, token string, requestBody any, responseData any) error {
@@ -189,6 +193,72 @@ func refreshAccessToken(ctx context.Context, baseURL, refreshToken string) (*aut
 		return nil, err
 	}
 	return &data, nil
+}
+
+func refreshProfileTeamGrants(ctx context.Context, cfg *config.Config, profileName string) (bool, error) {
+	if cfg == nil {
+		return false, nil
+	}
+	profile, err := cfg.GetProfile(profileName)
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(*config.GetTokenVar()) != "" || strings.TrimSpace(os.Getenv(config.EnvToken)) != "" {
+		return false, nil
+	}
+	refreshToken := strings.TrimSpace(profile.GetRefreshToken())
+	if refreshToken == "" {
+		return false, nil
+	}
+
+	refreshed, err := refreshAccessToken(ctx, profile.GetAPIURL(), refreshToken)
+	if err != nil {
+		return false, err
+	}
+	cfg.SetCredentials(
+		profileName,
+		profile.GetAPIURL(),
+		refreshed.AccessToken,
+		refreshed.RefreshToken,
+		refreshed.ExpiresAt,
+	)
+	return true, nil
+}
+
+func printTeamGrantRefreshWarning(action string, refreshed bool, err error) {
+	if err == nil && refreshed {
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not refresh access token team grants after %s: %v\n", action, err)
+	} else {
+		fmt.Fprintf(os.Stderr, "Warning: access token team grants were not refreshed after %s.\n", action)
+	}
+	fmt.Fprintf(os.Stderr, "Hint: %s.\n", staleSelectedTeamGrantHint)
+}
+
+func withSelectedTeamAuthHint(err error) error {
+	if err == nil || !isSelectedTeamAuthError(err) {
+		return err
+	}
+	return fmt.Errorf("%w\nHint: %s", err, staleSelectedTeamGrantHint)
+}
+
+func isSelectedTeamAuthError(err error) bool {
+	var apiErr *sandbox0.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.StatusCode != http.StatusUnauthorized {
+			return false
+		}
+		return containsSelectedTeamAuthMessage(apiErr.Message) ||
+			containsSelectedTeamAuthMessage(string(apiErr.Body)) ||
+			containsSelectedTeamAuthMessage(err.Error())
+	}
+	return containsSelectedTeamAuthMessage(err.Error())
+}
+
+func containsSelectedTeamAuthMessage(value string) bool {
+	return strings.Contains(strings.ToLower(value), "not a member of selected team")
 }
 
 func logoutToken(ctx context.Context, baseURL, accessToken string) error {

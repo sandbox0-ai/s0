@@ -143,7 +143,33 @@ var teamCreateCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
 		}
+		refreshCurrentProfileTeamGrantsAfter(cmd.Context(), "creating team")
 	},
+}
+
+func refreshCurrentProfileTeamGrantsAfter(ctx context.Context, action string) {
+	cfg, err := getConfig()
+	if err != nil {
+		printTeamGrantRefreshWarning(action, false, err)
+		return
+	}
+	profileName := cfg.GetActiveProfile()
+	profile, err := cfg.GetProfile(profileName)
+	if err != nil {
+		printTeamGrantRefreshWarning(action, false, err)
+		return
+	}
+	if resolveGatewayModeForProfile(ctx, profile) != config.GatewayModeGlobal {
+		return
+	}
+	refreshed, err := refreshProfileTeamGrants(ctx, cfg, profileName)
+	if err != nil || !refreshed {
+		printTeamGrantRefreshWarning(action, refreshed, err)
+		return
+	}
+	if err := cfg.Save(); err != nil {
+		printTeamGrantRefreshWarning(action, false, fmt.Errorf("save refreshed credentials: %w", err))
+	}
 }
 
 func resolveGatewayModeForProfile(ctx context.Context, p *config.Profile) config.GatewayMode {
@@ -268,6 +294,12 @@ var teamUseCmd = &cobra.Command{
 
 		cfg.SetGatewayMode(profileName, gatewayMode)
 		cfg.SetCurrentTeam(profileName, teamID, homeRegionID, regionalGatewayURL)
+		if gatewayMode == config.GatewayModeGlobal {
+			refreshed, refreshErr := refreshProfileTeamGrants(cmd.Context(), cfg, profileName)
+			if refreshErr != nil || !refreshed {
+				printTeamGrantRefreshWarning("selecting team", refreshed, refreshErr)
+			}
+		}
 		if err := cfg.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
 			os.Exit(1)
