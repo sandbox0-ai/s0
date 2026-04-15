@@ -26,6 +26,14 @@ var (
 	sandboxListPaused     string
 	sandboxListLimit      int
 	sandboxListOffset     int
+	// logs flags
+	sandboxLogsContainer    string
+	sandboxLogsTailLines    int64
+	sandboxLogsLimitBytes   int64
+	sandboxLogsFollow       bool
+	sandboxLogsPrevious     bool
+	sandboxLogsTimestamps   bool
+	sandboxLogsSinceSeconds int64
 	// update flags
 	sandboxUpdateTTL        int32
 	sandboxUpdateHardTTL    int32
@@ -316,6 +324,58 @@ var sandboxListCmd = &cobra.Command{
 	},
 }
 
+// sandboxLogsCmd gets sandbox pod logs.
+var sandboxLogsCmd = &cobra.Command{
+	Use:   "logs <sandbox-id>",
+	Short: "Get sandbox pod logs",
+	Long:  `Get Kubernetes pod logs for a sandbox container. Use --follow to stream logs until interrupted.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		sandboxID := args[0]
+
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		options, err := buildSandboxLogsOptions(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building sandbox logs request: %v\n", err)
+			os.Exit(1)
+		}
+
+		sandbox := client.Sandbox(sandboxID)
+		if sandboxLogsFollow {
+			stream, err := sandbox.StreamLogs(cmd.Context(), options)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error streaming sandbox logs: %v\n", err)
+				os.Exit(1)
+			}
+			defer stream.Close()
+			if _, err := io.Copy(os.Stdout, stream); err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading sandbox log stream: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+
+		logs, err := sandbox.GetLogs(cmd.Context(), options)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting sandbox logs: %v\n", err)
+			os.Exit(1)
+		}
+		if cfgFormat == "json" || cfgFormat == "yaml" {
+			if err := getFormatter().Format(os.Stdout, logs); err != nil {
+				fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		_, _ = io.WriteString(os.Stdout, logs.Logs)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(sandboxCmd)
 
@@ -336,6 +396,7 @@ func init() {
 	sandboxCmd.AddCommand(sandboxRefreshCmd)
 	sandboxCmd.AddCommand(sandboxStatusCmd)
 	sandboxCmd.AddCommand(sandboxUpdateCmd)
+	sandboxCmd.AddCommand(sandboxLogsCmd)
 
 	// Update command flags
 	sandboxUpdateCmd.Flags().StringVarP(&sandboxUpdateConfigFile, "config-file", "f", "", "path to sandbox update config YAML/JSON file, or - for stdin")
@@ -350,6 +411,15 @@ func init() {
 	sandboxListCmd.Flags().IntVar(&sandboxListLimit, "limit", 50, "maximum number of results")
 	sandboxListCmd.Flags().IntVar(&sandboxListOffset, "offset", 0, "pagination offset")
 	sandboxCmd.AddCommand(sandboxListCmd)
+
+	// Logs command flags
+	sandboxLogsCmd.Flags().StringVar(&sandboxLogsContainer, "container", "", "pod container name (default: procd)")
+	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsTailLines, "tail", 0, "maximum number of log lines from the end")
+	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsLimitBytes, "limit-bytes", 0, "maximum snapshot log payload bytes")
+	sandboxLogsCmd.Flags().BoolVarP(&sandboxLogsFollow, "follow", "f", false, "stream logs until interrupted")
+	sandboxLogsCmd.Flags().BoolVar(&sandboxLogsPrevious, "previous", false, "return logs for the previously terminated container instance")
+	sandboxLogsCmd.Flags().BoolVar(&sandboxLogsTimestamps, "timestamps", false, "include Kubernetes log timestamps")
+	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsSinceSeconds, "since-seconds", 0, "only return logs newer than this many seconds")
 }
 
 func buildSandboxCreateRequest(waitForMountsSet bool) (apispec.ClaimRequest, error) {
@@ -404,6 +474,38 @@ func buildSandboxCreateRequest(waitForMountsSet bool) (apispec.ClaimRequest, err
 		return apispec.ClaimRequest{}, fmt.Errorf("invalid sandbox create request: %w", err)
 	}
 	return request, nil
+}
+
+func buildSandboxLogsOptions(cmd *cobra.Command) (*sandbox0.SandboxLogsOptions, error) {
+	options := &sandbox0.SandboxLogsOptions{}
+	if sandboxLogsContainer != "" {
+		options.Container = sandboxLogsContainer
+	}
+	if cmd.Flags().Changed("tail") {
+		if sandboxLogsTailLines < 1 {
+			return nil, fmt.Errorf("--tail must be greater than 0")
+		}
+		options.TailLines = &sandboxLogsTailLines
+	}
+	if cmd.Flags().Changed("limit-bytes") {
+		if sandboxLogsLimitBytes < 1 {
+			return nil, fmt.Errorf("--limit-bytes must be greater than 0")
+		}
+		options.LimitBytes = &sandboxLogsLimitBytes
+	}
+	if sandboxLogsPrevious {
+		options.Previous = true
+	}
+	if sandboxLogsTimestamps {
+		options.Timestamps = true
+	}
+	if cmd.Flags().Changed("since-seconds") {
+		if sandboxLogsSinceSeconds < 1 {
+			return nil, fmt.Errorf("--since-seconds must be greater than 0")
+		}
+		options.SinceSeconds = &sandboxLogsSinceSeconds
+	}
+	return options, nil
 }
 
 func buildSandboxCreateConfigOverrides() (apispec.SandboxConfig, bool, error) {

@@ -252,10 +252,13 @@ s0 sandbox pause <sandbox-id>
 s0 sandbox resume <sandbox-id>
 s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
+s0 sandbox logs <sandbox-id> [--tail 200] [--container procd] [--follow]
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
 ```
 
 `s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
+
+`s0 sandbox logs <sandbox-id>` prints raw sandbox pod logs for the selected container. Add `--follow` to stream logs until interrupted, or use `-o json` / `-o yaml` without `--follow` to include metadata such as pod and container name.
 
 Manage the current user's SSH public keys with:
 
