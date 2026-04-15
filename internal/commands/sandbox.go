@@ -328,7 +328,7 @@ var sandboxListCmd = &cobra.Command{
 var sandboxLogsCmd = &cobra.Command{
 	Use:   "logs <sandbox-id>",
 	Short: "Get sandbox pod logs",
-	Long:  `Get Kubernetes pod logs for a sandbox container. Use --follow to stream logs until interrupted.`,
+	Long:  `Get Kubernetes pod logs for a sandbox container. Without --follow, s0 prints a text snapshot. With --follow, s0 streams log lines until interrupted.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
