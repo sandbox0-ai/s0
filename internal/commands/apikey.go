@@ -13,9 +13,15 @@ import (
 
 var (
 	apiKeyName      string
+	apiKeyScope     string
 	apiKeyRoles     []string
 	apiKeyExpiresIn string
 	apiKeyRaw       bool
+)
+
+const (
+	apiKeyScopeTeam     = "team"
+	apiKeyScopePlatform = "platform"
 )
 
 var apiKeyCmd = &cobra.Command{
@@ -69,8 +75,13 @@ var apiKeyCreateCmd = &cobra.Command{
 			fmt.Fprintln(os.Stderr, "Error: --name is required")
 			os.Exit(1)
 		}
-		if len(apiKeyRoles) == 0 {
-			fmt.Fprintln(os.Stderr, "Error: at least one --role is required")
+		scope, err := normalizeAPIKeyScope(apiKeyScope)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if err := validateAPIKeyCreateOptions(scope, apiKeyRoles); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -82,7 +93,10 @@ var apiKeyCreateCmd = &cobra.Command{
 
 		req := &apispec.CreateAPIKeyRequest{
 			Name:  apiKeyName,
-			Roles: apiKeyRoles,
+			Scope: apispec.NewOptString(scope),
+		}
+		if len(apiKeyRoles) > 0 {
+			req.Roles = apiKeyRoles
 		}
 		if strings.TrimSpace(apiKeyExpiresIn) != "" {
 			req.ExpiresIn = apispec.NewOptString(apiKeyExpiresIn)
@@ -208,6 +222,35 @@ func printCreatedAPIKeyRaw(w io.Writer, data *apispec.CreateAPIKeyResponse) erro
 	return err
 }
 
+func normalizeAPIKeyScope(scope string) (string, error) {
+	normalized := strings.TrimSpace(scope)
+	if normalized == "" {
+		return apiKeyScopeTeam, nil
+	}
+	switch normalized {
+	case apiKeyScopeTeam, apiKeyScopePlatform:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("--scope must be team or platform")
+	}
+}
+
+func validateAPIKeyCreateOptions(scope string, roles []string) error {
+	switch scope {
+	case apiKeyScopePlatform:
+		if len(roles) > 0 {
+			return fmt.Errorf("platform API keys do not support --role")
+		}
+	case apiKeyScopeTeam:
+		if len(roles) == 0 {
+			return fmt.Errorf("at least one --role is required for team API keys")
+		}
+	default:
+		return fmt.Errorf("--scope must be team or platform")
+	}
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(apiKeyCmd)
 
@@ -217,7 +260,8 @@ func init() {
 	apiKeyCmd.AddCommand(apiKeyDeleteCmd)
 
 	apiKeyCreateCmd.Flags().StringVar(&apiKeyName, "name", "", "API key name (required)")
-	apiKeyCreateCmd.Flags().StringArrayVar(&apiKeyRoles, "role", nil, "role to grant (admin, developer, viewer; can be repeated, required)")
+	apiKeyCreateCmd.Flags().StringVar(&apiKeyScope, "scope", apiKeyScopeTeam, "API key scope (team or platform)")
+	apiKeyCreateCmd.Flags().StringArrayVar(&apiKeyRoles, "role", nil, "role to grant (admin, developer, builder, viewer; can be repeated; required for team scope)")
 	apiKeyCreateCmd.Flags().StringVar(&apiKeyExpiresIn, "expires-in", "", "key expiry (30d, 90d, 180d, 365d, or never)")
 	apiKeyCreateCmd.Flags().BoolVar(&apiKeyRaw, "raw", false, "print only the API key value (for scripts/pipes)")
 }

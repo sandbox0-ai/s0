@@ -9,7 +9,7 @@ require (
 	github.com/go-faster/jx v1.2.0
 	github.com/gorilla/websocket v1.5.1
 	github.com/olekukonko/tablewriter v1.1.3
-	github.com/sandbox0-ai/sdk-go v0.2.13
+	github.com/sandbox0-ai/sdk-go v0.2.14
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	golang.org/x/text v0.33.0

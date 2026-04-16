@@ -1012,11 +1012,12 @@ func (f *TableFormatter) formatAPIKeyList(w io.Writer, keys []apispec.APIKey) er
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "NAME", "TEAM ID", "USER ID", "ROLES", "ACTIVE", "EXPIRES AT", "LAST USED"})
+	t.Header([]string{"ID", "NAME", "SCOPE", "TEAM ID", "USER ID", "ROLES", "ACTIVE", "EXPIRES AT", "LAST USED"})
 	for _, k := range keys {
 		_ = t.Append([]string{
 			k.ID,
 			k.Name,
+			formatAPIKeyScope(k.Scope),
 			k.TeamID,
 			formatOptNilString(k.UserID),
 			formatStringSlice(k.Roles),
@@ -1032,6 +1033,7 @@ func (f *TableFormatter) formatCreatedAPIKey(w io.Writer, k *apispec.CreateAPIKe
 	t := newTable(w)
 	_ = t.Append([]string{"ID:", k.ID})
 	_ = t.Append([]string{"Name:", k.Name})
+	_ = t.Append([]string{"Scope:", formatAPIKeyScope(k.Scope)})
 	_ = t.Append([]string{"Team ID:", k.TeamID})
 	_ = t.Append([]string{"Roles:", formatStringSlice(k.Roles)})
 	_ = t.Append([]string{"Expires At:", formatTimestamp(k.ExpiresAt)})
@@ -1043,6 +1045,14 @@ func (f *TableFormatter) formatCreatedAPIKey(w io.Writer, k *apispec.CreateAPIKe
 		_ = t.Append([]string{"Key:", key})
 	}
 	return t.Render()
+}
+
+func formatAPIKeyScope(scope string) string {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return "team"
+	}
+	return scope
 }
 
 func (f *TableFormatter) formatTeamList(w io.Writer, teams []apispec.Team) error {

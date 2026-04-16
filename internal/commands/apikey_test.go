@@ -53,3 +53,61 @@ func TestPrintCreatedAPIKeyRaw(t *testing.T) {
 		}
 	})
 }
+
+func TestNormalizeAPIKeyScope(t *testing.T) {
+	tests := []struct {
+		name    string
+		scope   string
+		want    string
+		wantErr bool
+	}{
+		{name: "defaults to team", want: apiKeyScopeTeam},
+		{name: "team", scope: "team", want: apiKeyScopeTeam},
+		{name: "platform", scope: "platform", want: apiKeyScopePlatform},
+		{name: "rejects unknown", scope: "system", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeAPIKeyScope(tt.scope)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizeAPIKeyScope() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("scope = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateAPIKeyCreateOptions(t *testing.T) {
+	tests := []struct {
+		name    string
+		scope   string
+		roles   []string
+		wantErr bool
+	}{
+		{name: "team requires role", scope: apiKeyScopeTeam, wantErr: true},
+		{name: "team accepts roles", scope: apiKeyScopeTeam, roles: []string{"developer"}},
+		{name: "platform forbids roles", scope: apiKeyScopePlatform, roles: []string{"admin"}, wantErr: true},
+		{name: "platform accepts no roles", scope: apiKeyScopePlatform},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAPIKeyCreateOptions(tt.scope, tt.roles)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("validateAPIKeyCreateOptions() error = %v", err)
+			}
+		})
+	}
+}
