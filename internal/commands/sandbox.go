@@ -13,13 +13,11 @@ import (
 )
 
 var (
-	sandboxTemplate           string
-	sandboxTTL                int32
-	sandboxHardTTL            int32
-	sandboxConfigFile         string
-	sandboxMounts             []string
-	sandboxWaitForMounts      bool
-	sandboxMountWaitTimeoutMS int32
+	sandboxTemplate   string
+	sandboxTTL        int32
+	sandboxHardTTL    int32
+	sandboxConfigFile string
+	sandboxMounts     []string
 	// list flags
 	sandboxListStatus     string
 	sandboxListTemplateID string
@@ -60,7 +58,7 @@ var sandboxCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		request, err := buildSandboxCreateRequest(cmd.Flags().Changed("wait-for-mounts"))
+		request, err := buildSandboxCreateRequest()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error building sandbox create request: %v\n", err)
 			os.Exit(1)
@@ -385,8 +383,6 @@ func init() {
 	sandboxCreateCmd.Flags().Int32Var(&sandboxTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
 	sandboxCreateCmd.Flags().StringArrayVar(&sandboxMounts, "mount", nil, "bootstrap mount in the form <sandboxvolume-id>:/absolute/path (repeatable)")
-	sandboxCreateCmd.Flags().BoolVar(&sandboxWaitForMounts, "wait-for-mounts", false, "wait best-effort for bootstrap mounts before claim returns")
-	sandboxCreateCmd.Flags().Int32Var(&sandboxMountWaitTimeoutMS, "mount-wait-timeout-ms", 0, "best-effort bootstrap mount wait budget in milliseconds")
 
 	sandboxCmd.AddCommand(sandboxCreateCmd)
 	sandboxCmd.AddCommand(sandboxGetCmd)
@@ -422,7 +418,7 @@ func init() {
 	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsSinceSeconds, "since-seconds", 0, "only return logs newer than this many seconds")
 }
 
-func buildSandboxCreateRequest(waitForMountsSet bool) (apispec.ClaimRequest, error) {
+func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
 	request := apispec.ClaimRequest{}
 	if sandboxConfigFile != "" {
 		var err error
@@ -457,15 +453,6 @@ func buildSandboxCreateRequest(waitForMountsSet bool) (apispec.ClaimRequest, err
 	}
 	if len(mounts) > 0 {
 		request.Mounts = append(request.Mounts, mounts...)
-	}
-	if waitForMountsSet {
-		request.WaitForMounts = apispec.NewOptBool(sandboxWaitForMounts)
-	}
-	if sandboxMountWaitTimeoutMS > 0 {
-		request.MountWaitTimeoutMs = apispec.NewOptInt32(sandboxMountWaitTimeoutMS)
-		if !waitForMountsSet {
-			request.WaitForMounts = apispec.NewOptBool(true)
-		}
 	}
 	if _, ok := request.Template.Get(); !ok {
 		return apispec.ClaimRequest{}, fmt.Errorf("--template is required unless provided in config file")
@@ -587,7 +574,7 @@ func isSandboxCreateClaimRequest(data []byte) (bool, error) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return false, fmt.Errorf("parse sandbox create file: %w", err)
 	}
-	for _, key := range []string{"template", "config", "mounts", "wait_for_mounts", "mount_wait_timeout_ms"} {
+	for _, key := range []string{"template", "config", "mounts"} {
 		if _, ok := raw[key]; ok {
 			return true, nil
 		}

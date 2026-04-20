@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	sdk "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
@@ -13,10 +12,6 @@ import (
 // Volume create flags.
 var (
 	volumeAccessMode  string
-	volumeCacheSize   string
-	volumePrefetch    string
-	volumeBufferSize  string
-	volumeWriteback   string
 	volumeDeleteForce bool
 )
 
@@ -97,28 +92,6 @@ var volumeCreateCmd = &cobra.Command{
 		if volumeAccessMode != "" {
 			req.AccessMode = apispec.NewOptVolumeAccessMode(apispec.VolumeAccessMode(volumeAccessMode))
 		}
-		if volumeCacheSize != "" {
-			req.CacheSize = apispec.NewOptString(volumeCacheSize)
-		}
-		if volumePrefetch != "" {
-			prefetch, err := strconv.Atoi(volumePrefetch)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing prefetch: %v\n", err)
-				os.Exit(1)
-			}
-			req.Prefetch = apispec.NewOptInt(prefetch)
-		}
-		if volumeBufferSize != "" {
-			req.BufferSize = apispec.NewOptString(volumeBufferSize)
-		}
-		if volumeWriteback != "" {
-			writeback, err := strconv.ParseBool(volumeWriteback)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing writeback: %v\n", err)
-				os.Exit(1)
-			}
-			req.Writeback = apispec.NewOptBool(writeback)
-		}
 
 		volume, err := client.CreateVolume(cmd.Context(), req)
 		if err != nil {
@@ -182,28 +155,6 @@ var volumeForkCmd = &cobra.Command{
 		if volumeAccessMode != "" {
 			req.AccessMode = apispec.NewOptVolumeAccessMode(apispec.VolumeAccessMode(volumeAccessMode))
 		}
-		if volumeCacheSize != "" {
-			req.CacheSize = apispec.NewOptString(volumeCacheSize)
-		}
-		if volumePrefetch != "" {
-			prefetch, err := strconv.Atoi(volumePrefetch)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing prefetch: %v\n", err)
-				os.Exit(1)
-			}
-			req.Prefetch = apispec.NewOptInt(prefetch)
-		}
-		if volumeBufferSize != "" {
-			req.BufferSize = apispec.NewOptString(volumeBufferSize)
-		}
-		if volumeWriteback != "" {
-			writeback, err := strconv.ParseBool(volumeWriteback)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing writeback: %v\n", err)
-				os.Exit(1)
-			}
-			req.Writeback = apispec.NewOptBool(writeback)
-		}
 
 		volume, err := client.ForkVolume(cmd.Context(), volumeID, req)
 		if err != nil {
@@ -229,16 +180,8 @@ func init() {
 
 	// Volume create flags
 	volumeCreateCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode (RWO or RWX)")
-	volumeCreateCmd.Flags().StringVar(&volumeCacheSize, "cache-size", "", "cache size (e.g., 1Gi)")
-	volumeCreateCmd.Flags().StringVar(&volumePrefetch, "prefetch", "", "prefetch count")
-	volumeCreateCmd.Flags().StringVar(&volumeBufferSize, "buffer-size", "", "buffer size (e.g., 64Mi)")
-	volumeCreateCmd.Flags().StringVar(&volumeWriteback, "writeback", "", "enable writeback (true/false)")
 	volumeDeleteCmd.Flags().BoolVar(&volumeDeleteForce, "force", false, "force delete volume even if it has active mounts")
 
 	// Volume fork flags
 	volumeForkCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode override (RWO or RWX)")
-	volumeForkCmd.Flags().StringVar(&volumeCacheSize, "cache-size", "", "cache size override (e.g., 1Gi)")
-	volumeForkCmd.Flags().StringVar(&volumePrefetch, "prefetch", "", "prefetch count override")
-	volumeForkCmd.Flags().StringVar(&volumeBufferSize, "buffer-size", "", "buffer size override (e.g., 64Mi)")
-	volumeForkCmd.Flags().StringVar(&volumeWriteback, "writeback", "", "enable writeback override (true/false)")
 }
