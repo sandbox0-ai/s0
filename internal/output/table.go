@@ -77,8 +77,6 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatExposedPorts(w, v)
 	case []apispec.MountStatus:
 		return f.formatMountStatusList(w, v)
-	case *apispec.MountResponse:
-		return f.formatMountResponse(w, v)
 	case []apispec.APIKey:
 		return f.formatAPIKeyList(w, v)
 	case apispec.CreateAPIKeyResponse:
@@ -197,13 +195,12 @@ func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVol
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "TEAM ID", "CACHE SIZE", "CREATED"})
+	t.Header([]string{"ID", "TEAM ID", "CREATED"})
 
 	for _, v := range volumes {
 		_ = t.Append([]string{
 			v.ID,
 			v.TeamID,
-			v.CacheSize,
 			v.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
@@ -215,8 +212,6 @@ func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) err
 	_ = t.Append([]string{"ID:", v.ID})
 	_ = t.Append([]string{"Team ID:", v.TeamID})
 	_ = t.Append([]string{"User ID:", v.UserID})
-	_ = t.Append([]string{"Cache Size:", v.CacheSize})
-	_ = t.Append([]string{"Buffer Size:", v.BufferSize})
 	_ = t.Append([]string{"Created:", v.CreatedAt.Format("2006-01-02 15:04:05")})
 	_ = t.Append([]string{"Updated:", v.UpdatedAt.Format("2006-01-02 15:04:05")})
 	return t.Render()
@@ -948,7 +943,7 @@ func (f *TableFormatter) formatMountStatusList(w io.Writer, mounts []apispec.Mou
 	}
 
 	t := newTable(w)
-	t.Header([]string{"VOLUME ID", "MOUNT POINT", "STATE", "MOUNTED AT", "DURATION", "SESSION ID", "ERROR"})
+	t.Header([]string{"VOLUME ID", "MOUNT POINT", "STATE", "MOUNTED AT", "DURATION", "ERROR"})
 
 	for _, m := range mounts {
 		volumeID := m.SandboxvolumeID
@@ -958,7 +953,6 @@ func (f *TableFormatter) formatMountStatusList(w io.Writer, mounts []apispec.Mou
 		if d, ok := m.MountedDurationSec.Get(); ok {
 			duration = formatDuration(d)
 		}
-		sessionID, _ := m.MountSessionID.Get()
 		errorText := "-"
 		errorCode, hasErrorCode := m.ErrorCode.Get()
 		errorMessage, hasErrorMessage := m.ErrorMessage.Get()
@@ -977,7 +971,6 @@ func (f *TableFormatter) formatMountStatusList(w io.Writer, mounts []apispec.Mou
 			string(m.State),
 			formatTimestampText(mountedAt),
 			duration,
-			sessionID,
 			errorText,
 		})
 	}
@@ -994,15 +987,6 @@ func formatDuration(seconds int64) string {
 	hours := seconds / 3600
 	minutes := (seconds % 3600) / 60
 	return fmt.Sprintf("%dh%dm", hours, minutes)
-}
-
-func (f *TableFormatter) formatMountResponse(w io.Writer, r *apispec.MountResponse) error {
-	t := newTable(w)
-	_ = t.Append([]string{"Volume ID:", r.SandboxvolumeID})
-	_ = t.Append([]string{"Mount Point:", r.MountPoint})
-	_ = t.Append([]string{"Mounted At:", formatTimestampText(r.MountedAt)})
-	_ = t.Append([]string{"Session ID:", r.MountSessionID})
-	return t.Render()
 }
 
 func (f *TableFormatter) formatAPIKeyList(w io.Writer, keys []apispec.APIKey) error {

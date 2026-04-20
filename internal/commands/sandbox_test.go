@@ -36,7 +36,7 @@ network:
               valueTemplate: "Bearer {{token}}"
 `)
 
-		request, err := buildSandboxCreateRequest(false)
+		request, err := buildSandboxCreateRequest()
 		if err != nil {
 			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
 		}
@@ -69,7 +69,7 @@ hard_ttl: 120
 `)
 		sandboxTTL = 300
 
-		request, err := buildSandboxCreateRequest(false)
+		request, err := buildSandboxCreateRequest()
 		if err != nil {
 			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
 		}
@@ -94,13 +94,11 @@ template: from-file
 mounts:
   - sandboxvolume_id: vol_123
     mount_point: /workspace/data
-wait_for_mounts: true
-mount_wait_timeout_ms: 45000
 config:
   ttl: 90
 `)
 
-		request, err := buildSandboxCreateRequest(false)
+		request, err := buildSandboxCreateRequest()
 		if err != nil {
 			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
 		}
@@ -114,32 +112,19 @@ config:
 		if request.Mounts[0].SandboxvolumeID != "vol_123" || request.Mounts[0].MountPoint != "/workspace/data" {
 			t.Fatalf("unexpected mount = %+v", request.Mounts[0])
 		}
-		waitForMounts, ok := request.WaitForMounts.Get()
-		if !ok || !waitForMounts {
-			t.Fatalf("wait_for_mounts = %v, want true", waitForMounts)
-		}
-		timeout, ok := request.MountWaitTimeoutMs.Get()
-		if !ok || timeout != 45000 {
-			t.Fatalf("mount_wait_timeout_ms = %d, want 45000", timeout)
-		}
 	})
 
-	t.Run("mount flags extend request and timeout implies wait", func(t *testing.T) {
+	t.Run("mount flags extend request", func(t *testing.T) {
 		resetSandboxFlagsForTest()
 		sandboxTemplate = "default"
 		sandboxMounts = []string{"vol_abc:/workspace/bootstrap-data"}
-		sandboxMountWaitTimeoutMS = 30000
 
-		request, err := buildSandboxCreateRequest(false)
+		request, err := buildSandboxCreateRequest()
 		if err != nil {
 			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
 		}
 		if len(request.Mounts) != 1 {
 			t.Fatalf("mount count = %d, want 1", len(request.Mounts))
-		}
-		waitForMounts, ok := request.WaitForMounts.Get()
-		if !ok || !waitForMounts {
-			t.Fatalf("wait_for_mounts = %v, want true", waitForMounts)
 		}
 	})
 
@@ -151,12 +136,10 @@ template: from-file
 mounts:
   - sandboxvolume_id: vol_file
     mount_point: /workspace/from-file
-wait_for_mounts: false
 `)
 		sandboxMounts = []string{"vol_flag:/workspace/from-flag"}
-		sandboxWaitForMounts = true
 
-		request, err := buildSandboxCreateRequest(true)
+		request, err := buildSandboxCreateRequest()
 		if err != nil {
 			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
 		}
@@ -170,10 +153,6 @@ wait_for_mounts: false
 		if request.Mounts[0].SandboxvolumeID != "vol_file" || request.Mounts[1].SandboxvolumeID != "vol_flag" {
 			t.Fatalf("unexpected mounts = %+v", request.Mounts)
 		}
-		waitForMounts, ok := request.WaitForMounts.Get()
-		if !ok || !waitForMounts {
-			t.Fatalf("wait_for_mounts = %v, want true", waitForMounts)
-		}
 	})
 
 	t.Run("invalid mount flag fails", func(t *testing.T) {
@@ -181,7 +160,7 @@ wait_for_mounts: false
 		sandboxTemplate = "default"
 		sandboxMounts = []string{"missing-separator"}
 
-		_, err := buildSandboxCreateRequest(false)
+		_, err := buildSandboxCreateRequest()
 		if err == nil {
 			t.Fatal("buildSandboxCreateRequest() error = nil, want error")
 		}
@@ -192,7 +171,7 @@ wait_for_mounts: false
 		sandboxTemplate = "default"
 		sandboxMounts = []string{"vol_abc:workspace/relative"}
 
-		_, err := buildSandboxCreateRequest(false)
+		_, err := buildSandboxCreateRequest()
 		if err == nil {
 			t.Fatal("buildSandboxCreateRequest() error = nil, want error")
 		}
@@ -272,8 +251,6 @@ func resetSandboxFlagsForTest() {
 	sandboxHardTTL = 0
 	sandboxConfigFile = ""
 	sandboxMounts = nil
-	sandboxWaitForMounts = false
-	sandboxMountWaitTimeoutMS = 0
 	sandboxListStatus = ""
 	sandboxListTemplateID = ""
 	sandboxListPaused = ""

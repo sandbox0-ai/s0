@@ -273,9 +273,7 @@ Bootstrap mounts can be requested as part of sandbox creation:
 ```bash
 s0 volume create
 s0 sandbox create -t default \
-  --mount <volume-id>:/workspace/data \
-  --wait-for-mounts \
-  --mount-wait-timeout-ms 45000
+  --mount <volume-id>:/workspace/data
 
 # Or provide a full claim request file.
 cat <<'EOF' > sandbox-claim.yaml
@@ -283,8 +281,6 @@ template: default
 mounts:
   - sandboxvolume_id: <volume-id>
     mount_point: /workspace/data
-wait_for_mounts: true
-mount_wait_timeout_ms: 45000
 config:
   ttl: 3600
 EOF
@@ -423,7 +419,7 @@ s0 template delete <template-id>
 ```bash
 s0 volume list
 s0 volume get <volume-id>
-s0 volume create [--access-mode RWO|RWX] [--cache-size <size>] [--prefetch <count>] [--buffer-size <size>] [--writeback true|false]
+s0 volume create [--access-mode RWO|RWX]
 s0 volume delete <volume-id> [--force]
 ```
 
@@ -450,14 +446,6 @@ s0 volume snapshot get <volume-id> <snapshot-id>
 s0 volume snapshot create <volume-id> -n <name> [-d <description>]
 s0 volume snapshot delete <volume-id> <snapshot-id>
 s0 volume snapshot restore <volume-id> <snapshot-id>
-```
-
-### Sandbox Volume
-
-```bash
-s0 sandbox volume mount --volume-id <volume-id> --path <mount-path> [--cache-size <size>] [--buffer-size <size>] [--prefetch <count>] [--writeback true|false] -s <sandbox-id>
-s0 sandbox volume unmount --volume-id <volume-id> --session-id <session-id> -s <sandbox-id>
-s0 sandbox volume status -s <sandbox-id>
 ```
 
 ### Template Image
