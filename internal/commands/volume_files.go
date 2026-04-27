@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
 
@@ -13,6 +14,8 @@ var (
 	volumeFilesParents   bool
 	volumeFilesStdin     bool
 	volumeFilesData      string
+	volumeFilesCloneMode string
+	volumeFilesOverwrite bool
 )
 
 var volumeFilesCmd = &cobra.Command{
@@ -184,6 +187,57 @@ var volumeFilesMvCmd = &cobra.Command{
 	},
 }
 
+var volumeFilesCloneCmd = &cobra.Command{
+	Use:   "clone <target-volume-id> <source-volume-id> <source-path> <target-path>",
+	Short: "Clone a file between volumes",
+	Long:  `Clone a regular file from a source volume into a target volume. Use --mode copy to force server-side copy.`,
+	Args:  cobra.ExactArgs(4),
+	Run: func(cmd *cobra.Command, args []string) {
+		targetVolumeID := args[0]
+		sourceVolumeID := args[1]
+		sourcePath := args[2]
+		targetPath := args[3]
+
+		mode, err := parseVolumeFilesCloneMode(volumeFilesCloneMode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		entry := apispec.CloneVolumeFileEntry{
+			SourceVolumeID: sourceVolumeID,
+			SourcePath:     sourcePath,
+			TargetPath:     targetPath,
+		}
+		if volumeFilesOverwrite {
+			entry.Overwrite = apispec.NewOptBool(true)
+		}
+		if volumeFilesParents {
+			entry.CreateParents = apispec.NewOptBool(true)
+		}
+
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		result, err := client.CloneVolumeFiles(cmd.Context(), targetVolumeID, apispec.CloneVolumeFilesRequest{
+			Mode:    apispec.NewOptCloneVolumeFilesRequestMode(mode),
+			Entries: []apispec.CloneVolumeFileEntry{entry},
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error cloning file: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := getFormatter().Format(os.Stdout, result); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
 var volumeFilesUploadCmd = &cobra.Command{
 	Use:   "upload <volume-id> <local-path> <remote-path>",
 	Short: "Upload a local file",
@@ -337,15 +391,32 @@ func init() {
 	volumeFilesCmd.AddCommand(volumeFilesMkdirCmd)
 	volumeFilesCmd.AddCommand(volumeFilesRmCmd)
 	volumeFilesCmd.AddCommand(volumeFilesMvCmd)
+	volumeFilesCmd.AddCommand(volumeFilesCloneCmd)
 	volumeFilesCmd.AddCommand(volumeFilesUploadCmd)
 	volumeFilesCmd.AddCommand(volumeFilesDownloadCmd)
 	volumeFilesCmd.AddCommand(volumeFilesWriteCmd)
 	volumeFilesCmd.AddCommand(volumeFilesWatchCmd)
 
 	volumeFilesMkdirCmd.Flags().BoolVar(&volumeFilesParents, "parents", false, "create parent directories as needed")
+	volumeFilesCloneCmd.Flags().StringVar(&volumeFilesCloneMode, "mode", "cow_or_copy", "clone mode: cow_or_copy, cow_required, or copy")
+	volumeFilesCloneCmd.Flags().BoolVar(&volumeFilesOverwrite, "overwrite", false, "replace an existing destination file")
+	volumeFilesCloneCmd.Flags().BoolVar(&volumeFilesParents, "parents", false, "create parent directories as needed")
 	volumeFilesWatchCmd.Flags().BoolVarP(&volumeFilesRecursive, "recursive", "r", false, "watch recursively")
 	volumeFilesWriteCmd.Flags().BoolVar(&volumeFilesStdin, "stdin", false, "read content from stdin")
 	volumeFilesWriteCmd.Flags().StringVar(&volumeFilesData, "data", "", "content to write directly")
 
 	volumeCmd.AddCommand(volumeFilesCmd)
+}
+
+func parseVolumeFilesCloneMode(mode string) (apispec.CloneVolumeFilesRequestMode, error) {
+	switch mode {
+	case "", string(apispec.CloneVolumeFilesRequestModeCowOrCopy):
+		return apispec.CloneVolumeFilesRequestModeCowOrCopy, nil
+	case string(apispec.CloneVolumeFilesRequestModeCowRequired):
+		return apispec.CloneVolumeFilesRequestModeCowRequired, nil
+	case string(apispec.CloneVolumeFilesRequestModeCopy):
+		return apispec.CloneVolumeFilesRequestModeCopy, nil
+	default:
+		return "", fmt.Errorf("invalid clone mode %q", mode)
+	}
 }
