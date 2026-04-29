@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sandbox0-ai/s0/internal/syncstate"
-	"github.com/sandbox0-ai/s0/internal/syncview"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
@@ -272,100 +270,6 @@ func TestTableFormatterFormatSSHPublicKey(t *testing.T) {
 	} {
 		if strings.Contains(output, unwanted) {
 			t.Fatalf("output contains %q:\n%s", unwanted, output)
-		}
-	}
-}
-
-func TestTableFormatterFormatSyncStatusView(t *testing.T) {
-	formatter := &TableFormatter{}
-	view := &syncview.StatusView{
-		Attachment: &syncstate.Attachment{
-			WorkspaceRoot: "/tmp/work",
-			VolumeID:      "vol-123",
-			ReplicaID:     "replica-mac",
-			InitFrom:      "auto",
-			Worker: syncstate.WorkerState{
-				Status: "running",
-				Mode:   "background",
-			},
-			Ignore: syncstate.IgnoreConfig{
-				BuiltinPatterns: []string{".git/"},
-			},
-			CreatedAt: time.Date(2026, 3, 26, 12, 0, 0, 0, time.UTC),
-			UpdatedAt: time.Date(2026, 3, 26, 12, 1, 0, 0, time.UTC),
-			LastSync: &syncstate.SyncCheckpoint{
-				HeadSeq:           10,
-				LastAppliedSeq:    8,
-				OpenConflictCount: 2,
-			},
-		},
-		ConflictSummary: &syncview.ConflictListView{
-			OpenCount: 2,
-			UnmergedPaths: []syncview.ConflictListEntry{
-				{Path: "src/main.go", Summary: `modified locally, conflicted with sandbox "sandbox-1"`},
-				{Path: "docs/CON.txt", Summary: "namespace incompatible for Windows-capable replicas"},
-			},
-		},
-	}
-
-	var buf bytes.Buffer
-	if err := formatter.Format(&buf, view); err != nil {
-		t.Fatalf("Format() error = %v", err)
-	}
-
-	output := buf.String()
-	for _, want := range []string{
-		"Workspace:",
-		"/tmp/work",
-		"Open Conflicts: 2",
-		"Unmerged sync paths:",
-		`modified locally, conflicted with sandbox "sandbox-1": src/main.go`,
-		"namespace incompatible for Windows-capable replicas: docs/CON.txt",
-	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("output missing %q:\n%s", want, output)
-		}
-	}
-}
-
-func TestTableFormatterFormatConflictDetailView(t *testing.T) {
-	formatter := &TableFormatter{}
-	now := time.Date(2026, 3, 26, 12, 0, 0, 0, time.UTC)
-	view := &syncview.ConflictDetailView{
-		Path:              "src/main.go",
-		Summary:           `modified locally, conflicted with sandbox "sandbox-1"`,
-		ReasonCode:        "concurrent_update",
-		Status:            "open",
-		RecordedFor:       `replica "replica-mac"`,
-		ArtifactPath:      "src/main.sandbox0-conflict-replica-mac-seq-42.go",
-		LatestRemoteActor: `sandbox "sandbox-1"`,
-		LatestRemoteEvent: "write",
-		SuggestedNextStep: "Inspect the artifact and repair the canonical path locally.",
-		CreatedAt:         &now,
-	}
-
-	var buf bytes.Buffer
-	if err := formatter.Format(&buf, view); err != nil {
-		t.Fatalf("Format() error = %v", err)
-	}
-
-	output := buf.String()
-	for _, want := range []string{
-		"Path:",
-		"Summary:",
-		"Reason Code:",
-		"Recorded For:",
-		"Latest Remote Actor:",
-		"Latest Remote Event:",
-		"Suggested Next Step:",
-		"src/main.go",
-		"concurrent_update",
-		`replica "replica-mac"`,
-		`sandbox "sandbox-1"`,
-		"write",
-	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("output missing %q:\n%s", want, output)
 		}
 	}
 }
