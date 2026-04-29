@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/sandbox0-ai/s0/internal/client"
-	"github.com/sandbox0-ai/s0/internal/syncstate"
-	"github.com/sandbox0-ai/s0/internal/syncview"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -111,20 +109,6 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSSHPublicKey(w, &v)
 	case *apispec.SSHPublicKey:
 		return f.formatSSHPublicKey(w, v)
-	case []syncstate.Attachment:
-		return f.formatSyncAttachments(w, v)
-	case *syncstate.Attachment:
-		return f.formatSyncAttachment(w, v)
-	case *syncview.StatusView:
-		return f.formatSyncStatusView(w, v)
-	case *syncview.ConflictListView:
-		return f.formatConflictListView(w, v)
-	case *syncview.ConflictDetailView:
-		return f.formatConflictDetailView(w, v)
-	case []apispec.SyncConflict:
-		return f.formatSyncConflicts(w, v)
-	case *apispec.SyncConflict:
-		return f.formatSyncConflict(w, v)
 	case string:
 		_, _ = fmt.Fprintln(w, v)
 		return nil
@@ -217,201 +201,6 @@ func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) err
 	return t.Render()
 }
 
-func (f *TableFormatter) formatSyncAttachments(w io.Writer, attachments []syncstate.Attachment) error {
-	if len(attachments) == 0 {
-		_, _ = fmt.Fprintln(w, "No sync attachments found.")
-		return nil
-	}
-
-	t := newTable(w)
-	t.Header([]string{"WORKSPACE", "VOLUME", "WORKER", "HEALTH", "MODE", "REPLICA", "UPDATED"})
-	for _, attachment := range attachments {
-		t.Append([]string{
-			attachment.WorkspaceRoot,
-			attachment.VolumeID,
-			syncstate.EffectiveStatus(&attachment),
-			syncstate.SyncHealth(&attachment),
-			valueOrDash(attachment.Worker.Mode),
-			attachment.ReplicaID,
-			attachment.UpdatedAt.Format(timeLayout),
-		})
-	}
-	return t.Render()
-}
-
-func (f *TableFormatter) formatSyncAttachment(w io.Writer, attachment *syncstate.Attachment) error {
-	t := newTable(w)
-	_ = t.Append([]string{"Workspace:", attachment.WorkspaceRoot})
-	_ = t.Append([]string{"Volume ID:", attachment.VolumeID})
-	_ = t.Append([]string{"Replica ID:", attachment.ReplicaID})
-	_ = t.Append([]string{"Display Name:", valueOrDash(attachment.DisplayName)})
-	_ = t.Append([]string{"Init From:", attachment.InitFrom})
-	_ = t.Append([]string{"Worker Status:", syncstate.EffectiveStatus(attachment)})
-	_ = t.Append([]string{"Sync Health:", syncstate.SyncHealth(attachment)})
-	_ = t.Append([]string{"Mode:", valueOrDash(attachment.Worker.Mode)})
-	_ = t.Append([]string{"PID:", intOrDash(attachment.Worker.PID)})
-	_ = t.Append([]string{"Log Path:", valueOrDash(attachment.Worker.LogPath)})
-	_ = t.Append([]string{"Last Heartbeat:", timeOrDash(attachment.Worker.LastHeartbeatAt)})
-	_ = t.Append([]string{"Last Started:", timeOrDash(attachment.Worker.LastStartedAt)})
-	_ = t.Append([]string{"Last Stopped:", timeOrDash(attachment.Worker.LastStoppedAt)})
-	_ = t.Append([]string{"Last Error:", valueOrDash(attachment.LastError)})
-	if attachment.LastSync != nil {
-		_ = t.Append([]string{"Head Seq:", fmt.Sprintf("%d", attachment.LastSync.HeadSeq)})
-		_ = t.Append([]string{"Last Applied Seq:", fmt.Sprintf("%d", attachment.LastSync.LastAppliedSeq)})
-		_ = t.Append([]string{"Lag:", fmt.Sprintf("%d", attachment.LastSync.HeadSeq-attachment.LastSync.LastAppliedSeq)})
-		_ = t.Append([]string{"Last Success:", timeOrDash(attachment.LastSync.LastSuccessAt)})
-		_ = t.Append([]string{"Last Failure:", timeOrDash(attachment.LastSync.LastFailureAt)})
-		_ = t.Append([]string{"Replica Refreshed:", timeOrDash(attachment.LastSync.LastReplicaSyncAt)})
-		_ = t.Append([]string{"Consecutive Errors:", fmt.Sprintf("%d", attachment.LastSync.ConsecutiveErrors)})
-		_ = t.Append([]string{"Reseed Required:", fmt.Sprintf("%t", attachment.LastSync.ReseedRequired)})
-		_ = t.Append([]string{"Open Conflicts:", fmt.Sprintf("%d", attachment.LastSync.OpenConflictCount)})
-	}
-	_ = t.Append([]string{"Ignore Defaults:", strings.Join(attachment.Ignore.BuiltinPatterns, ", ")})
-	_ = t.Append([]string{"Created:", attachment.CreatedAt.Format(timeLayout)})
-	_ = t.Append([]string{"Updated:", attachment.UpdatedAt.Format(timeLayout)})
-	return t.Render()
-}
-
-func (f *TableFormatter) formatSyncStatusView(w io.Writer, view *syncview.StatusView) error {
-	if view == nil || view.Attachment == nil {
-		_, _ = fmt.Fprintln(w, "No sync attachment found.")
-		return nil
-	}
-	if err := f.formatSyncAttachment(w, view.Attachment); err != nil {
-		return err
-	}
-	if view.ConflictSummary != nil && view.ConflictSummary.OpenCount > 0 {
-		_, _ = fmt.Fprintln(w)
-		if err := f.writeConflictListSummary(w, view.ConflictSummary); err != nil {
-			return err
-		}
-	}
-	if strings.TrimSpace(view.ConflictQueryError) != "" {
-		_, _ = fmt.Fprintf(w, "\nConflict Summary Error: %s\n", view.ConflictQueryError)
-	}
-	return nil
-}
-
-func (f *TableFormatter) formatConflictListView(w io.Writer, view *syncview.ConflictListView) error {
-	if view == nil || view.OpenCount == 0 {
-		_, _ = fmt.Fprintln(w, "No sync conflicts found.")
-		return nil
-	}
-
-	if strings.TrimSpace(view.WorkspaceRoot) != "" {
-		_, _ = fmt.Fprintf(w, "Workspace: %s\n", view.WorkspaceRoot)
-	}
-	if strings.TrimSpace(view.VolumeID) != "" {
-		_, _ = fmt.Fprintf(w, "Volume ID: %s\n", view.VolumeID)
-	}
-	return f.writeConflictListSummary(w, view)
-}
-
-func (f *TableFormatter) writeConflictListSummary(w io.Writer, view *syncview.ConflictListView) error {
-	if view == nil {
-		return nil
-	}
-	_, _ = fmt.Fprintf(w, "Open Conflicts: %d\n", view.OpenCount)
-	if len(view.UnmergedPaths) == 0 {
-		_, _ = fmt.Fprintln(w, "Unmerged sync paths: summary unavailable")
-		return nil
-	}
-	_, _ = fmt.Fprintln(w, "Unmerged sync paths:")
-	for _, entry := range view.UnmergedPaths {
-		_, _ = fmt.Fprintf(w, "  %s: %s\n", valueOrDash(entry.Summary), valueOrDash(entry.Path))
-	}
-	if view.Truncated && view.Remaining > 0 {
-		_, _ = fmt.Fprintf(w, "  ... and %d more\n", view.Remaining)
-	}
-	return nil
-}
-
-func (f *TableFormatter) formatConflictDetailView(w io.Writer, view *syncview.ConflictDetailView) error {
-	if view == nil {
-		_, _ = fmt.Fprintln(w, "No sync conflict found.")
-		return nil
-	}
-
-	t := newTable(w)
-	_ = t.Append([]string{"Path:", valueOrDash(view.Path)})
-	_ = t.Append([]string{"Summary:", valueOrDash(view.Summary)})
-	_ = t.Append([]string{"Reason Code:", valueOrDash(view.ReasonCode)})
-	_ = t.Append([]string{"Status:", valueOrDash(view.Status)})
-	_ = t.Append([]string{"Recorded For:", valueOrDash(view.RecordedFor)})
-	_ = t.Append([]string{"Compatibility Impact:", valueOrDash(view.CompatibilityImpact)})
-	_ = t.Append([]string{"Normalized Path:", valueOrDash(view.NormalizedPath)})
-	_ = t.Append([]string{"Artifact Path:", valueOrDash(view.ArtifactPath)})
-	_ = t.Append([]string{"Incoming Path:", valueOrDash(view.IncomingPath)})
-	_ = t.Append([]string{"Incoming Old Path:", valueOrDash(view.IncomingOldPath)})
-	_ = t.Append([]string{"Other Paths:", valueOrDash(strings.Join(view.OtherPaths, ", "))})
-	if view.ExistingSeq != nil {
-		_ = t.Append([]string{"Existing Seq:", fmt.Sprintf("%d", *view.ExistingSeq)})
-	} else {
-		_ = t.Append([]string{"Existing Seq:", "-"})
-	}
-	_ = t.Append([]string{"Latest Remote Path:", valueOrDash(view.LatestRemotePath)})
-	_ = t.Append([]string{"Latest Remote Actor:", valueOrDash(view.LatestRemoteActor)})
-	_ = t.Append([]string{"Latest Remote Event:", valueOrDash(view.LatestRemoteEvent)})
-	_ = t.Append([]string{"Issue:", valueOrDash(view.IssueMessage)})
-	_ = t.Append([]string{"Resolution:", valueOrDash(view.Resolution)})
-	_ = t.Append([]string{"Note:", valueOrDash(view.Note)})
-	_ = t.Append([]string{"Resolved At:", valueOrDash(view.ResolvedAt)})
-	_ = t.Append([]string{"Suggested Next Step:", valueOrDash(view.SuggestedNextStep)})
-	_ = t.Append([]string{"Created:", timeOrDash(view.CreatedAt)})
-	_ = t.Append([]string{"Updated:", timeOrDash(view.UpdatedAt)})
-	return t.Render()
-}
-
-func (f *TableFormatter) formatSyncConflicts(w io.Writer, conflicts []apispec.SyncConflict) error {
-	if len(conflicts) == 0 {
-		_, _ = fmt.Fprintln(w, "No sync conflicts found.")
-		return nil
-	}
-
-	t := newTable(w)
-	t.Header([]string{"PATH", "REASON", "STATUS", "REPLICA", "ARTIFACT"})
-	for _, conflict := range conflicts {
-		path, _ := conflict.Path.Get()
-		reason, _ := conflict.Reason.Get()
-		status, _ := conflict.Status.Get()
-		replicaID, _ := conflict.ReplicaID.Get()
-		artifactPath, _ := conflict.ArtifactPath.Get()
-		_ = t.Append([]string{
-			valueOrDash(path),
-			valueOrDash(reason),
-			valueOrDash(status),
-			valueOrDash(replicaID),
-			valueOrDash(artifactPath),
-		})
-	}
-	return t.Render()
-}
-
-func (f *TableFormatter) formatSyncConflict(w io.Writer, conflict *apispec.SyncConflict) error {
-	t := newTable(w)
-	id, _ := conflict.ID.Get()
-	path, _ := conflict.Path.Get()
-	normalizedPath, _ := conflict.NormalizedPath.Get()
-	artifactPath, _ := conflict.ArtifactPath.Get()
-	incomingPath, _ := conflict.IncomingPath.Get()
-	incomingOldPath, _ := conflict.IncomingOldPath.Get()
-	reason, _ := conflict.Reason.Get()
-	status, _ := conflict.Status.Get()
-	replicaID, _ := conflict.ReplicaID.Get()
-	_ = t.Append([]string{"ID:", valueOrDash(id)})
-	_ = t.Append([]string{"Path:", valueOrDash(path)})
-	_ = t.Append([]string{"Normalized Path:", valueOrDash(normalizedPath)})
-	_ = t.Append([]string{"Artifact Path:", valueOrDash(artifactPath)})
-	_ = t.Append([]string{"Incoming Path:", valueOrDash(incomingPath)})
-	_ = t.Append([]string{"Incoming Old Path:", valueOrDash(incomingOldPath)})
-	_ = t.Append([]string{"Reason:", valueOrDash(reason)})
-	_ = t.Append([]string{"Status:", valueOrDash(status)})
-	_ = t.Append([]string{"Replica ID:", valueOrDash(replicaID)})
-	_ = t.Append([]string{"Created:", timeOrDash(optDateTimePtr(conflict.CreatedAt))})
-	_ = t.Append([]string{"Updated:", timeOrDash(optDateTimePtr(conflict.UpdatedAt))})
-	return t.Render()
-}
-
 func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapshot) error {
 	if len(snapshots) == 0 {
 		_, _ = fmt.Fprintln(w, "No snapshots found.")
@@ -449,21 +238,6 @@ func intOrDash(value int) string {
 		return "-"
 	}
 	return fmt.Sprintf("%d", value)
-}
-
-func timeOrDash(value *time.Time) string {
-	if value == nil || value.IsZero() {
-		return "-"
-	}
-	return value.Format(timeLayout)
-}
-
-func optDateTimePtr(value apispec.OptDateTime) *time.Time {
-	v, ok := value.Get()
-	if !ok {
-		return nil
-	}
-	return &v
 }
 
 func (f *TableFormatter) formatSnapshot(w io.Writer, s *apispec.Snapshot) error {
