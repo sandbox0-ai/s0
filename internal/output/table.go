@@ -73,6 +73,8 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSandboxNetworkPolicy(w, v)
 	case *sandbox0.ExposedPortsResponse:
 		return f.formatExposedPorts(w, v)
+	case *sandbox0.PublicGatewayResponse:
+		return f.formatPublicGateway(w, v)
 	case []apispec.MountStatus:
 		return f.formatMountStatusList(w, v)
 	case []apispec.APIKey:
@@ -687,6 +689,75 @@ func (f *TableFormatter) formatExposedPorts(w io.Writer, resp *sandbox0.ExposedP
 		_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
 	}
 	return nil
+}
+
+func (f *TableFormatter) formatPublicGateway(w io.Writer, resp *sandbox0.PublicGatewayResponse) error {
+	policy := resp.PublicGateway
+	if !policy.Enabled || len(policy.Routes) == 0 {
+		state := "disabled"
+		if policy.Enabled {
+			state = "enabled with no routes"
+		}
+		_, _ = fmt.Fprintf(w, "Public Gateway: %s\n", state)
+		if resp.ExposureDomain != "" {
+			_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
+		}
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "PORT", "PATH", "METHODS", "AUTH", "RATE LIMIT", "TIMEOUT", "RESUME"})
+	for _, route := range policy.Routes {
+		_ = t.Append([]string{
+			route.ID,
+			fmt.Sprintf("%d", route.Port),
+			route.PathPrefix.Or("/"),
+			formatGatewayMethods(route.Methods),
+			formatGatewayAuth(route.Auth),
+			formatGatewayRateLimit(route.RateLimit),
+			formatGatewayTimeout(route.TimeoutSeconds),
+			fmt.Sprintf("%v", route.Resume),
+		})
+	}
+	if err := t.Render(); err != nil {
+		return err
+	}
+
+	if resp.ExposureDomain != "" {
+		_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
+	}
+	return nil
+}
+
+func formatGatewayMethods(methods []string) string {
+	if len(methods) == 0 {
+		return "*"
+	}
+	return strings.Join(methods, ",")
+}
+
+func formatGatewayAuth(auth apispec.OptPublicGatewayAuth) string {
+	value, ok := auth.Get()
+	if !ok {
+		return "none"
+	}
+	return string(value.Mode)
+}
+
+func formatGatewayRateLimit(rateLimit apispec.OptPublicGatewayRateLimit) string {
+	value, ok := rateLimit.Get()
+	if !ok {
+		return "-"
+	}
+	return fmt.Sprintf("%d/%d", value.Rps, value.Burst)
+}
+
+func formatGatewayTimeout(timeout apispec.OptInt32) string {
+	value, ok := timeout.Get()
+	if !ok || value == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%ds", value)
 }
 
 func formatTimestamp(ts time.Time) string {
