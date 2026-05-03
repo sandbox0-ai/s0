@@ -71,8 +71,6 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatContextStats(w, v)
 	case *apispec.SandboxNetworkPolicy:
 		return f.formatSandboxNetworkPolicy(w, v)
-	case *sandbox0.ExposedPortsResponse:
-		return f.formatExposedPorts(w, v)
 	case *sandbox0.PublicGatewayResponse:
 		return f.formatPublicGateway(w, v)
 	case []apispec.MountStatus:
@@ -656,39 +654,6 @@ func (f *TableFormatter) formatSandboxNetworkPolicy(w io.Writer, policy *apispec
 		_ = t.Append([]string{"Credential Bindings:", fmt.Sprintf("%d", len(policy.CredentialBindings))})
 	}
 	return t.Render()
-}
-
-func (f *TableFormatter) formatExposedPorts(w io.Writer, resp *sandbox0.ExposedPortsResponse) error {
-	if len(resp.Ports) == 0 {
-		_, _ = fmt.Fprintln(w, "No exposed ports.")
-		if resp.ExposureDomain != "" {
-			_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
-		}
-		return nil
-	}
-
-	t := newTable(w)
-	t.Header([]string{"PORT", "RESUME", "PUBLIC URL"})
-
-	for _, port := range resp.Ports {
-		publicURL := port.PublicURL
-		if publicURL == "" && resp.ExposureDomain != "" {
-			publicURL = fmt.Sprintf("http://%d.%s", port.Port, resp.ExposureDomain)
-		}
-		_ = t.Append([]string{
-			fmt.Sprintf("%d", port.Port),
-			fmt.Sprintf("%v", port.Resume),
-			publicURL,
-		})
-	}
-	if err := t.Render(); err != nil {
-		return err
-	}
-
-	if resp.ExposureDomain != "" {
-		_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
-	}
-	return nil
 }
 
 func (f *TableFormatter) formatPublicGateway(w io.Writer, resp *sandbox0.PublicGatewayResponse) error {

@@ -395,13 +395,35 @@ s0 sandbox network update --mode block-all \
   -s <sandbox-id>
 ```
 
-### Sandbox Ports
+### Sandbox Gateway
 
 ```bash
-s0 sandbox ports list -s <sandbox-id>
-s0 sandbox ports expose <port> --resume -s <sandbox-id>
-s0 sandbox ports unexpose <port> -s <sandbox-id>
-s0 sandbox ports clear -s <sandbox-id>
+s0 sandbox gateway get -s <sandbox-id>
+s0 sandbox gateway update --policy-file gateway.yaml -s <sandbox-id>
+s0 sandbox gateway clear -s <sandbox-id>
+
+# Claim-time public gateway policy via sandbox config file
+cat <<'EOF' > sandbox-config.yaml
+public_gateway:
+  enabled: true
+  routes:
+    - id: app
+      port: 8080
+      path_prefix: /
+      resume: true
+EOF
+s0 sandbox create -t default -f sandbox-config.yaml
+
+# Update an existing sandbox policy
+cat <<'EOF' > gateway.yaml
+enabled: true
+routes:
+  - id: app
+    port: 8080
+    path_prefix: /
+    resume: true
+EOF
+s0 sandbox gateway update --policy-file gateway.yaml -s <sandbox-id>
 ```
 
 ### Template
@@ -479,8 +501,8 @@ s0 volume files watch <volume-id> /docs --recursive
 s0 sandbox context create --type repl --alias python -s <sandbox-id>
 s0 sandbox context exec <ctx-id> "print('hello')" -s <sandbox-id>
 
-# Expose a port
-s0 sandbox ports expose 8080 --resume -s <sandbox-id>
+# Publish HTTP traffic through public gateway policy
+s0 sandbox gateway update --policy-file gateway.yaml -s <sandbox-id>
 
 # Build and push a template image
 s0 template image build . -t my-image:v1
