@@ -71,6 +71,8 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatContextStats(w, v)
 	case *apispec.SandboxNetworkPolicy:
 		return f.formatSandboxNetworkPolicy(w, v)
+	case *sandbox0.SandboxServicesResponse:
+		return f.formatSandboxServices(w, v)
 	case *sandbox0.PublicGatewayResponse:
 		return f.formatPublicGateway(w, v)
 	case []apispec.FunctionRecord:
@@ -716,6 +718,61 @@ func (f *TableFormatter) formatPublicGateway(w io.Writer, resp *sandbox0.PublicG
 		_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
 	}
 	return nil
+}
+
+func (f *TableFormatter) formatSandboxServices(w io.Writer, resp *sandbox0.SandboxServicesResponse) error {
+	if len(resp.Services) == 0 {
+		_, _ = fmt.Fprintln(w, "No sandbox services configured.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"SERVICE", "PORT", "PUBLIC", "ROUTE", "PATH", "METHODS", "AUTH", "RATE LIMIT", "TIMEOUT", "RESUME", "PUBLISHABLE"})
+	for _, service := range resp.Services {
+		routes := service.Ingress.Routes
+		if len(routes) == 0 {
+			_ = t.Append([]string{
+				service.ID,
+				fmt.Sprintf("%d", service.Port),
+				fmt.Sprintf("%v", service.Ingress.Public),
+				"-",
+				"-",
+				"-",
+				"-",
+				"-",
+				"-",
+				"-",
+				formatPublishable(service),
+			})
+			continue
+		}
+		for _, route := range routes {
+			_ = t.Append([]string{
+				service.ID,
+				fmt.Sprintf("%d", service.Port),
+				fmt.Sprintf("%v", service.Ingress.Public),
+				route.ID,
+				route.PathPrefix.Or("/"),
+				formatGatewayMethods(route.Methods),
+				formatGatewayAuth(route.Auth),
+				formatGatewayRateLimit(route.RateLimit),
+				formatGatewayTimeout(route.TimeoutSeconds),
+				fmt.Sprintf("%v", route.Resume),
+				formatPublishable(service),
+			})
+		}
+	}
+	return t.Render()
+}
+
+func formatPublishable(service apispec.SandboxAppServiceView) string {
+	if service.Publishable {
+		return "true"
+	}
+	if len(service.PublishBlockers) == 0 {
+		return "false"
+	}
+	return "false: " + strings.Join(service.PublishBlockers, ",")
 }
 
 func formatGatewayMethods(methods []string) string {
