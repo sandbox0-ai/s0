@@ -17,10 +17,9 @@ var (
 
 // sandboxGatewayCmd represents the sandbox service command group.
 var sandboxGatewayCmd = &cobra.Command{
-	Use:     "service",
-	Aliases: []string{"gateway"},
-	Short:   "Manage sandbox services",
-	Long:    `Get, update, and clear canonical services for a sandbox.`,
+	Use:   "service",
+	Short: "Manage sandbox services",
+	Long:  `Get, update, and clear canonical services for a sandbox.`,
 }
 
 // sandboxGatewayGetCmd gets sandbox services.
@@ -138,8 +137,6 @@ func init() {
 	_ = sandboxGatewayCmd.MarkPersistentFlagRequired("sandbox-id")
 
 	sandboxGatewayUpdateCmd.Flags().StringVarP(&gatewayPolicyFile, "services-file", "f", "", "path to sandbox services YAML/JSON file, or - for stdin")
-	sandboxGatewayUpdateCmd.Flags().StringVar(&gatewayPolicyFile, "policy-file", "", "deprecated alias for --services-file")
-	_ = sandboxGatewayUpdateCmd.Flags().MarkDeprecated("policy-file", "use --services-file")
 
 	sandboxCmd.AddCommand(sandboxGatewayCmd)
 }

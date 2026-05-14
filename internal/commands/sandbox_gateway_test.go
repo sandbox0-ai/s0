@@ -51,7 +51,7 @@ services:
 	if !ok {
 		t.Fatal("auth not set")
 	}
-	if auth.Mode != apispec.PublicGatewayAuthModeBearer {
+	if auth.Mode != apispec.SandboxAppServiceRouteAuthModeBearer {
 		t.Fatalf("auth mode = %q, want bearer", auth.Mode)
 	}
 }
