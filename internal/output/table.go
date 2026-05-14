@@ -73,6 +73,30 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSandboxNetworkPolicy(w, v)
 	case *sandbox0.PublicGatewayResponse:
 		return f.formatPublicGateway(w, v)
+	case []apispec.FunctionRecord:
+		return f.formatFunctionList(w, v)
+	case apispec.FunctionRecord:
+		return f.formatFunction(w, &v)
+	case *apispec.FunctionRecord:
+		return f.formatFunction(w, v)
+	case sandbox0.FunctionCreateResult:
+		return f.formatFunctionCreateResult(w, &v)
+	case *sandbox0.FunctionCreateResult:
+		return f.formatFunctionCreateResult(w, v)
+	case []apispec.FunctionRevision:
+		return f.formatFunctionRevisionList(w, v)
+	case apispec.FunctionRevision:
+		return f.formatFunctionRevision(w, &v)
+	case *apispec.FunctionRevision:
+		return f.formatFunctionRevision(w, v)
+	case sandbox0.FunctionRevisionCreateResult:
+		return f.formatFunctionRevisionCreateResult(w, &v)
+	case *sandbox0.FunctionRevisionCreateResult:
+		return f.formatFunctionRevisionCreateResult(w, v)
+	case apispec.FunctionAlias:
+		return f.formatFunctionAlias(w, &v)
+	case *apispec.FunctionAlias:
+		return f.formatFunctionAlias(w, v)
 	case []apispec.MountStatus:
 		return f.formatMountStatusList(w, v)
 	case []apispec.APIKey:
@@ -723,6 +747,142 @@ func formatGatewayTimeout(timeout apispec.OptInt32) string {
 		return "-"
 	}
 	return fmt.Sprintf("%ds", value)
+}
+
+func (f *TableFormatter) formatFunctionList(w io.Writer, functions []apispec.FunctionRecord) error {
+	if len(functions) == 0 {
+		_, _ = fmt.Fprintln(w, "No functions found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "NAME", "SLUG", "HOST", "ACTIVE REVISION", "UPDATED AT"})
+	for _, fn := range functions {
+		_ = t.Append([]string{
+			fn.ID,
+			fn.Name,
+			fn.Slug,
+			fn.Host,
+			formatOptString(fn.ActiveRevisionID),
+			formatTimestamp(fn.UpdatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunction(w io.Writer, fn *apispec.FunctionRecord) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", fn.ID})
+	_ = t.Append([]string{"Team ID:", fn.TeamID})
+	_ = t.Append([]string{"Name:", fn.Name})
+	_ = t.Append([]string{"Slug:", fn.Slug})
+	_ = t.Append([]string{"Domain Label:", fn.DomainLabel})
+	_ = t.Append([]string{"Host:", fn.Host})
+	_ = t.Append([]string{"URL:", fn.URL})
+	_ = t.Append([]string{"Active Revision:", formatOptString(fn.ActiveRevisionID)})
+	_ = t.Append([]string{"Created By:", formatOptString(fn.CreatedBy)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(fn.CreatedAt)})
+	_ = t.Append([]string{"Updated At:", formatTimestamp(fn.UpdatedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionCreateResult(w io.Writer, result *sandbox0.FunctionCreateResult) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Function ID:", result.Function.ID})
+	_ = t.Append([]string{"Name:", result.Function.Name})
+	_ = t.Append([]string{"Slug:", result.Function.Slug})
+	_ = t.Append([]string{"URL:", result.Function.URL})
+	_ = t.Append([]string{"Revision ID:", result.Revision.ID})
+	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", result.Revision.RevisionNumber)})
+	_ = t.Append([]string{"Alias:", result.Alias.Alias})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionRevisionList(w io.Writer, revisions []apispec.FunctionRevision) error {
+	if len(revisions) == 0 {
+		_, _ = fmt.Fprintln(w, "No function revisions found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"REVISION", "ID", "SOURCE", "PORT", "RUNTIME", "RUNTIME SANDBOX", "CREATED AT"})
+	for _, revision := range revisions {
+		_ = t.Append([]string{
+			fmt.Sprintf("%d", revision.RevisionNumber),
+			revision.ID,
+			formatFunctionRevisionSource(revision),
+			fmt.Sprintf("%d", revision.ServiceSnapshot.Port),
+			formatFunctionServiceRuntime(revision.ServiceSnapshot),
+			formatOptString(revision.RuntimeSandboxID),
+			formatTimestamp(revision.CreatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionRevision(w io.Writer, revision *apispec.FunctionRevision) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", revision.ID})
+	_ = t.Append([]string{"Function ID:", revision.FunctionID})
+	_ = t.Append([]string{"Team ID:", revision.TeamID})
+	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", revision.RevisionNumber)})
+	_ = t.Append([]string{"Source Sandbox ID:", revision.SourceSandboxID})
+	_ = t.Append([]string{"Source Service ID:", revision.SourceServiceID})
+	_ = t.Append([]string{"Source Template ID:", revision.SourceTemplateID})
+	_ = t.Append([]string{"Service Port:", fmt.Sprintf("%d", revision.ServiceSnapshot.Port)})
+	_ = t.Append([]string{"Service Runtime:", formatFunctionServiceRuntime(revision.ServiceSnapshot)})
+	_ = t.Append([]string{"Runtime Sandbox ID:", formatOptString(revision.RuntimeSandboxID)})
+	_ = t.Append([]string{"Runtime Context ID:", formatOptString(revision.RuntimeContextID)})
+	_ = t.Append([]string{"Runtime Updated At:", formatOptDateTime(revision.RuntimeUpdatedAt)})
+	_ = t.Append([]string{"Restore Mounts:", formatFunctionRestoreMounts(revision.RestoreMounts)})
+	_ = t.Append([]string{"Created By:", formatOptString(revision.CreatedBy)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(revision.CreatedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionRevisionCreateResult(w io.Writer, result *sandbox0.FunctionRevisionCreateResult) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Revision ID:", result.Revision.ID})
+	_ = t.Append([]string{"Function ID:", result.Revision.FunctionID})
+	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", result.Revision.RevisionNumber)})
+	_ = t.Append([]string{"Promoted:", fmt.Sprintf("%v", result.Promoted)})
+	_ = t.Append([]string{"Runtime Sandbox ID:", formatOptString(result.Revision.RuntimeSandboxID)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(result.Revision.CreatedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionAlias(w io.Writer, alias *apispec.FunctionAlias) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Function ID:", alias.FunctionID})
+	_ = t.Append([]string{"Alias:", alias.Alias})
+	_ = t.Append([]string{"Revision ID:", alias.RevisionID})
+	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", alias.RevisionNumber)})
+	_ = t.Append([]string{"Updated By:", formatOptString(alias.UpdatedBy)})
+	_ = t.Append([]string{"Updated At:", formatTimestamp(alias.UpdatedAt)})
+	return t.Render()
+}
+
+func formatFunctionRevisionSource(revision apispec.FunctionRevision) string {
+	return fmt.Sprintf("%s/%s", valueOrDash(revision.SourceSandboxID), valueOrDash(revision.SourceServiceID))
+}
+
+func formatFunctionServiceRuntime(service apispec.SandboxAppService) string {
+	runtime, ok := service.Runtime.Get()
+	if !ok || runtime.Type == "" {
+		return "-"
+	}
+	return string(runtime.Type)
+}
+
+func formatFunctionRestoreMounts(mounts []apispec.FunctionRestoreMount) string {
+	if len(mounts) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(mounts))
+	for _, mount := range mounts {
+		parts = append(parts, fmt.Sprintf("%s:%s", mount.SandboxvolumeID, mount.MountPoint))
+	}
+	return strings.Join(parts, ",")
 }
 
 func formatTimestamp(ts time.Time) string {

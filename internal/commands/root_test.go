@@ -19,6 +19,16 @@ func TestCommandRouteScopeRoutesUserSSHKeysToHomeRegion(t *testing.T) {
 	}
 }
 
+func TestCommandRouteScopeRoutesFunctionsToHomeRegion(t *testing.T) {
+	function := &cobra.Command{Use: "function"}
+	create := &cobra.Command{Use: "create"}
+	function.AddCommand(create)
+
+	if got := commandRouteScope(create); got != client.RouteScopeHomeRegion {
+		t.Fatalf("commandRouteScope(function create) = %q, want %q", got, client.RouteScopeHomeRegion)
+	}
+}
+
 func TestCommandRouteScopeKeepsUserProfileOnEntrypoint(t *testing.T) {
 	user := &cobra.Command{Use: "user"}
 	get := &cobra.Command{Use: "get"}
