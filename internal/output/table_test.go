@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
@@ -270,6 +271,117 @@ func TestTableFormatterFormatSSHPublicKey(t *testing.T) {
 	} {
 		if strings.Contains(output, unwanted) {
 			t.Fatalf("output contains %q:\n%s", unwanted, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFunctionList(t *testing.T) {
+	formatter := &TableFormatter{}
+	functions := []apispec.FunctionRecord{
+		{
+			ID:               "fn_123",
+			Name:             "API",
+			Slug:             "api",
+			Host:             "api.sandbox0.site",
+			ActiveRevisionID: apispec.NewOptString("rev_1"),
+			UpdatedAt:        time.Date(2026, 5, 14, 8, 0, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, functions); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID",
+		"NAME",
+		"ACTIVE REVISION",
+		"fn_123",
+		"api.sandbox0.site",
+		"rev_1",
+		"2026-05-14 08:00:00",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFunctionRevisionCreateResult(t *testing.T) {
+	formatter := &TableFormatter{}
+	result := &sandbox0.FunctionRevisionCreateResult{
+		Revision: apispec.FunctionRevision{
+			ID:             "rev_2",
+			FunctionID:     "fn_123",
+			RevisionNumber: 2,
+			RuntimeSandboxID: apispec.NewOptString(
+				"sb_runtime",
+			),
+			CreatedAt: time.Date(2026, 5, 14, 9, 0, 0, 0, time.UTC),
+		},
+		Promoted: true,
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, result); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Revision ID:",
+		"rev_2",
+		"Function ID:",
+		"fn_123",
+		"Revision Number:",
+		"2",
+		"Promoted:",
+		"true",
+		"sb_runtime",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFunctionRevisionList(t *testing.T) {
+	formatter := &TableFormatter{}
+	revisions := []apispec.FunctionRevision{
+		{
+			ID:              "rev_1",
+			RevisionNumber:  1,
+			SourceSandboxID: "sb_123",
+			SourceServiceID: "web",
+			ServiceSnapshot: apispec.SandboxAppService{
+				Port: 8080,
+				Runtime: apispec.NewOptSandboxAppServiceRuntime(apispec.SandboxAppServiceRuntime{
+					Type: apispec.SandboxAppServiceRuntimeTypeWarmProcess,
+				}),
+			},
+			CreatedAt: time.Date(2026, 5, 14, 8, 0, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, revisions); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"REVISION",
+		"SOURCE",
+		"RUNTIME",
+		"rev_1",
+		"sb_123/web",
+		"8080",
+		"warm_process",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
 		}
 	}
 }
