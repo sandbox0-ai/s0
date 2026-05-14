@@ -6,36 +6,43 @@ import (
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
-func TestParsePublicGatewayPolicy(t *testing.T) {
-	policy, err := parsePublicGatewayPolicy([]byte(`
-enabled: true
-routes:
+func TestParseSandboxServices(t *testing.T) {
+	services, err := parseSandboxServices([]byte(`
+services:
   - id: app
     port: 8080
-    path_prefix: /api
-    methods: [GET, POST]
-    auth:
-      mode: bearer
-      bearer_token_sha256: abc123
-    rate_limit:
-      rps: 10
-      burst: 20
-    timeout_seconds: 30
-    resume: true
+    ingress:
+      public: true
+      routes:
+        - id: app
+          path_prefix: /api
+          methods: [GET, POST]
+          auth:
+            mode: bearer
+            bearer_token_sha256: abc123
+          rate_limit:
+            rps: 10
+            burst: 20
+          timeout_seconds: 30
+          resume: true
 `))
 	if err != nil {
-		t.Fatalf("parsePublicGatewayPolicy() error = %v", err)
+		t.Fatalf("parseSandboxServices() error = %v", err)
 	}
 
-	if !policy.Enabled {
-		t.Fatal("enabled = false, want true")
+	if len(services.Services) != 1 {
+		t.Fatalf("services count = %d, want 1", len(services.Services))
 	}
-	if len(policy.Routes) != 1 {
-		t.Fatalf("routes count = %d, want 1", len(policy.Routes))
+	service := services.Services[0]
+	if service.ID != "app" || service.Port != 8080 {
+		t.Fatalf("service = %#v, want id app and port 8080", service)
 	}
-	route := policy.Routes[0]
-	if route.ID != "app" || route.Port != 8080 {
-		t.Fatalf("route = %#v, want id app and port 8080", route)
+	if !service.Ingress.Public || len(service.Ingress.Routes) != 1 {
+		t.Fatalf("ingress = %#v, want one public route", service.Ingress)
+	}
+	route := service.Ingress.Routes[0]
+	if route.ID != "app" {
+		t.Fatalf("route = %#v, want id app", route)
 	}
 	if route.PathPrefix.Or("") != "/api" {
 		t.Fatalf("path_prefix = %q, want /api", route.PathPrefix.Or(""))
@@ -49,9 +56,9 @@ routes:
 	}
 }
 
-func TestReadPublicGatewayPolicyFileRequiresPath(t *testing.T) {
-	_, err := readPublicGatewayPolicyFile("")
+func TestReadSandboxServicesFileRequiresPath(t *testing.T) {
+	_, err := readSandboxServicesFile("")
 	if err == nil {
-		t.Fatal("readPublicGatewayPolicyFile() error = nil, want error")
+		t.Fatal("readSandboxServicesFile() error = nil, want error")
 	}
 }

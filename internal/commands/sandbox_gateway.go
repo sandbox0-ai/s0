@@ -15,18 +15,19 @@ var (
 	gatewayPolicyFile string
 )
 
-// sandboxGatewayCmd represents the sandbox gateway command group.
+// sandboxGatewayCmd represents the sandbox service command group.
 var sandboxGatewayCmd = &cobra.Command{
-	Use:   "gateway",
-	Short: "Manage public gateway policy",
-	Long:  `Get, update, and clear request-level public gateway policy for a sandbox.`,
+	Use:     "service",
+	Aliases: []string{"gateway"},
+	Short:   "Manage sandbox services",
+	Long:    `Get, update, and clear canonical services for a sandbox.`,
 }
 
-// sandboxGatewayGetCmd gets the public gateway policy.
+// sandboxGatewayGetCmd gets sandbox services.
 var sandboxGatewayGetCmd = &cobra.Command{
 	Use:   "get",
-	Short: "Get public gateway policy",
-	Long:  `Get the request-level public gateway policy for the sandbox.`,
+	Short: "Get sandbox services",
+	Long:  `Get canonical services configured for the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -34,9 +35,9 @@ var sandboxGatewayGetCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		result, err := client.Sandbox(gatewaySandboxID).GetPublicGateway(cmd.Context())
+		result, err := client.Sandbox(gatewaySandboxID).GetServices(cmd.Context())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting public gateway policy: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error getting sandbox services: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -47,11 +48,11 @@ var sandboxGatewayGetCmd = &cobra.Command{
 	},
 }
 
-// sandboxGatewayUpdateCmd updates the public gateway policy.
+// sandboxGatewayUpdateCmd updates sandbox services.
 var sandboxGatewayUpdateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update public gateway policy",
-	Long:  `Replace the request-level public gateway policy for the sandbox.`,
+	Short: "Update sandbox services",
+	Long:  `Replace canonical services configured for the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -59,15 +60,15 @@ var sandboxGatewayUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		policy, err := readPublicGatewayPolicyFile(gatewayPolicyFile)
+		services, err := readSandboxServicesFile(gatewayPolicyFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading public gateway policy: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error reading sandbox services: %v\n", err)
 			os.Exit(1)
 		}
 
-		result, err := client.Sandbox(gatewaySandboxID).UpdatePublicGateway(cmd.Context(), *policy)
+		result, err := client.Sandbox(gatewaySandboxID).UpdateServices(cmd.Context(), services.Services)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error updating public gateway policy: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error updating sandbox services: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -78,11 +79,11 @@ var sandboxGatewayUpdateCmd = &cobra.Command{
 	},
 }
 
-// sandboxGatewayClearCmd disables request-level public gateway enforcement.
+// sandboxGatewayClearCmd clears sandbox services.
 var sandboxGatewayClearCmd = &cobra.Command{
 	Use:   "clear",
-	Short: "Clear public gateway policy",
-	Long:  `Disable request-level public gateway enforcement for the sandbox.`,
+	Short: "Clear sandbox services",
+	Long:  `Remove all canonical services from the sandbox.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -90,9 +91,9 @@ var sandboxGatewayClearCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		result, err := client.Sandbox(gatewaySandboxID).ClearPublicGateway(cmd.Context())
+		result, err := client.Sandbox(gatewaySandboxID).ClearServices(cmd.Context())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error clearing public gateway policy: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error clearing sandbox services: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -103,26 +104,29 @@ var sandboxGatewayClearCmd = &cobra.Command{
 	},
 }
 
-func readPublicGatewayPolicyFile(path string) (*apispec.PublicGatewayConfig, error) {
+func readSandboxServicesFile(path string) (*apispec.SandboxServicesUpdateRequest, error) {
 	if strings.TrimSpace(path) == "" {
-		return nil, fmt.Errorf("--policy-file is required")
+		return nil, fmt.Errorf("--services-file is required")
 	}
 	data, err := readConfigFile(path)
 	if err != nil {
 		return nil, err
 	}
-	return parsePublicGatewayPolicy(data)
+	return parseSandboxServices(data)
 }
 
-func parsePublicGatewayPolicy(data []byte) (*apispec.PublicGatewayConfig, error) {
-	var policy apispec.PublicGatewayConfig
-	if err := yaml.Unmarshal(data, &policy); err != nil {
-		return nil, fmt.Errorf("parse public gateway policy file: %w", err)
+func parseSandboxServices(data []byte) (*apispec.SandboxServicesUpdateRequest, error) {
+	var services apispec.SandboxServicesUpdateRequest
+	if err := yaml.Unmarshal(data, &services); err != nil {
+		return nil, fmt.Errorf("parse sandbox services file: %w", err)
 	}
-	if err := policy.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid public gateway policy: %w", err)
+	if services.Services == nil {
+		services.Services = []apispec.SandboxAppService{}
 	}
-	return &policy, nil
+	if err := services.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid sandbox services: %w", err)
+	}
+	return &services, nil
 }
 
 func init() {
@@ -133,8 +137,9 @@ func init() {
 	sandboxGatewayCmd.PersistentFlags().StringVarP(&gatewaySandboxID, "sandbox-id", "s", "", "sandbox ID (required)")
 	_ = sandboxGatewayCmd.MarkPersistentFlagRequired("sandbox-id")
 
-	sandboxGatewayUpdateCmd.Flags().StringVarP(&gatewayPolicyFile, "policy-file", "f", "", "path to public gateway policy YAML/JSON file, or - for stdin")
-	_ = sandboxGatewayUpdateCmd.MarkFlagRequired("policy-file")
+	sandboxGatewayUpdateCmd.Flags().StringVarP(&gatewayPolicyFile, "services-file", "f", "", "path to sandbox services YAML/JSON file, or - for stdin")
+	sandboxGatewayUpdateCmd.Flags().StringVar(&gatewayPolicyFile, "policy-file", "", "deprecated alias for --services-file")
+	_ = sandboxGatewayUpdateCmd.Flags().MarkDeprecated("policy-file", "use --services-file")
 
 	sandboxCmd.AddCommand(sandboxGatewayCmd)
 }
