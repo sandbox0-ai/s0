@@ -73,8 +73,6 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSandboxNetworkPolicy(w, v)
 	case *sandbox0.SandboxServicesResponse:
 		return f.formatSandboxServices(w, v)
-	case *sandbox0.PublicGatewayResponse:
-		return f.formatPublicGateway(w, v)
 	case []apispec.FunctionRecord:
 		return f.formatFunctionList(w, v)
 	case apispec.FunctionRecord:
@@ -682,44 +680,6 @@ func (f *TableFormatter) formatSandboxNetworkPolicy(w io.Writer, policy *apispec
 	return t.Render()
 }
 
-func (f *TableFormatter) formatPublicGateway(w io.Writer, resp *sandbox0.PublicGatewayResponse) error {
-	policy := resp.PublicGateway
-	if !policy.Enabled || len(policy.Routes) == 0 {
-		state := "disabled"
-		if policy.Enabled {
-			state = "enabled with no routes"
-		}
-		_, _ = fmt.Fprintf(w, "Public Gateway: %s\n", state)
-		if resp.ExposureDomain != "" {
-			_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
-		}
-		return nil
-	}
-
-	t := newTable(w)
-	t.Header([]string{"ID", "PORT", "PATH", "METHODS", "AUTH", "RATE LIMIT", "TIMEOUT", "RESUME"})
-	for _, route := range policy.Routes {
-		_ = t.Append([]string{
-			route.ID,
-			fmt.Sprintf("%d", route.Port),
-			route.PathPrefix.Or("/"),
-			formatGatewayMethods(route.Methods),
-			formatGatewayAuth(route.Auth),
-			formatGatewayRateLimit(route.RateLimit),
-			formatGatewayTimeout(route.TimeoutSeconds),
-			fmt.Sprintf("%v", route.Resume),
-		})
-	}
-	if err := t.Render(); err != nil {
-		return err
-	}
-
-	if resp.ExposureDomain != "" {
-		_, _ = fmt.Fprintf(w, "Exposure Domain: %s\n", resp.ExposureDomain)
-	}
-	return nil
-}
-
 func (f *TableFormatter) formatSandboxServices(w io.Writer, resp *sandbox0.SandboxServicesResponse) error {
 	if len(resp.Services) == 0 {
 		_, _ = fmt.Fprintln(w, "No sandbox services configured.")
@@ -782,7 +742,7 @@ func formatGatewayMethods(methods []string) string {
 	return strings.Join(methods, ",")
 }
 
-func formatGatewayAuth(auth apispec.OptPublicGatewayAuth) string {
+func formatGatewayAuth(auth apispec.OptSandboxAppServiceRouteAuth) string {
 	value, ok := auth.Get()
 	if !ok {
 		return "none"
@@ -790,7 +750,7 @@ func formatGatewayAuth(auth apispec.OptPublicGatewayAuth) string {
 	return string(value.Mode)
 }
 
-func formatGatewayRateLimit(rateLimit apispec.OptPublicGatewayRateLimit) string {
+func formatGatewayRateLimit(rateLimit apispec.OptSandboxAppServiceRouteRateLimit) string {
 	value, ok := rateLimit.Get()
 	if !ok {
 		return "-"

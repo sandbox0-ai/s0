@@ -417,7 +417,7 @@ EOF
 s0 sandbox create -t default -f sandbox-config.yaml
 
 # Update existing sandbox services
-cat <<'EOF' > gateway.yaml
+cat <<'EOF' > services.yaml
 services:
   - id: app
     port: 8080
@@ -428,7 +428,7 @@ services:
           path_prefix: /
           resume: true
 EOF
-s0 sandbox service update --services-file gateway.yaml -s <sandbox-id>
+s0 sandbox service update --services-file services.yaml -s <sandbox-id>
 ```
 
 ### Template
