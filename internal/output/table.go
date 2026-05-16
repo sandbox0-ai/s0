@@ -93,10 +93,16 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatFunctionRevisionCreateResult(w, &v)
 	case *sandbox0.FunctionRevisionCreateResult:
 		return f.formatFunctionRevisionCreateResult(w, v)
+	case []apispec.FunctionAlias:
+		return f.formatFunctionAliasList(w, v)
 	case apispec.FunctionAlias:
 		return f.formatFunctionAlias(w, &v)
 	case *apispec.FunctionAlias:
 		return f.formatFunctionAlias(w, v)
+	case apispec.FunctionRuntimeStatus:
+		return f.formatFunctionRuntime(w, &v)
+	case *apispec.FunctionRuntimeStatus:
+		return f.formatFunctionRuntime(w, v)
 	case []apispec.MountStatus:
 		return f.formatMountStatusList(w, v)
 	case []apispec.APIKey:
@@ -779,13 +785,14 @@ func (f *TableFormatter) formatFunctionList(w io.Writer, functions []apispec.Fun
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "NAME", "SLUG", "HOST", "ACTIVE REVISION", "UPDATED AT"})
+	t.Header([]string{"ID", "NAME", "SLUG", "HOST", "ENABLED", "ACTIVE REVISION", "UPDATED AT"})
 	for _, fn := range functions {
 		_ = t.Append([]string{
 			fn.ID,
 			fn.Name,
 			fn.Slug,
 			fn.Host,
+			fmt.Sprintf("%v", fn.Enabled),
 			formatOptString(fn.ActiveRevisionID),
 			formatTimestamp(fn.UpdatedAt),
 		})
@@ -802,10 +809,12 @@ func (f *TableFormatter) formatFunction(w io.Writer, fn *apispec.FunctionRecord)
 	_ = t.Append([]string{"Domain Label:", fn.DomainLabel})
 	_ = t.Append([]string{"Host:", fn.Host})
 	_ = t.Append([]string{"URL:", fn.URL})
+	_ = t.Append([]string{"Enabled:", fmt.Sprintf("%v", fn.Enabled)})
 	_ = t.Append([]string{"Active Revision:", formatOptString(fn.ActiveRevisionID)})
 	_ = t.Append([]string{"Created By:", formatOptString(fn.CreatedBy)})
 	_ = t.Append([]string{"Created At:", formatTimestamp(fn.CreatedAt)})
 	_ = t.Append([]string{"Updated At:", formatTimestamp(fn.UpdatedAt)})
+	_ = t.Append([]string{"Deleted At:", formatOptDateTime(fn.DeletedAt)})
 	return t.Render()
 }
 
@@ -882,6 +891,38 @@ func (f *TableFormatter) formatFunctionAlias(w io.Writer, alias *apispec.Functio
 	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", alias.RevisionNumber)})
 	_ = t.Append([]string{"Updated By:", formatOptString(alias.UpdatedBy)})
 	_ = t.Append([]string{"Updated At:", formatTimestamp(alias.UpdatedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionAliasList(w io.Writer, aliases []apispec.FunctionAlias) error {
+	if len(aliases) == 0 {
+		_, _ = fmt.Fprintln(w, "No function aliases found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ALIAS", "FUNCTION ID", "REVISION", "REVISION ID", "UPDATED AT"})
+	for _, alias := range aliases {
+		_ = t.Append([]string{
+			alias.Alias,
+			alias.FunctionID,
+			fmt.Sprintf("%d", alias.RevisionNumber),
+			alias.RevisionID,
+			formatTimestamp(alias.UpdatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionRuntime(w io.Writer, runtime *apispec.FunctionRuntimeStatus) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Function ID:", runtime.FunctionID})
+	_ = t.Append([]string{"Revision ID:", runtime.RevisionID})
+	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", runtime.RevisionNumber)})
+	_ = t.Append([]string{"State:", string(runtime.State)})
+	_ = t.Append([]string{"Runtime Sandbox ID:", formatOptString(runtime.RuntimeSandboxID)})
+	_ = t.Append([]string{"Runtime Context ID:", formatOptString(runtime.RuntimeContextID)})
+	_ = t.Append([]string{"Runtime Updated At:", formatOptDateTime(runtime.RuntimeUpdatedAt)})
 	return t.Render()
 }
 
