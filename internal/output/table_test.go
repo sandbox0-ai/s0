@@ -283,6 +283,7 @@ func TestTableFormatterFormatFunctionList(t *testing.T) {
 			Name:             "API",
 			Slug:             "api",
 			Host:             "api.sandbox0.site",
+			Enabled:          true,
 			ActiveRevisionID: apispec.NewOptString("rev_1"),
 			UpdatedAt:        time.Date(2026, 5, 14, 8, 0, 0, 0, time.UTC),
 		},
@@ -300,8 +301,75 @@ func TestTableFormatterFormatFunctionList(t *testing.T) {
 		"ACTIVE REVISION",
 		"fn_123",
 		"api.sandbox0.site",
+		"true",
 		"rev_1",
 		"2026-05-14 08:00:00",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFunctionAliasList(t *testing.T) {
+	formatter := &TableFormatter{}
+	aliases := []apispec.FunctionAlias{
+		{
+			FunctionID:     "fn_123",
+			Alias:          "production",
+			RevisionID:     "rev_1",
+			RevisionNumber: 1,
+			UpdatedAt:      time.Date(2026, 5, 14, 8, 0, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, aliases); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ALIAS",
+		"FUNCTION ID",
+		"production",
+		"fn_123",
+		"rev_1",
+		"2026-05-14 08:00:00",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFunctionRuntime(t *testing.T) {
+	formatter := &TableFormatter{}
+	runtime := &apispec.FunctionRuntimeStatus{
+		FunctionID:       "fn_123",
+		RevisionID:       "rev_1",
+		RevisionNumber:   1,
+		State:            apispec.FunctionRuntimeStateActive,
+		RuntimeSandboxID: apispec.NewOptString("sb_runtime"),
+		RuntimeContextID: apispec.NewOptString("ctx_runtime"),
+		RuntimeUpdatedAt: apispec.NewOptDateTime(time.Date(2026, 5, 14, 8, 0, 0, 0, time.UTC)),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, runtime); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Function ID:",
+		"fn_123",
+		"Revision ID:",
+		"rev_1",
+		"State:",
+		"active",
+		"sb_runtime",
+		"ctx_runtime",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
