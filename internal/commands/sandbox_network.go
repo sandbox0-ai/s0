@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -25,6 +26,9 @@ var (
 	networkTrafficRules    []string
 	networkCredentialRules []string
 	networkCredentialBinds []string
+	networkProxy           string
+	networkProxyCredRef    string
+	networkProxyCredSource string
 )
 
 type networkUpdateOptions struct {
@@ -39,6 +43,9 @@ type networkUpdateOptions struct {
 	TrafficRules    []string
 	CredentialRules []string
 	CredentialBinds []string
+	Proxy           string
+	ProxyCredRef    string
+	ProxyCredSource string
 }
 
 // sandboxNetworkCmd represents the sandbox network command group.
@@ -97,6 +104,9 @@ var sandboxNetworkUpdateCmd = &cobra.Command{
 			TrafficRules:    networkTrafficRules,
 			CredentialRules: networkCredentialRules,
 			CredentialBinds: networkCredentialBinds,
+			Proxy:           networkProxy,
+			ProxyCredRef:    networkProxyCredRef,
+			ProxyCredSource: networkProxyCredSource,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error building network policy: %v\n", err)
@@ -153,13 +163,27 @@ func buildNetworkPolicyFromUpdateOptions(opts networkUpdateOptions) (*apispec.Sa
 	if err != nil {
 		return nil, err
 	}
+	proxy, proxySet, err := buildEgressProxyPolicy(opts.Proxy, opts.ProxyCredRef, opts.ProxyCredSource)
+	if err != nil {
+		return nil, err
+	}
+	proxyBinding, proxyBindingSet, err := buildEgressProxyCredentialBinding(opts.Proxy, opts.ProxyCredRef, opts.ProxyCredSource)
+	if err != nil {
+		return nil, err
+	}
+	if proxyBindingSet {
+		if hasCredentialBindingRef(credentialBinds, proxyBinding.Ref) {
+			return nil, fmt.Errorf("credential binding %q is already provided", proxyBinding.Ref)
+		}
+		credentialBinds = append(credentialBinds, proxyBinding)
+	}
 
 	policy := &apispec.SandboxNetworkPolicy{
 		Mode: apispec.SandboxNetworkPolicyMode(mode),
 	}
 
-	if hasAnyNetworkEgressInputs(opts, allowedPorts, deniedPorts, trafficRules, credentialRules) {
-		policy.Egress = apispec.NewOptNetworkEgressPolicy(apispec.NetworkEgressPolicy{
+	if hasAnyNetworkEgressInputs(opts, allowedPorts, deniedPorts, trafficRules, credentialRules, proxySet) {
+		egress := apispec.NetworkEgressPolicy{
 			AllowedCidrs:    opts.AllowedCidrs,
 			AllowedDomains:  opts.AllowedDomains,
 			AllowedPorts:    allowedPorts,
@@ -168,7 +192,11 @@ func buildNetworkPolicyFromUpdateOptions(opts networkUpdateOptions) (*apispec.Sa
 			DeniedPorts:     deniedPorts,
 			TrafficRules:    trafficRules,
 			CredentialRules: credentialRules,
-		})
+		}
+		if proxySet {
+			egress.Proxy = apispec.NewOptEgressProxyPolicy(proxy)
+		}
+		policy.Egress = apispec.NewOptNetworkEgressPolicy(egress)
 	}
 
 	if len(credentialBinds) > 0 {
@@ -191,7 +219,10 @@ func hasNetworkNonFileInputs(opts networkUpdateOptions) bool {
 		len(opts.DeniedPorts) > 0 ||
 		len(opts.TrafficRules) > 0 ||
 		len(opts.CredentialRules) > 0 ||
-		len(opts.CredentialBinds) > 0
+		len(opts.CredentialBinds) > 0 ||
+		strings.TrimSpace(opts.Proxy) != "" ||
+		strings.TrimSpace(opts.ProxyCredRef) != "" ||
+		strings.TrimSpace(opts.ProxyCredSource) != ""
 }
 
 func hasLegacyNetworkInputs(opts networkUpdateOptions) bool {
@@ -209,6 +240,7 @@ func hasAnyNetworkEgressInputs(
 	deniedPorts []apispec.PortSpec,
 	trafficRules []apispec.TrafficRule,
 	credentialRules []apispec.EgressCredentialRule,
+	proxySet bool,
 ) bool {
 	return len(opts.AllowedCidrs) > 0 ||
 		len(opts.AllowedDomains) > 0 ||
@@ -217,7 +249,94 @@ func hasAnyNetworkEgressInputs(
 		len(opts.DeniedDomains) > 0 ||
 		len(deniedPorts) > 0 ||
 		len(trafficRules) > 0 ||
-		len(credentialRules) > 0
+		len(credentialRules) > 0 ||
+		proxySet
+}
+
+func buildEgressProxyPolicy(rawProxy, rawCredRef, rawCredSource string) (apispec.EgressProxyPolicy, bool, error) {
+	proxyValue := strings.TrimSpace(rawProxy)
+	credRef := effectiveProxyCredentialRef(rawCredRef, rawCredSource)
+	if proxyValue == "" {
+		if strings.TrimSpace(rawCredRef) != "" || strings.TrimSpace(rawCredSource) != "" {
+			return apispec.EgressProxyPolicy{}, false, fmt.Errorf("--proxy is required when proxy credential flags are provided")
+		}
+		return apispec.EgressProxyPolicy{}, false, nil
+	}
+	address, err := normalizeEgressProxyAddress(proxyValue)
+	if err != nil {
+		return apispec.EgressProxyPolicy{}, false, err
+	}
+	proxy := apispec.EgressProxyPolicy{
+		Type:    apispec.EgressProxyTypeSocks5,
+		Address: address,
+	}
+	if credRef != "" {
+		proxy.CredentialRef = apispec.NewOptString(credRef)
+	}
+	return proxy, true, nil
+}
+
+func buildEgressProxyCredentialBinding(rawProxy, rawCredRef, rawCredSource string) (apispec.CredentialBinding, bool, error) {
+	if strings.TrimSpace(rawProxy) == "" || strings.TrimSpace(rawCredSource) == "" {
+		return apispec.CredentialBinding{}, false, nil
+	}
+	ref := effectiveProxyCredentialRef(rawCredRef, rawCredSource)
+	return apispec.CredentialBinding{
+		Ref:       ref,
+		SourceRef: strings.TrimSpace(rawCredSource),
+		Projection: apispec.ProjectionSpec{
+			Type:             apispec.CredentialProjectionTypeUsernamePassword,
+			UsernamePassword: &apispec.UsernamePasswordProjection{},
+		},
+	}, true, nil
+}
+
+func effectiveProxyCredentialRef(rawCredRef, rawCredSource string) string {
+	credRef := strings.TrimSpace(rawCredRef)
+	if credRef == "" && strings.TrimSpace(rawCredSource) != "" {
+		credRef = "egress-proxy"
+	}
+	return credRef
+}
+
+func normalizeEgressProxyAddress(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", fmt.Errorf("--proxy value is required")
+	}
+	if strings.Contains(value, "://") {
+		scheme, rest, ok := strings.Cut(value, "://")
+		if !ok || !strings.EqualFold(scheme, string(apispec.EgressProxyTypeSocks5)) {
+			return "", fmt.Errorf("--proxy only supports socks5:// endpoints")
+		}
+		value = rest
+		if idx := strings.IndexAny(value, "/?#"); idx >= 0 {
+			if strings.Trim(value[idx:], "/?#") != "" {
+				return "", fmt.Errorf("--proxy must not include path, query, or fragment")
+			}
+			value = value[:idx]
+		}
+	}
+	if strings.Contains(value, "@") {
+		return "", fmt.Errorf("--proxy must not include credentials; use --proxy-credential-source instead")
+	}
+	host, port, err := net.SplitHostPort(value)
+	if err != nil || strings.TrimSpace(host) == "" || strings.TrimSpace(port) == "" {
+		return "", fmt.Errorf("--proxy must be a SOCKS5 endpoint in host:port form")
+	}
+	if _, err := parsePortNumber(port); err != nil {
+		return "", fmt.Errorf("invalid --proxy port %q: %w", port, err)
+	}
+	return net.JoinHostPort(strings.TrimSpace(host), strings.TrimSpace(port)), nil
+}
+
+func hasCredentialBindingRef(bindings []apispec.CredentialBinding, ref string) bool {
+	for _, binding := range bindings {
+		if binding.Ref == ref {
+			return true
+		}
+	}
+	return false
 }
 
 func readNetworkPolicyUpdateFile(path string) (*apispec.SandboxNetworkPolicy, error) {
@@ -382,6 +501,9 @@ func init() {
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkTrafficRules, "traffic-rule", nil, "traffic rule object as JSON/YAML (can be repeated)")
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkCredentialRules, "credential-rule", nil, "credential rule object as JSON/YAML (can be repeated)")
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkCredentialBinds, "credential-binding", nil, "credential binding object as JSON/YAML (can be repeated)")
+	sandboxNetworkUpdateCmd.Flags().StringVar(&networkProxy, "proxy", "", "SOCKS5 egress proxy endpoint: socks5://host:port or host:port")
+	sandboxNetworkUpdateCmd.Flags().StringVar(&networkProxyCredRef, "proxy-credential-ref", "", "credential binding ref used by --proxy")
+	sandboxNetworkUpdateCmd.Flags().StringVar(&networkProxyCredSource, "proxy-credential-source", "", "credential source name for --proxy username_password binding")
 
 	sandboxCmd.AddCommand(sandboxNetworkCmd)
 }

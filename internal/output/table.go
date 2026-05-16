@@ -678,6 +678,12 @@ func (f *TableFormatter) formatSandboxNetworkPolicy(w io.Writer, policy *apispec
 		if len(egress.CredentialRules) > 0 {
 			_ = t.Append([]string{"Credential Rules:", fmt.Sprintf("%d", len(egress.CredentialRules))})
 		}
+		if proxy, ok := egress.Proxy.Get(); ok {
+			_ = t.Append([]string{"Proxy:", fmt.Sprintf("%s %s", proxy.Type, proxy.Address)})
+			if credentialRef, ok := proxy.CredentialRef.Get(); ok {
+				_ = t.Append([]string{"Proxy Credential:", credentialRef})
+			}
+		}
 	}
 	if len(policy.CredentialBindings) > 0 {
 		_ = t.Append([]string{"", ""})

@@ -113,6 +113,75 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 		}
 	})
 
+	t.Run("egress proxy flags create username password binding", func(t *testing.T) {
+		policy, err := buildNetworkPolicyFromUpdateOptions(networkUpdateOptions{
+			Mode:            "block-all",
+			AllowedDomains:  []string{"api.internal.example.com"},
+			AllowedPorts:    []string{"443/tcp"},
+			Proxy:           "socks5://proxy.example.com:1080",
+			ProxyCredRef:    "corp-proxy",
+			ProxyCredSource: "corp-proxy-source",
+		})
+		if err != nil {
+			t.Fatalf("buildNetworkPolicyFromUpdateOptions() error = %v", err)
+		}
+		egress, ok := policy.Egress.Get()
+		if !ok {
+			t.Fatal("egress not set")
+		}
+		proxy, ok := egress.Proxy.Get()
+		if !ok {
+			t.Fatal("proxy not set")
+		}
+		if proxy.Type != apispec.EgressProxyTypeSocks5 {
+			t.Fatalf("proxy type = %q, want socks5", proxy.Type)
+		}
+		if proxy.Address != "proxy.example.com:1080" {
+			t.Fatalf("proxy address = %q, want proxy.example.com:1080", proxy.Address)
+		}
+		credentialRef, ok := proxy.CredentialRef.Get()
+		if !ok || credentialRef != "corp-proxy" {
+			t.Fatalf("proxy credentialRef = %q, want corp-proxy", credentialRef)
+		}
+		if len(policy.CredentialBindings) != 1 {
+			t.Fatalf("credentialBindings count = %d, want 1", len(policy.CredentialBindings))
+		}
+		binding := policy.CredentialBindings[0]
+		if binding.Ref != "corp-proxy" || binding.SourceRef != "corp-proxy-source" {
+			t.Fatalf("credential binding = %#v, want corp-proxy/corp-proxy-source", binding)
+		}
+		if binding.Projection.Type != apispec.CredentialProjectionTypeUsernamePassword || binding.Projection.UsernamePassword == nil {
+			t.Fatalf("credential binding projection = %#v, want username_password", binding.Projection)
+		}
+	})
+
+	t.Run("proxy credential source defaults ref", func(t *testing.T) {
+		policy, err := buildNetworkPolicyFromUpdateOptions(networkUpdateOptions{
+			Mode:            "block-all",
+			AllowedCidrs:    []string{"10.0.0.0/8"},
+			Proxy:           "proxy.example.com:1080",
+			ProxyCredSource: "corp-proxy-source",
+		})
+		if err != nil {
+			t.Fatalf("buildNetworkPolicyFromUpdateOptions() error = %v", err)
+		}
+		egress, ok := policy.Egress.Get()
+		if !ok {
+			t.Fatal("egress not set")
+		}
+		proxy, ok := egress.Proxy.Get()
+		if !ok {
+			t.Fatal("proxy not set")
+		}
+		credentialRef, ok := proxy.CredentialRef.Get()
+		if !ok || credentialRef != "egress-proxy" {
+			t.Fatalf("proxy credentialRef = %q, want egress-proxy", credentialRef)
+		}
+		if len(policy.CredentialBindings) != 1 || policy.CredentialBindings[0].Ref != "egress-proxy" {
+			t.Fatalf("credentialBindings = %#v, want egress-proxy binding", policy.CredentialBindings)
+		}
+	})
+
 	t.Run("policy file is exclusive", func(t *testing.T) {
 		_, err := buildNetworkPolicyFromUpdateOptions(networkUpdateOptions{
 			PolicyFile:     "network.yaml",
@@ -129,6 +198,26 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 			Mode:          "allow-all",
 			DeniedDomains: []string{"facebook.com"},
 			TrafficRules:  []string{`{"action":"deny","domains":["example.com"]}`},
+		})
+		if err == nil {
+			t.Fatal("buildNetworkPolicyFromUpdateOptions() error = nil, want error")
+		}
+	})
+
+	t.Run("proxy credential flags require proxy", func(t *testing.T) {
+		_, err := buildNetworkPolicyFromUpdateOptions(networkUpdateOptions{
+			Mode:            "block-all",
+			ProxyCredSource: "corp-proxy-source",
+		})
+		if err == nil {
+			t.Fatal("buildNetworkPolicyFromUpdateOptions() error = nil, want error")
+		}
+	})
+
+	t.Run("proxy rejects inline credentials", func(t *testing.T) {
+		_, err := buildNetworkPolicyFromUpdateOptions(networkUpdateOptions{
+			Mode:  "block-all",
+			Proxy: "socks5://proxy-user:proxy-password@proxy.example.com:1080",
 		})
 		if err == nil {
 			t.Fatal("buildNetworkPolicyFromUpdateOptions() error = nil, want error")
