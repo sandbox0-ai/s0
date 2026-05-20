@@ -9,10 +9,18 @@ import (
 )
 
 var (
-	functionName            string
-	functionUpdateName      string
-	functionUpdateEnabled   bool
-	functionRevisionPromote bool
+	functionName                        string
+	functionMinWarm                     int32
+	functionMaxActive                   int32
+	functionTargetConcurrency           int32
+	functionScaleDownAfterSeconds       int32
+	functionUpdateName                  string
+	functionUpdateEnabled               bool
+	functionUpdateMinWarm               int32
+	functionUpdateMaxActive             int32
+	functionUpdateTargetConcurrency     int32
+	functionUpdateScaleDownAfterSeconds int32
+	functionRevisionPromote             bool
 )
 
 // functionCmd represents the function command.
@@ -83,9 +91,26 @@ var functionCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		opts := make([]sandbox0.FunctionCreateOption, 0, 1)
+		opts := make([]sandbox0.FunctionCreateOption, 0, 2)
 		if functionName != "" {
 			opts = append(opts, sandbox0.WithFunctionName(functionName))
+		}
+		if functionAutoscalingFlagsChanged(cmd) {
+			if err := validateFunctionAutoscalingFlags(
+				functionMinWarm,
+				functionMaxActive,
+				functionTargetConcurrency,
+				functionScaleDownAfterSeconds,
+			); err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating function: %v\n", err)
+				os.Exit(1)
+			}
+			opts = append(opts, sandbox0.WithFunctionAutoscaling(sandbox0.FunctionAutoscaling(
+				functionMinWarm,
+				functionMaxActive,
+				functionTargetConcurrency,
+				functionScaleDownAfterSeconds,
+			)))
 		}
 
 		result, err := client.CreateFunctionFromSandbox(cmd.Context(), args[0], args[1], opts...)
@@ -113,15 +138,32 @@ var functionUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		opts := make([]sandbox0.FunctionUpdateOption, 0, 2)
+		opts := make([]sandbox0.FunctionUpdateOption, 0, 3)
 		if functionUpdateName != "" {
 			opts = append(opts, sandbox0.WithFunctionUpdateName(functionUpdateName))
 		}
 		if cmd.Flags().Changed("enabled") {
 			opts = append(opts, sandbox0.WithFunctionEnabled(functionUpdateEnabled))
 		}
+		if functionAutoscalingFlagsChanged(cmd) {
+			if err := validateFunctionAutoscalingFlags(
+				functionUpdateMinWarm,
+				functionUpdateMaxActive,
+				functionUpdateTargetConcurrency,
+				functionUpdateScaleDownAfterSeconds,
+			); err != nil {
+				fmt.Fprintf(os.Stderr, "Error updating function: %v\n", err)
+				os.Exit(1)
+			}
+			opts = append(opts, sandbox0.WithFunctionUpdateAutoscaling(sandbox0.FunctionAutoscaling(
+				functionUpdateMinWarm,
+				functionUpdateMaxActive,
+				functionUpdateTargetConcurrency,
+				functionUpdateScaleDownAfterSeconds,
+			)))
+		}
 		if len(opts) == 0 {
-			fmt.Fprintln(os.Stderr, "Error updating function: at least one of --name or --enabled is required")
+			fmt.Fprintln(os.Stderr, "Error updating function: at least one of --name, --enabled, --min-warm, --max-active, --target-concurrency, or --scale-down-after-seconds is required")
 			os.Exit(1)
 		}
 
@@ -136,6 +178,27 @@ var functionUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
+}
+
+func functionAutoscalingFlagsChanged(cmd *cobra.Command) bool {
+	return flagChanged(cmd, "min-warm", "max-active", "target-concurrency", "scale-down-after-seconds")
+}
+
+func validateFunctionAutoscalingFlags(minWarm, maxActive, targetConcurrency, scaleDownAfterSeconds int32) error {
+	switch {
+	case minWarm < 0:
+		return fmt.Errorf("--min-warm must be greater than or equal to 0")
+	case maxActive < 1:
+		return fmt.Errorf("--max-active must be greater than or equal to 1")
+	case targetConcurrency < 1:
+		return fmt.Errorf("--target-concurrency must be greater than or equal to 1")
+	case scaleDownAfterSeconds < 1:
+		return fmt.Errorf("--scale-down-after-seconds must be greater than or equal to 1")
+	case minWarm > maxActive:
+		return fmt.Errorf("--min-warm must be less than or equal to --max-active")
+	default:
+		return nil
+	}
 }
 
 var functionDeleteCmd = &cobra.Command{
@@ -418,8 +481,22 @@ func init() {
 	rootCmd.AddCommand(functionCmd)
 
 	functionCreateCmd.Flags().StringVar(&functionName, "name", "", "function display name")
+	addFunctionAutoscalingFlags(
+		functionCreateCmd,
+		&functionMinWarm,
+		&functionMaxActive,
+		&functionTargetConcurrency,
+		&functionScaleDownAfterSeconds,
+	)
 	functionUpdateCmd.Flags().StringVar(&functionUpdateName, "name", "", "function display name")
 	functionUpdateCmd.Flags().BoolVar(&functionUpdateEnabled, "enabled", true, "whether the function should serve traffic")
+	addFunctionAutoscalingFlags(
+		functionUpdateCmd,
+		&functionUpdateMinWarm,
+		&functionUpdateMaxActive,
+		&functionUpdateTargetConcurrency,
+		&functionUpdateScaleDownAfterSeconds,
+	)
 	functionRevisionCreateCmd.Flags().BoolVar(&functionRevisionPromote, "promote", true, "move the production alias to the new revision")
 
 	functionRevisionCmd.AddCommand(functionRevisionListCmd)
@@ -440,4 +517,11 @@ func init() {
 	functionCmd.AddCommand(functionRevisionCmd)
 	functionCmd.AddCommand(functionAliasCmd)
 	functionCmd.AddCommand(functionRuntimeCmd)
+}
+
+func addFunctionAutoscalingFlags(cmd *cobra.Command, minWarm, maxActive, targetConcurrency, scaleDownAfterSeconds *int32) {
+	cmd.Flags().Int32Var(minWarm, "min-warm", 0, "minimum ready runtime sandboxes to keep after traffic creates capacity")
+	cmd.Flags().Int32Var(maxActive, "max-active", 20, "maximum active runtime sandboxes for the function")
+	cmd.Flags().Int32Var(targetConcurrency, "target-concurrency", 80, "soft in-flight request target per runtime sandbox before scaling out")
+	cmd.Flags().Int32Var(scaleDownAfterSeconds, "scale-down-after-seconds", 300, "idle seconds before removing extra runtime sandboxes")
 }
