@@ -27,10 +27,12 @@ func TestValidateFunctionAutoscalingFlags(t *testing.T) {
 	}{
 		{name: "default", minWarm: 0, maxActive: 20, targetConcurrency: 80, scaleDownSeconds: 300},
 		{name: "warm pool", minWarm: 2, maxActive: 4, targetConcurrency: 10, scaleDownSeconds: 60},
+		{name: "minimum scale down", minWarm: 0, maxActive: 20, targetConcurrency: 80, scaleDownSeconds: 30},
 		{name: "negative min warm", minWarm: -1, maxActive: 20, targetConcurrency: 80, scaleDownSeconds: 300, wantErr: true},
 		{name: "zero max active", minWarm: 0, maxActive: 0, targetConcurrency: 80, scaleDownSeconds: 300, wantErr: true},
 		{name: "zero target concurrency", minWarm: 0, maxActive: 20, targetConcurrency: 0, scaleDownSeconds: 300, wantErr: true},
 		{name: "zero scale down", minWarm: 0, maxActive: 20, targetConcurrency: 80, scaleDownSeconds: 0, wantErr: true},
+		{name: "below minimum scale down", minWarm: 0, maxActive: 20, targetConcurrency: 80, scaleDownSeconds: 29, wantErr: true},
 		{name: "min warm above max active", minWarm: 3, maxActive: 2, targetConcurrency: 80, scaleDownSeconds: 300, wantErr: true},
 	}
 

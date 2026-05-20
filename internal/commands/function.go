@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const minFunctionScaleDownAfterSeconds = 30
+
 var (
 	functionName                        string
 	functionMinWarm                     int32
@@ -192,8 +194,8 @@ func validateFunctionAutoscalingFlags(minWarm, maxActive, targetConcurrency, sca
 		return fmt.Errorf("--max-active must be greater than or equal to 1")
 	case targetConcurrency < 1:
 		return fmt.Errorf("--target-concurrency must be greater than or equal to 1")
-	case scaleDownAfterSeconds < 1:
-		return fmt.Errorf("--scale-down-after-seconds must be greater than or equal to 1")
+	case scaleDownAfterSeconds < minFunctionScaleDownAfterSeconds:
+		return fmt.Errorf("--scale-down-after-seconds must be greater than or equal to %d", minFunctionScaleDownAfterSeconds)
 	case minWarm > maxActive:
 		return fmt.Errorf("--min-warm must be less than or equal to --max-active")
 	default:
@@ -523,5 +525,5 @@ func addFunctionAutoscalingFlags(cmd *cobra.Command, minWarm, maxActive, targetC
 	cmd.Flags().Int32Var(minWarm, "min-warm", 0, "minimum ready runtime sandboxes to keep after traffic creates capacity")
 	cmd.Flags().Int32Var(maxActive, "max-active", 20, "maximum active runtime sandboxes for the function")
 	cmd.Flags().Int32Var(targetConcurrency, "target-concurrency", 80, "soft in-flight request target per runtime sandbox before scaling out")
-	cmd.Flags().Int32Var(scaleDownAfterSeconds, "scale-down-after-seconds", 300, "idle seconds before removing extra runtime sandboxes")
+	cmd.Flags().Int32Var(scaleDownAfterSeconds, "scale-down-after-seconds", 300, "idle seconds before removing extra runtime sandboxes; minimum 30")
 }
