@@ -7,7 +7,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/gorilla/websocket v1.5.1
 	github.com/olekukonko/tablewriter v1.1.3
-	github.com/sandbox0-ai/sdk-go v0.4.2-0.20260519212048-4b5a122aafc4
+	github.com/sandbox0-ai/sdk-go v0.4.2
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	gopkg.in/yaml.v3 v3.0.1
