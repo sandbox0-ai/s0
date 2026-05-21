@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ghodss/yaml"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
+	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +18,7 @@ var (
 	functionMaxActive                   int32
 	functionTargetConcurrency           int32
 	functionScaleDownAfterSeconds       int32
+	functionSpecFile                    string
 	functionUpdateName                  string
 	functionUpdateEnabled               bool
 	functionUpdateMinWarm               int32
@@ -23,6 +26,7 @@ var (
 	functionUpdateTargetConcurrency     int32
 	functionUpdateScaleDownAfterSeconds int32
 	functionRevisionPromote             bool
+	functionRevisionSpecFile            string
 )
 
 // functionCmd represents the function command.
@@ -82,10 +86,10 @@ var functionGetCmd = &cobra.Command{
 }
 
 var functionCreateCmd = &cobra.Command{
-	Use:   "create <sandbox-id> <service-id>",
-	Short: "Create a function from a sandbox service",
-	Long:  `Create a function from an existing publishable sandbox service.`,
-	Args:  cobra.ExactArgs(2),
+	Use:   "create [sandbox-id] [service-id]",
+	Short: "Create a function",
+	Long:  `Create a function from an existing publishable sandbox service or a revision spec file.`,
+	Args:  validateFunctionCreateArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -115,7 +119,17 @@ var functionCreateCmd = &cobra.Command{
 			)))
 		}
 
-		result, err := client.CreateFunctionFromSandbox(cmd.Context(), args[0], args[1], opts...)
+		var result *sandbox0.FunctionCreateResult
+		if functionSpecFile != "" {
+			spec, err := readFunctionRevisionSpecFile(functionSpecFile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating function: %v\n", err)
+				os.Exit(1)
+			}
+			result, err = client.CreateFunctionFromRevisionSpec(cmd.Context(), spec, opts...)
+		} else {
+			result, err = client.CreateFunctionFromSandbox(cmd.Context(), args[0], args[1], opts...)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating function: %v\n", err)
 			os.Exit(1)
@@ -126,6 +140,16 @@ var functionCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
+}
+
+func validateFunctionCreateArgs(cmd *cobra.Command, args []string) error {
+	if functionSpecFile != "" {
+		if len(args) != 0 {
+			return fmt.Errorf("when --spec-file is set, create expects no sandbox service arguments")
+		}
+		return nil
+	}
+	return cobra.ExactArgs(2)(cmd, args)
 }
 
 var functionUpdateCmd = &cobra.Command{
@@ -286,10 +310,10 @@ var functionRevisionGetCmd = &cobra.Command{
 }
 
 var functionRevisionCreateCmd = &cobra.Command{
-	Use:   "create <function-id-or-slug> <sandbox-id> <service-id>",
+	Use:   "create <function-id-or-slug> [sandbox-id] [service-id]",
 	Short: "Create a function revision",
-	Long:  `Create a new function revision from an existing publishable sandbox service.`,
-	Args:  cobra.ExactArgs(3),
+	Long:  `Create a new function revision from an existing publishable sandbox service or a revision spec file.`,
+	Args:  validateFunctionRevisionCreateArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		client, err := getClientRaw(cmd)
 		if err != nil {
@@ -297,13 +321,28 @@ var functionRevisionCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		result, err := client.CreateFunctionRevisionFromSandbox(
-			cmd.Context(),
-			args[0],
-			args[1],
-			args[2],
-			sandbox0.WithFunctionRevisionPromote(functionRevisionPromote),
-		)
+		var result *sandbox0.FunctionRevisionCreateResult
+		if functionRevisionSpecFile != "" {
+			spec, err := readFunctionRevisionSpecFile(functionRevisionSpecFile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating function revision: %v\n", err)
+				os.Exit(1)
+			}
+			result, err = client.CreateFunctionRevisionFromSpec(
+				cmd.Context(),
+				args[0],
+				spec,
+				sandbox0.WithFunctionRevisionPromote(functionRevisionPromote),
+			)
+		} else {
+			result, err = client.CreateFunctionRevisionFromSandbox(
+				cmd.Context(),
+				args[0],
+				args[1],
+				args[2],
+				sandbox0.WithFunctionRevisionPromote(functionRevisionPromote),
+			)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating function revision: %v\n", err)
 			os.Exit(1)
@@ -314,6 +353,35 @@ var functionRevisionCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
+}
+
+func validateFunctionRevisionCreateArgs(cmd *cobra.Command, args []string) error {
+	if functionRevisionSpecFile != "" {
+		if len(args) != 1 {
+			return fmt.Errorf("when --spec-file is set, revision create expects only <function-id-or-slug>")
+		}
+		return nil
+	}
+	return cobra.ExactArgs(3)(cmd, args)
+}
+
+func readFunctionRevisionSpecFile(path string) (apispec.FunctionRevisionSpec, error) {
+	if path == "" {
+		return apispec.FunctionRevisionSpec{}, fmt.Errorf("spec file path is required")
+	}
+	data, err := readConfigFile(path)
+	if err != nil {
+		return apispec.FunctionRevisionSpec{}, err
+	}
+	return parseFunctionRevisionSpec(data)
+}
+
+func parseFunctionRevisionSpec(data []byte) (apispec.FunctionRevisionSpec, error) {
+	var spec apispec.FunctionRevisionSpec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return apispec.FunctionRevisionSpec{}, fmt.Errorf("parse function revision spec file: %w", err)
+	}
+	return spec, nil
 }
 
 var functionAliasCmd = &cobra.Command{
@@ -483,6 +551,7 @@ func init() {
 	rootCmd.AddCommand(functionCmd)
 
 	functionCreateCmd.Flags().StringVar(&functionName, "name", "", "function display name")
+	functionCreateCmd.Flags().StringVar(&functionSpecFile, "spec-file", "", "revision spec YAML or JSON file")
 	addFunctionAutoscalingFlags(
 		functionCreateCmd,
 		&functionMinWarm,
@@ -500,6 +569,7 @@ func init() {
 		&functionUpdateScaleDownAfterSeconds,
 	)
 	functionRevisionCreateCmd.Flags().BoolVar(&functionRevisionPromote, "promote", true, "move the production alias to the new revision")
+	functionRevisionCreateCmd.Flags().StringVar(&functionRevisionSpecFile, "spec-file", "", "revision spec YAML or JSON file")
 
 	functionRevisionCmd.AddCommand(functionRevisionListCmd)
 	functionRevisionCmd.AddCommand(functionRevisionGetCmd)

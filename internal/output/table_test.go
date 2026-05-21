@@ -421,14 +421,18 @@ func TestTableFormatterFormatFunctionRevisionList(t *testing.T) {
 		{
 			ID:              "rev_1",
 			RevisionNumber:  1,
-			SourceSandboxID: "sb_123",
-			SourceServiceID: "web",
-			ServiceSnapshot: apispec.SandboxAppService{
+			SourceType:      apispec.FunctionRevisionSourceTypeSandboxService,
+			SourceSandboxID: apispec.NewOptString("sb_123"),
+			SourceServiceID: apispec.NewOptString("web"),
+			RevisionSpec: apispec.FunctionRevisionSpec{
+				TemplateID: "default",
+			},
+			ServiceSnapshot: apispec.NewOptSandboxAppService(apispec.SandboxAppService{
 				Port: 8080,
 				Runtime: apispec.NewOptSandboxAppServiceRuntime(apispec.SandboxAppServiceRuntime{
 					Type: apispec.SandboxAppServiceRuntimeTypeWarmProcess,
 				}),
-			},
+			}),
 			CreatedAt: time.Date(2026, 5, 14, 8, 0, 0, 0, time.UTC),
 		},
 	}
