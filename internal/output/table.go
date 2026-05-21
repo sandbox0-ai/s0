@@ -675,6 +675,9 @@ func (f *TableFormatter) formatSandboxNetworkPolicy(w io.Writer, policy *apispec
 		if len(egress.TrafficRules) > 0 {
 			_ = t.Append([]string{"Traffic Rules:", fmt.Sprintf("%d", len(egress.TrafficRules))})
 		}
+		if len(egress.ProtocolRules) > 0 {
+			_ = t.Append([]string{"Protocol Rules:", fmt.Sprintf("%d", len(egress.ProtocolRules))})
+		}
 		if len(egress.CredentialRules) > 0 {
 			_ = t.Append([]string{"Credential Rules:", fmt.Sprintf("%d", len(egress.CredentialRules))})
 		}
