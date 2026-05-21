@@ -88,6 +88,9 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 			TrafficRules: []string{
 				`{"name":"allow-ssh","action":"allow","appProtocols":["ssh"],"ports":[{"port":22,"protocol":"tcp"}]}`,
 			},
+			ProtocolRules: []string{
+				`{"name":"docs-mcp","protocol":"mcp","domains":["mcp.example.com"],"ports":[{"port":443,"protocol":"tcp"}],"tlsMode":"terminate-reoriginate","httpMatch":{"methods":["POST"],"paths":["/mcp"]},"mcp":{"tools":{"allowed":["read_file"],"denied":["run_command"]}}}`,
+			},
 			CredentialBinds: []string{
 				`{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}`,
 			},
@@ -104,6 +107,20 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 		}
 		if len(egress.TrafficRules) != 1 {
 			t.Fatalf("trafficRules count = %d, want 1", len(egress.TrafficRules))
+		}
+		if len(egress.ProtocolRules) != 1 {
+			t.Fatalf("protocolRules count = %d, want 1", len(egress.ProtocolRules))
+		}
+		if egress.ProtocolRules[0].Protocol != apispec.ProtocolRuleProtocolMcp {
+			t.Fatalf("protocol rule protocol = %q, want mcp", egress.ProtocolRules[0].Protocol)
+		}
+		mcp, ok := egress.ProtocolRules[0].Mcp.Get()
+		if !ok {
+			t.Fatal("mcp policy not set")
+		}
+		tools, ok := mcp.Tools.Get()
+		if !ok || len(tools.Allowed) != 1 || tools.Allowed[0] != "read_file" {
+			t.Fatalf("mcp tools = %#v, want read_file allowed", mcp.Tools)
 		}
 		if len(egress.CredentialRules) != 1 {
 			t.Fatalf("credentialRules count = %d, want 1", len(egress.CredentialRules))
@@ -236,6 +253,21 @@ egress:
       ports:
         - port: 22
           protocol: tcp
+  protocolRules:
+    - name: docs-mcp
+      protocol: mcp
+      domains: [mcp.example.com]
+      ports:
+        - port: 443
+          protocol: tcp
+      tlsMode: terminate-reoriginate
+      httpMatch:
+        methods: [POST]
+        paths: [/mcp]
+      mcp:
+        tools:
+          allowed: [read_file]
+          denied: [run_command]
   credentialRules:
     - name: github-auth
       credentialRef: gh-token
@@ -266,6 +298,9 @@ credentialBindings:
 	}
 	if len(egress.TrafficRules) != 1 {
 		t.Fatalf("trafficRules count = %d, want 1", len(egress.TrafficRules))
+	}
+	if len(egress.ProtocolRules) != 1 {
+		t.Fatalf("protocolRules count = %d, want 1", len(egress.ProtocolRules))
 	}
 	if len(egress.CredentialRules) != 1 {
 		t.Fatalf("credentialRules count = %d, want 1", len(egress.CredentialRules))

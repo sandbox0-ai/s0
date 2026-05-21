@@ -24,6 +24,7 @@ var (
 	networkDeniedDomains   []string
 	networkDeniedPorts     []string
 	networkTrafficRules    []string
+	networkProtocolRules   []string
 	networkCredentialRules []string
 	networkCredentialBinds []string
 	networkProxy           string
@@ -41,6 +42,7 @@ type networkUpdateOptions struct {
 	DeniedDomains   []string
 	DeniedPorts     []string
 	TrafficRules    []string
+	ProtocolRules   []string
 	CredentialRules []string
 	CredentialBinds []string
 	Proxy           string
@@ -102,6 +104,7 @@ var sandboxNetworkUpdateCmd = &cobra.Command{
 			DeniedDomains:   networkDeniedDomains,
 			DeniedPorts:     networkDeniedPorts,
 			TrafficRules:    networkTrafficRules,
+			ProtocolRules:   networkProtocolRules,
 			CredentialRules: networkCredentialRules,
 			CredentialBinds: networkCredentialBinds,
 			Proxy:           networkProxy,
@@ -155,6 +158,10 @@ func buildNetworkPolicyFromUpdateOptions(opts networkUpdateOptions) (*apispec.Sa
 	if err != nil {
 		return nil, err
 	}
+	protocolRules, err := parseNetworkObjects[apispec.ProtocolRule](opts.ProtocolRules, "--protocol-rule")
+	if err != nil {
+		return nil, err
+	}
 	credentialRules, err := parseNetworkObjects[apispec.EgressCredentialRule](opts.CredentialRules, "--credential-rule")
 	if err != nil {
 		return nil, err
@@ -182,7 +189,7 @@ func buildNetworkPolicyFromUpdateOptions(opts networkUpdateOptions) (*apispec.Sa
 		Mode: apispec.SandboxNetworkPolicyMode(mode),
 	}
 
-	if hasAnyNetworkEgressInputs(opts, allowedPorts, deniedPorts, trafficRules, credentialRules, proxySet) {
+	if hasAnyNetworkEgressInputs(opts, allowedPorts, deniedPorts, trafficRules, protocolRules, credentialRules, proxySet) {
 		egress := apispec.NetworkEgressPolicy{
 			AllowedCidrs:    opts.AllowedCidrs,
 			AllowedDomains:  opts.AllowedDomains,
@@ -191,6 +198,7 @@ func buildNetworkPolicyFromUpdateOptions(opts networkUpdateOptions) (*apispec.Sa
 			DeniedDomains:   opts.DeniedDomains,
 			DeniedPorts:     deniedPorts,
 			TrafficRules:    trafficRules,
+			ProtocolRules:   protocolRules,
 			CredentialRules: credentialRules,
 		}
 		if proxySet {
@@ -218,6 +226,7 @@ func hasNetworkNonFileInputs(opts networkUpdateOptions) bool {
 		len(opts.DeniedDomains) > 0 ||
 		len(opts.DeniedPorts) > 0 ||
 		len(opts.TrafficRules) > 0 ||
+		len(opts.ProtocolRules) > 0 ||
 		len(opts.CredentialRules) > 0 ||
 		len(opts.CredentialBinds) > 0 ||
 		strings.TrimSpace(opts.Proxy) != "" ||
@@ -239,6 +248,7 @@ func hasAnyNetworkEgressInputs(
 	allowedPorts []apispec.PortSpec,
 	deniedPorts []apispec.PortSpec,
 	trafficRules []apispec.TrafficRule,
+	protocolRules []apispec.ProtocolRule,
 	credentialRules []apispec.EgressCredentialRule,
 	proxySet bool,
 ) bool {
@@ -249,6 +259,7 @@ func hasAnyNetworkEgressInputs(
 		len(opts.DeniedDomains) > 0 ||
 		len(deniedPorts) > 0 ||
 		len(trafficRules) > 0 ||
+		len(protocolRules) > 0 ||
 		len(credentialRules) > 0 ||
 		proxySet
 }
@@ -499,6 +510,7 @@ func init() {
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkDeniedDomains, "deny-domain", nil, "denied domain (can be repeated)")
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkDeniedPorts, "deny-port", nil, "denied port spec: <port>[/tcp|udp] or <start>-<end>[/tcp|udp] (can be repeated)")
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkTrafficRules, "traffic-rule", nil, "traffic rule object as JSON/YAML (can be repeated)")
+	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkProtocolRules, "protocol-rule", nil, "protocol rule object as JSON/YAML (can be repeated)")
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkCredentialRules, "credential-rule", nil, "credential rule object as JSON/YAML (can be repeated)")
 	sandboxNetworkUpdateCmd.Flags().StringArrayVar(&networkCredentialBinds, "credential-binding", nil, "credential binding object as JSON/YAML (can be repeated)")
 	sandboxNetworkUpdateCmd.Flags().StringVar(&networkProxy, "proxy", "", "SOCKS5 egress proxy endpoint: socks5://host:port or host:port")
