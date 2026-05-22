@@ -846,8 +846,8 @@ func (f *TableFormatter) formatFunctionRevisionList(w io.Writer, revisions []api
 			fmt.Sprintf("%d", revision.RevisionNumber),
 			revision.ID,
 			formatFunctionRevisionSource(revision),
-			fmt.Sprintf("%d", revision.ServiceSnapshot.Port),
-			formatFunctionServiceRuntime(revision.ServiceSnapshot),
+			formatFunctionRevisionPort(revision),
+			formatFunctionRevisionRuntime(revision),
 			formatOptString(revision.RuntimeSandboxID),
 			formatTimestamp(revision.CreatedAt),
 		})
@@ -861,11 +861,13 @@ func (f *TableFormatter) formatFunctionRevision(w io.Writer, revision *apispec.F
 	_ = t.Append([]string{"Function ID:", revision.FunctionID})
 	_ = t.Append([]string{"Team ID:", revision.TeamID})
 	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", revision.RevisionNumber)})
-	_ = t.Append([]string{"Source Sandbox ID:", revision.SourceSandboxID})
-	_ = t.Append([]string{"Source Service ID:", revision.SourceServiceID})
-	_ = t.Append([]string{"Source Template ID:", revision.SourceTemplateID})
-	_ = t.Append([]string{"Service Port:", fmt.Sprintf("%d", revision.ServiceSnapshot.Port)})
-	_ = t.Append([]string{"Service Runtime:", formatFunctionServiceRuntime(revision.ServiceSnapshot)})
+	_ = t.Append([]string{"Source Type:", formatFunctionRevisionSourceType(revision.SourceType)})
+	_ = t.Append([]string{"Source Sandbox ID:", formatOptString(revision.SourceSandboxID)})
+	_ = t.Append([]string{"Source Service ID:", formatOptString(revision.SourceServiceID)})
+	_ = t.Append([]string{"Source Template ID:", formatOptString(revision.SourceTemplateID)})
+	_ = t.Append([]string{"Revision Template ID:", valueOrDash(revision.RevisionSpec.TemplateID)})
+	_ = t.Append([]string{"Service Port:", formatFunctionRevisionPort(*revision)})
+	_ = t.Append([]string{"Service Runtime:", formatFunctionRevisionRuntime(*revision)})
 	_ = t.Append([]string{"Runtime Sandbox ID:", formatOptString(revision.RuntimeSandboxID)})
 	_ = t.Append([]string{"Runtime Context ID:", formatOptString(revision.RuntimeContextID)})
 	_ = t.Append([]string{"Runtime Updated At:", formatOptDateTime(revision.RuntimeUpdatedAt)})
@@ -930,7 +932,43 @@ func (f *TableFormatter) formatFunctionRuntime(w io.Writer, runtime *apispec.Fun
 }
 
 func formatFunctionRevisionSource(revision apispec.FunctionRevision) string {
-	return fmt.Sprintf("%s/%s", valueOrDash(revision.SourceSandboxID), valueOrDash(revision.SourceServiceID))
+	if revision.SourceType == apispec.FunctionRevisionSourceTypeRevisionSpec {
+		return fmt.Sprintf("revision_spec/%s", valueOrDash(revision.RevisionSpec.TemplateID))
+	}
+	return fmt.Sprintf("%s/%s", formatOptString(revision.SourceSandboxID), formatOptString(revision.SourceServiceID))
+}
+
+func formatFunctionRevisionSourceType(sourceType apispec.FunctionRevisionSourceType) string {
+	if sourceType == "" {
+		return "-"
+	}
+	return string(sourceType)
+}
+
+func formatFunctionRevisionPort(revision apispec.FunctionRevision) string {
+	service, ok := functionRevisionService(revision)
+	if !ok || service.Port == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%d", service.Port)
+}
+
+func formatFunctionRevisionRuntime(revision apispec.FunctionRevision) string {
+	service, ok := functionRevisionService(revision)
+	if !ok {
+		return "-"
+	}
+	return formatFunctionServiceRuntime(service)
+}
+
+func functionRevisionService(revision apispec.FunctionRevision) (apispec.SandboxAppService, bool) {
+	if service, ok := revision.ServiceSnapshot.Get(); ok {
+		return service, true
+	}
+	if revision.RevisionSpec.RuntimeService.ID != "" || revision.RevisionSpec.RuntimeService.Port != 0 {
+		return revision.RevisionSpec.RuntimeService, true
+	}
+	return apispec.SandboxAppService{}, false
 }
 
 func formatFunctionServiceRuntime(service apispec.SandboxAppService) string {

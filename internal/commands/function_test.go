@@ -1,6 +1,10 @@
 package commands
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
+)
 
 func TestFunctionCommandsExposeAutoscalingFlags(t *testing.T) {
 	for _, cmd := range []string{"create", "update"} {
@@ -13,6 +17,15 @@ func TestFunctionCommandsExposeAutoscalingFlags(t *testing.T) {
 				t.Fatalf("function %s missing --%s flag", cmd, flag)
 			}
 		}
+	}
+}
+
+func TestFunctionCommandsExposeSpecFileFlags(t *testing.T) {
+	if functionCreateCmd.Flags().Lookup("spec-file") == nil {
+		t.Fatal("function create missing --spec-file flag")
+	}
+	if functionRevisionCreateCmd.Flags().Lookup("spec-file") == nil {
+		t.Fatal("function revision create missing --spec-file flag")
 	}
 }
 
@@ -43,5 +56,38 @@ func TestValidateFunctionAutoscalingFlags(t *testing.T) {
 				t.Fatalf("validateFunctionAutoscalingFlags() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestParseFunctionRevisionSpec(t *testing.T) {
+	spec, err := parseFunctionRevisionSpec([]byte(`
+template_id: default
+runtime_service:
+  id: web
+  port: 8080
+  ingress:
+    public: true
+  runtime:
+    type: warm_process
+mounts:
+  - mount_point: /data
+    source:
+      type: sandbox_volume
+      sandboxvolume_id: sv_123
+`))
+	if err != nil {
+		t.Fatalf("parseFunctionRevisionSpec() error = %v", err)
+	}
+	if spec.TemplateID != "default" {
+		t.Fatalf("template id = %q, want default", spec.TemplateID)
+	}
+	if spec.RuntimeService.ID != "web" || spec.RuntimeService.Port != 8080 {
+		t.Fatalf("runtime service = %#v, want web:8080", spec.RuntimeService)
+	}
+	if len(spec.Mounts) != 1 {
+		t.Fatalf("mounts count = %d, want 1", len(spec.Mounts))
+	}
+	if spec.Mounts[0].Source.Type != apispec.FunctionRevisionMountSourceTypeSandboxVolume {
+		t.Fatalf("mount source type = %q, want sandbox_volume", spec.Mounts[0].Source.Type)
 	}
 }
