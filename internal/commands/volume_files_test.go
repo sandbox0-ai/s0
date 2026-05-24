@@ -26,6 +26,9 @@ func TestVolumeFilesCommandFlags(t *testing.T) {
 	if volumeFilesWriteCmd.Flags().Lookup("data") == nil {
 		t.Fatalf("expected write --data flag")
 	}
+	if volumeFilesUploadCmd.Flags().Lookup("recursive") == nil {
+		t.Fatalf("expected upload --recursive flag")
+	}
 	if volumeFilesWatchCmd.Flags().Lookup("recursive") == nil {
 		t.Fatalf("expected watch --recursive flag")
 	}

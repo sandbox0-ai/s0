@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	volumeFilesRecursive bool
-	volumeFilesParents   bool
-	volumeFilesStdin     bool
-	volumeFilesData      string
+	volumeFilesRecursive       bool
+	volumeFilesUploadRecursive bool
+	volumeFilesParents         bool
+	volumeFilesStdin           bool
+	volumeFilesData            string
 )
 
 var volumeFilesCmd = &cobra.Command{
@@ -186,8 +187,8 @@ var volumeFilesMvCmd = &cobra.Command{
 
 var volumeFilesUploadCmd = &cobra.Command{
 	Use:   "upload <volume-id> <local-path> <remote-path>",
-	Short: "Upload a local file",
-	Long:  `Upload a local file to a volume path.`,
+	Short: "Upload a local file or directory",
+	Long:  `Upload a local file to a volume path. Use --recursive to upload a local directory.`,
 	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
 		volumeID := args[0]
@@ -198,6 +199,32 @@ var volumeFilesUploadCmd = &cobra.Command{
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
+		}
+
+		info, err := os.Stat(localPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading local path: %v\n", err)
+			os.Exit(1)
+		}
+		if info.IsDir() {
+			if !volumeFilesUploadRecursive {
+				fmt.Fprintf(os.Stderr, "Error uploading file: local path is a directory; use --recursive\n")
+				os.Exit(1)
+			}
+			result, err := client.UploadVolumeDirectory(cmd.Context(), volumeID, localPath, remotePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error uploading directory: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf(
+				"Directory uploaded to %s (files=%d directories=%d symlinks=%d bytes=%d)\n",
+				remotePath,
+				result.Files,
+				result.Directories,
+				result.Symlinks,
+				result.Bytes,
+			)
+			return
 		}
 
 		data, err := os.ReadFile(localPath)
@@ -343,6 +370,7 @@ func init() {
 	volumeFilesCmd.AddCommand(volumeFilesWatchCmd)
 
 	volumeFilesMkdirCmd.Flags().BoolVar(&volumeFilesParents, "parents", false, "create parent directories as needed")
+	volumeFilesUploadCmd.Flags().BoolVarP(&volumeFilesUploadRecursive, "recursive", "r", false, "upload a directory recursively")
 	volumeFilesWatchCmd.Flags().BoolVarP(&volumeFilesRecursive, "recursive", "r", false, "watch recursively")
 	volumeFilesWriteCmd.Flags().BoolVar(&volumeFilesStdin, "stdin", false, "read content from stdin")
 	volumeFilesWriteCmd.Flags().StringVar(&volumeFilesData, "data", "", "content to write directly")
