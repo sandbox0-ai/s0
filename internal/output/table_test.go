@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
@@ -193,6 +194,46 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		"30222",
 		"SSH Username:",
 		"sb_123",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatSandboxServicesIncludesPublicURL(t *testing.T) {
+	formatter := &TableFormatter{}
+	services := &sandbox0.SandboxServicesResponse{
+		SandboxID: "rs-default-api-abcde",
+		Services: []apispec.SandboxAppServiceView{
+			{
+				ID:   "api",
+				Port: 8080,
+				Ingress: apispec.SandboxAppServiceIngress{
+					Public: true,
+					Routes: []apispec.SandboxAppServiceRoute{
+						{
+							ID:         "api",
+							PathPrefix: apispec.NewOptString("/"),
+							Resume:     true,
+						},
+					},
+				},
+				Publishable: true,
+				PublicURL:   apispec.NewOptString("https://rs-default-api-abcde--p8080.us.sandbox0.app"),
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, services); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"URL",
+		"https://rs-default-api-abcde--p8080.us.sandbox0.app",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)

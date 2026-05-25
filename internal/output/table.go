@@ -672,7 +672,7 @@ func (f *TableFormatter) formatSandboxServices(w io.Writer, resp *sandbox0.Sandb
 	}
 
 	t := newTable(w)
-	t.Header([]string{"SERVICE", "PORT", "PUBLIC", "ROUTE", "PATH", "METHODS", "AUTH", "RATE LIMIT", "TIMEOUT", "RESUME", "PUBLISHABLE"})
+	t.Header([]string{"SERVICE", "PORT", "PUBLIC", "URL", "ROUTE", "PATH", "METHODS", "AUTH", "RATE LIMIT", "TIMEOUT", "RESUME", "PUBLISHABLE"})
 	for _, service := range resp.Services {
 		routes := service.Ingress.Routes
 		if len(routes) == 0 {
@@ -680,6 +680,7 @@ func (f *TableFormatter) formatSandboxServices(w io.Writer, resp *sandbox0.Sandb
 				service.ID,
 				fmt.Sprintf("%d", service.Port),
 				fmt.Sprintf("%v", service.Ingress.Public),
+				service.PublicURL.Or("-"),
 				"-",
 				"-",
 				"-",
@@ -696,6 +697,7 @@ func (f *TableFormatter) formatSandboxServices(w io.Writer, resp *sandbox0.Sandb
 				service.ID,
 				fmt.Sprintf("%d", service.Port),
 				fmt.Sprintf("%v", service.Ingress.Public),
+				service.PublicURL.Or("-"),
 				route.ID,
 				route.PathPrefix.Or("/"),
 				formatGatewayMethods(route.Methods),
