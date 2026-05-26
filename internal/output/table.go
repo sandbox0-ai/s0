@@ -33,6 +33,22 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatVolumes(w, v)
 	case *apispec.SandboxVolume:
 		return f.formatVolume(w, v)
+	case []apispec.Function:
+		return f.formatFunctionList(w, v)
+	case apispec.Function:
+		return f.formatFunction(w, &v)
+	case *apispec.Function:
+		return f.formatFunction(w, v)
+	case apispec.FunctionDeployResult:
+		return f.formatFunctionDeployResult(w, &v)
+	case *apispec.FunctionDeployResult:
+		return f.formatFunctionDeployResult(w, v)
+	case []apispec.FunctionRevision:
+		return f.formatFunctionRevisionList(w, v)
+	case apispec.FunctionRevision:
+		return f.formatFunctionRevision(w, &v)
+	case *apispec.FunctionRevision:
+		return f.formatFunctionRevision(w, v)
 	case []apispec.Snapshot:
 		return f.formatSnapshots(w, v)
 	case *apispec.Snapshot:
@@ -201,6 +217,93 @@ func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) err
 	return t.Render()
 }
 
+func (f *TableFormatter) formatFunctionList(w io.Writer, functions []apispec.Function) error {
+	if len(functions) == 0 {
+		_, _ = fmt.Fprintln(w, "No functions found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"NAME", "SLUG", "URL", "ACTIVE REVISION", "ENABLED", "UPDATED"})
+	for _, fn := range functions {
+		_ = t.Append([]string{
+			fn.Name,
+			fn.Slug,
+			optStringOrDash(fn.URL),
+			optStringOrDash(fn.ActiveRevisionID),
+			formatBool(fn.Enabled),
+			fn.UpdatedAt.Format(timeLayout),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunction(w io.Writer, fn *apispec.Function) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", fn.ID})
+	_ = t.Append([]string{"Name:", fn.Name})
+	_ = t.Append([]string{"Slug:", fn.Slug})
+	_ = t.Append([]string{"Domain Label:", fn.DomainLabel})
+	_ = t.Append([]string{"URL:", optStringOrDash(fn.URL)})
+	_ = t.Append([]string{"Active Revision:", optStringOrDash(fn.ActiveRevisionID)})
+	_ = t.Append([]string{"Enabled:", formatBool(fn.Enabled)})
+	_ = t.Append([]string{"Max Instances:", optInt32OrDash(fn.Scale.MaxInstances)})
+	_ = t.Append([]string{"Target Concurrency:", optInt32OrDash(fn.Scale.TargetConcurrency)})
+	_ = t.Append([]string{"Idle Timeout:", optInt32SecondsOrDash(fn.Scale.IdleTimeoutSeconds)})
+	_ = t.Append([]string{"Startup Timeout:", optInt32SecondsOrDash(fn.Scale.StartupTimeoutSeconds)})
+	_ = t.Append([]string{"Created:", fn.CreatedAt.Format(timeLayout)})
+	_ = t.Append([]string{"Updated:", fn.UpdatedAt.Format(timeLayout)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionDeployResult(w io.Writer, result *apispec.FunctionDeployResult) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Function ID:", result.Function.ID})
+	_ = t.Append([]string{"Name:", result.Function.Name})
+	_ = t.Append([]string{"Slug:", result.Function.Slug})
+	_ = t.Append([]string{"URL:", optStringOrDash(result.Function.URL)})
+	_ = t.Append([]string{"Revision ID:", result.Revision.ID})
+	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", result.Revision.Number)})
+	_ = t.Append([]string{"Revision Status:", string(result.Revision.Status)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionRevisionList(w io.Writer, revisions []apispec.FunctionRevision) error {
+	if len(revisions) == 0 {
+		_, _ = fmt.Fprintln(w, "No function revisions found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"NUMBER", "ID", "STATUS", "RUNTIME SANDBOX", "CREATED", "ACTIVATED"})
+	for _, revision := range revisions {
+		_ = t.Append([]string{
+			fmt.Sprintf("%d", revision.Number),
+			revision.ID,
+			string(revision.Status),
+			optStringOrDash(revision.RuntimeSandboxID),
+			revision.CreatedAt.Format(timeLayout),
+			optDateTimeOrDash(revision.ActivatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFunctionRevision(w io.Writer, revision *apispec.FunctionRevision) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", revision.ID})
+	_ = t.Append([]string{"Function ID:", revision.FunctionID})
+	_ = t.Append([]string{"Number:", fmt.Sprintf("%d", revision.Number)})
+	_ = t.Append([]string{"Status:", string(revision.Status)})
+	_ = t.Append([]string{"Template:", revision.Spec.Template})
+	_ = t.Append([]string{"Service ID:", revision.Spec.Service.ID})
+	_ = t.Append([]string{"Runtime Sandbox:", optStringOrDash(revision.RuntimeSandboxID)})
+	_ = t.Append([]string{"Runtime Context:", optStringOrDash(revision.RuntimeContextID)})
+	_ = t.Append([]string{"Created:", revision.CreatedAt.Format(timeLayout)})
+	_ = t.Append([]string{"Activated:", optDateTimeOrDash(revision.ActivatedAt)})
+	return t.Render()
+}
+
 func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapshot) error {
 	if len(snapshots) == 0 {
 		_, _ = fmt.Fprintln(w, "No snapshots found.")
@@ -233,11 +336,46 @@ func valueOrDash(value string) string {
 	return value
 }
 
+func optStringOrDash(value apispec.OptString) string {
+	if v, ok := value.Get(); ok {
+		return valueOrDash(v)
+	}
+	return "-"
+}
+
 func intOrDash(value int) string {
 	if value == 0 {
 		return "-"
 	}
 	return fmt.Sprintf("%d", value)
+}
+
+func optInt32OrDash(value apispec.OptInt32) string {
+	if v, ok := value.Get(); ok {
+		return fmt.Sprintf("%d", v)
+	}
+	return "-"
+}
+
+func optInt32SecondsOrDash(value apispec.OptInt32) string {
+	if v, ok := value.Get(); ok {
+		return fmt.Sprintf("%ds", v)
+	}
+	return "-"
+}
+
+func optDateTimeOrDash(value apispec.OptDateTime) string {
+	if v, ok := value.Get(); ok {
+		return v.Format(timeLayout)
+	}
+	return "-"
+}
+
+func formatBool(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
 }
 
 func (f *TableFormatter) formatSnapshot(w io.Writer, s *apispec.Snapshot) error {
