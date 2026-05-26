@@ -33,22 +33,22 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatVolumes(w, v)
 	case *apispec.SandboxVolume:
 		return f.formatVolume(w, v)
-	case []apispec.Function:
-		return f.formatFunctionList(w, v)
-	case apispec.Function:
-		return f.formatFunction(w, &v)
-	case *apispec.Function:
-		return f.formatFunction(w, v)
-	case apispec.FunctionDeployResult:
-		return f.formatFunctionDeployResult(w, &v)
-	case *apispec.FunctionDeployResult:
-		return f.formatFunctionDeployResult(w, v)
-	case []apispec.FunctionRevision:
-		return f.formatFunctionRevisionList(w, v)
-	case apispec.FunctionRevision:
-		return f.formatFunctionRevision(w, &v)
-	case *apispec.FunctionRevision:
-		return f.formatFunctionRevision(w, v)
+	case []apispec.Run:
+		return f.formatRunList(w, v)
+	case apispec.Run:
+		return f.formatRun(w, &v)
+	case *apispec.Run:
+		return f.formatRun(w, v)
+	case apispec.RunDeployResult:
+		return f.formatRunDeployResult(w, &v)
+	case *apispec.RunDeployResult:
+		return f.formatRunDeployResult(w, v)
+	case []apispec.RunRevision:
+		return f.formatRunRevisionList(w, v)
+	case apispec.RunRevision:
+		return f.formatRunRevision(w, &v)
+	case *apispec.RunRevision:
+		return f.formatRunRevision(w, v)
 	case []apispec.Snapshot:
 		return f.formatSnapshots(w, v)
 	case *apispec.Snapshot:
@@ -217,60 +217,60 @@ func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) err
 	return t.Render()
 }
 
-func (f *TableFormatter) formatFunctionList(w io.Writer, functions []apispec.Function) error {
-	if len(functions) == 0 {
-		_, _ = fmt.Fprintln(w, "No functions found.")
+func (f *TableFormatter) formatRunList(w io.Writer, runs []apispec.Run) error {
+	if len(runs) == 0 {
+		_, _ = fmt.Fprintln(w, "No runs found.")
 		return nil
 	}
 
 	t := newTable(w)
 	t.Header([]string{"NAME", "SLUG", "URL", "ACTIVE REVISION", "ENABLED", "UPDATED"})
-	for _, fn := range functions {
+	for _, run := range runs {
 		_ = t.Append([]string{
-			fn.Name,
-			fn.Slug,
-			optStringOrDash(fn.URL),
-			optStringOrDash(fn.ActiveRevisionID),
-			formatBool(fn.Enabled),
-			fn.UpdatedAt.Format(timeLayout),
+			run.Name,
+			run.Slug,
+			optStringOrDash(run.URL),
+			optStringOrDash(run.ActiveRevisionID),
+			formatBool(run.Enabled),
+			run.UpdatedAt.Format(timeLayout),
 		})
 	}
 	return t.Render()
 }
 
-func (f *TableFormatter) formatFunction(w io.Writer, fn *apispec.Function) error {
+func (f *TableFormatter) formatRun(w io.Writer, run *apispec.Run) error {
 	t := newTable(w)
-	_ = t.Append([]string{"ID:", fn.ID})
-	_ = t.Append([]string{"Name:", fn.Name})
-	_ = t.Append([]string{"Slug:", fn.Slug})
-	_ = t.Append([]string{"Domain Label:", fn.DomainLabel})
-	_ = t.Append([]string{"URL:", optStringOrDash(fn.URL)})
-	_ = t.Append([]string{"Active Revision:", optStringOrDash(fn.ActiveRevisionID)})
-	_ = t.Append([]string{"Enabled:", formatBool(fn.Enabled)})
-	_ = t.Append([]string{"Max Instances:", optInt32OrDash(fn.Scale.MaxInstances)})
-	_ = t.Append([]string{"Target Concurrency:", optInt32OrDash(fn.Scale.TargetConcurrency)})
-	_ = t.Append([]string{"Idle Timeout:", optInt32SecondsOrDash(fn.Scale.IdleTimeoutSeconds)})
-	_ = t.Append([]string{"Startup Timeout:", optInt32SecondsOrDash(fn.Scale.StartupTimeoutSeconds)})
-	_ = t.Append([]string{"Created:", fn.CreatedAt.Format(timeLayout)})
-	_ = t.Append([]string{"Updated:", fn.UpdatedAt.Format(timeLayout)})
+	_ = t.Append([]string{"ID:", run.ID})
+	_ = t.Append([]string{"Name:", run.Name})
+	_ = t.Append([]string{"Slug:", run.Slug})
+	_ = t.Append([]string{"Domain Label:", run.DomainLabel})
+	_ = t.Append([]string{"URL:", optStringOrDash(run.URL)})
+	_ = t.Append([]string{"Active Revision:", optStringOrDash(run.ActiveRevisionID)})
+	_ = t.Append([]string{"Enabled:", formatBool(run.Enabled)})
+	_ = t.Append([]string{"Max Instances:", optInt32OrDash(run.Scale.MaxInstances)})
+	_ = t.Append([]string{"Target Concurrency:", optInt32OrDash(run.Scale.TargetConcurrency)})
+	_ = t.Append([]string{"Idle Timeout:", optInt32SecondsOrDash(run.Scale.IdleTimeoutSeconds)})
+	_ = t.Append([]string{"Startup Timeout:", optInt32SecondsOrDash(run.Scale.StartupTimeoutSeconds)})
+	_ = t.Append([]string{"Created:", run.CreatedAt.Format(timeLayout)})
+	_ = t.Append([]string{"Updated:", run.UpdatedAt.Format(timeLayout)})
 	return t.Render()
 }
 
-func (f *TableFormatter) formatFunctionDeployResult(w io.Writer, result *apispec.FunctionDeployResult) error {
+func (f *TableFormatter) formatRunDeployResult(w io.Writer, result *apispec.RunDeployResult) error {
 	t := newTable(w)
-	_ = t.Append([]string{"Function ID:", result.Function.ID})
-	_ = t.Append([]string{"Name:", result.Function.Name})
-	_ = t.Append([]string{"Slug:", result.Function.Slug})
-	_ = t.Append([]string{"URL:", optStringOrDash(result.Function.URL)})
+	_ = t.Append([]string{"Run ID:", result.Run.ID})
+	_ = t.Append([]string{"Name:", result.Run.Name})
+	_ = t.Append([]string{"Slug:", result.Run.Slug})
+	_ = t.Append([]string{"URL:", optStringOrDash(result.Run.URL)})
 	_ = t.Append([]string{"Revision ID:", result.Revision.ID})
 	_ = t.Append([]string{"Revision Number:", fmt.Sprintf("%d", result.Revision.Number)})
 	_ = t.Append([]string{"Revision Status:", string(result.Revision.Status)})
 	return t.Render()
 }
 
-func (f *TableFormatter) formatFunctionRevisionList(w io.Writer, revisions []apispec.FunctionRevision) error {
+func (f *TableFormatter) formatRunRevisionList(w io.Writer, revisions []apispec.RunRevision) error {
 	if len(revisions) == 0 {
-		_, _ = fmt.Fprintln(w, "No function revisions found.")
+		_, _ = fmt.Fprintln(w, "No run revisions found.")
 		return nil
 	}
 
@@ -289,10 +289,10 @@ func (f *TableFormatter) formatFunctionRevisionList(w io.Writer, revisions []api
 	return t.Render()
 }
 
-func (f *TableFormatter) formatFunctionRevision(w io.Writer, revision *apispec.FunctionRevision) error {
+func (f *TableFormatter) formatRunRevision(w io.Writer, revision *apispec.RunRevision) error {
 	t := newTable(w)
 	_ = t.Append([]string{"ID:", revision.ID})
-	_ = t.Append([]string{"Function ID:", revision.FunctionID})
+	_ = t.Append([]string{"Run ID:", revision.RunID})
 	_ = t.Append([]string{"Number:", fmt.Sprintf("%d", revision.Number)})
 	_ = t.Append([]string{"Status:", string(revision.Status)})
 	_ = t.Append([]string{"Template:", revision.Spec.Template})

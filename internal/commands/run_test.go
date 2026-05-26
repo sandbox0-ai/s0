@@ -7,47 +7,47 @@ import (
 	"testing"
 )
 
-func TestParseFunctionMounts(t *testing.T) {
+func TestParseRunMounts(t *testing.T) {
 	t.Parallel()
 
-	got, err := parseFunctionMounts([]string{"snap_123:/workspace", "snap_456:/data"})
+	got, err := parseRunMounts([]string{"snap_123:/workspace", "snap_456:/data"})
 	if err != nil {
-		t.Fatalf("parseFunctionMounts() error = %v", err)
+		t.Fatalf("parseRunMounts() error = %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("len(parseFunctionMounts()) = %d, want 2", len(got))
+		t.Fatalf("len(parseRunMounts()) = %d, want 2", len(got))
 	}
 	if got[0].SnapshotID != "snap_123" || got[0].MountPath != "/workspace" {
 		t.Fatalf("first mount = %+v, want snap_123:/workspace", got[0])
 	}
 }
 
-func TestParseFunctionMountsRejectsRelativePath(t *testing.T) {
+func TestParseRunMountsRejectsRelativePath(t *testing.T) {
 	t.Parallel()
 
-	if _, err := parseFunctionMounts([]string{"snap_123:workspace"}); err == nil {
-		t.Fatal("parseFunctionMounts() error = nil, want relative path error")
+	if _, err := parseRunMounts([]string{"snap_123:workspace"}); err == nil {
+		t.Fatal("parseRunMounts() error = nil, want relative path error")
 	}
 }
 
-func TestParseFunctionCommand(t *testing.T) {
+func TestParseRunCommand(t *testing.T) {
 	t.Parallel()
 
-	got, err := parseFunctionCommand(`python -m http.server "8080"`, nil)
+	got, err := parseRunCommand(`python -m http.server "8080"`, nil)
 	if err != nil {
-		t.Fatalf("parseFunctionCommand() error = %v", err)
+		t.Fatalf("parseRunCommand() error = %v", err)
 	}
 	want := []string{"python", "-m", "http.server", "8080"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("parseFunctionCommand() = %#v, want %#v", got, want)
+		t.Fatalf("parseRunCommand() = %#v, want %#v", got, want)
 	}
 }
 
-func TestReadFunctionDeploySpecFile(t *testing.T) {
+func TestReadRunDeploySpecFile(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	path := filepath.Join(dir, "function.yaml")
+	path := filepath.Join(dir, "run.yaml")
 	input := `name: api
 slug: api
 template: python
@@ -71,12 +71,12 @@ activate: false
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	spec, err := readFunctionDeploySpecFile(path)
+	spec, err := readRunDeploySpecFile(path)
 	if err != nil {
-		t.Fatalf("readFunctionDeploySpecFile() error = %v", err)
+		t.Fatalf("readRunDeploySpecFile() error = %v", err)
 	}
 	if spec.Name != "api" || spec.Slug != "api" || spec.Template != "python" {
-		t.Fatalf("function identity = %#v, want api/python", spec)
+		t.Fatalf("run identity = %#v, want api/python", spec)
 	}
 	if spec.Service.Port != 8080 || spec.Service.CWD != "/workspace" {
 		t.Fatalf("service = %+v, want port 8080 cwd /workspace", spec.Service)

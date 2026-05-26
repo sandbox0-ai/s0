@@ -8,7 +8,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/gorilla/websocket v1.5.1
 	github.com/olekukonko/tablewriter v1.1.3
-	github.com/sandbox0-ai/sdk-go v0.5.3-0.20260526163347-7e9a4b2a6dc2
+	github.com/sandbox0-ai/sdk-go v0.5.3-0.20260526222508-7219b9034b0a
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	gopkg.in/yaml.v3 v3.0.1

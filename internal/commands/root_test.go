@@ -19,13 +19,13 @@ func TestCommandRouteScopeRoutesUserSSHKeysToHomeRegion(t *testing.T) {
 	}
 }
 
-func TestCommandRouteScopeRoutesFunctionsToHomeRegion(t *testing.T) {
-	function := &cobra.Command{Use: "function"}
+func TestCommandRouteScopeRoutesRunsToHomeRegion(t *testing.T) {
+	run := &cobra.Command{Use: "run"}
 	list := &cobra.Command{Use: "list"}
-	function.AddCommand(list)
+	run.AddCommand(list)
 
 	if got := commandRouteScope(list); got != client.RouteScopeHomeRegion {
-		t.Fatalf("commandRouteScope(function list) = %q, want %q", got, client.RouteScopeHomeRegion)
+		t.Fatalf("commandRouteScope(run list) = %q, want %q", got, client.RouteScopeHomeRegion)
 	}
 }
 
