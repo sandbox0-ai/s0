@@ -13,29 +13,28 @@ import (
 )
 
 var (
-	runName                  string
-	runSlug                  string
-	runTemplate              string
-	runServiceID             string
-	runServiceDisplayName    string
-	runPort                  int32
-	runCommandString         string
-	runCommand               []string
-	runCWD                   string
-	runWarmProcessName       string
-	runHealthPath            string
-	runMounts                []string
-	runEnv                   []string
-	runSpecFile              string
-	runTargetID              string
-	runNoActivate            bool
-	runMaxInstances          int32
-	runTargetConcurrency     int32
-	runIdleTimeoutSeconds    int32
-	runStartupTimeoutSeconds int32
-	runUpdateName            string
-	runUpdateEnable          bool
-	runUpdateDisable         bool
+	runName               string
+	runSlug               string
+	runTemplate           string
+	runServiceID          string
+	runServiceDisplayName string
+	runPort               int32
+	runCommandString      string
+	runCommand            []string
+	runCWD                string
+	runWarmProcessName    string
+	runHealthPath         string
+	runMounts             []string
+	runEnv                []string
+	runSpecFile           string
+	runTargetID           string
+	runNoActivate         bool
+	runMaxInstances       int32
+	runTargetConcurrency  int32
+	runIdleTimeoutSeconds int32
+	runUpdateName         string
+	runUpdateEnable       bool
+	runUpdateDisable      bool
 )
 
 var runCmd = &cobra.Command{
@@ -340,7 +339,6 @@ func addRunScaleFlags(cmd *cobra.Command) {
 	cmd.Flags().Int32Var(&runMaxInstances, "max-instances", 0, "maximum runtime instances")
 	cmd.Flags().Int32Var(&runTargetConcurrency, "target-concurrency", 0, "target requests per runtime instance")
 	cmd.Flags().Int32Var(&runIdleTimeoutSeconds, "idle-timeout", 0, "seconds before scaling idle runtime back to zero")
-	cmd.Flags().Int32Var(&runStartupTimeoutSeconds, "startup-timeout", 0, "maximum seconds to wait for cold start health")
 }
 
 func buildRunDeploySpec(cmd *cobra.Command) (sandbox0.RunDeploySpec, error) {
@@ -437,13 +435,6 @@ func buildRunScalePolicy(cmd *cobra.Command) (*apispec.RunScalePolicy, error) {
 			return nil, fmt.Errorf("--idle-timeout must be greater than 0")
 		}
 		scale.IdleTimeoutSeconds = apispec.NewOptInt32(runIdleTimeoutSeconds)
-		hasScale = true
-	}
-	if cmd.Flags().Changed("startup-timeout") {
-		if runStartupTimeoutSeconds < 1 {
-			return nil, fmt.Errorf("--startup-timeout must be greater than 0")
-		}
-		scale.StartupTimeoutSeconds = apispec.NewOptInt32(runStartupTimeoutSeconds)
 		hasScale = true
 	}
 	if !hasScale {
@@ -611,14 +602,12 @@ type runMountFile struct {
 }
 
 type runScaleFile struct {
-	MaxInstances           *int32 `yaml:"maxInstances"`
-	MaxInstances2          *int32 `yaml:"max_instances"`
-	TargetConcurrency      *int32 `yaml:"targetConcurrency"`
-	TargetConcurrency2     *int32 `yaml:"target_concurrency"`
-	IdleTimeoutSeconds     *int32 `yaml:"idleTimeoutSeconds"`
-	IdleTimeoutSeconds2    *int32 `yaml:"idle_timeout_seconds"`
-	StartupTimeoutSeconds  *int32 `yaml:"startupTimeoutSeconds"`
-	StartupTimeoutSeconds2 *int32 `yaml:"startup_timeout_seconds"`
+	MaxInstances        *int32 `yaml:"maxInstances"`
+	MaxInstances2       *int32 `yaml:"max_instances"`
+	TargetConcurrency   *int32 `yaml:"targetConcurrency"`
+	TargetConcurrency2  *int32 `yaml:"target_concurrency"`
+	IdleTimeoutSeconds  *int32 `yaml:"idleTimeoutSeconds"`
+	IdleTimeoutSeconds2 *int32 `yaml:"idle_timeout_seconds"`
 }
 
 func (f runDeploySpecFile) toSDKSpec() (sandbox0.RunDeploySpec, error) {
@@ -683,13 +672,6 @@ func (f runScaleFile) toSDKScale() (*apispec.RunScalePolicy, error) {
 			return nil, fmt.Errorf("scale.idleTimeoutSeconds must be greater than 0")
 		}
 		scale.IdleTimeoutSeconds = apispec.NewOptInt32(value)
-		hasScale = true
-	}
-	if value, ok := firstInt32(f.StartupTimeoutSeconds, f.StartupTimeoutSeconds2); ok {
-		if value < 1 {
-			return nil, fmt.Errorf("scale.startupTimeoutSeconds must be greater than 0")
-		}
-		scale.StartupTimeoutSeconds = apispec.NewOptInt32(value)
 		hasScale = true
 	}
 	if !hasScale {

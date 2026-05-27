@@ -250,7 +250,6 @@ func (f *TableFormatter) formatRun(w io.Writer, run *apispec.Run) error {
 	_ = t.Append([]string{"Max Instances:", optInt32OrDash(run.Scale.MaxInstances)})
 	_ = t.Append([]string{"Target Concurrency:", optInt32OrDash(run.Scale.TargetConcurrency)})
 	_ = t.Append([]string{"Idle Timeout:", optInt32SecondsOrDash(run.Scale.IdleTimeoutSeconds)})
-	_ = t.Append([]string{"Startup Timeout:", optInt32SecondsOrDash(run.Scale.StartupTimeoutSeconds)})
 	_ = t.Append([]string{"Created:", run.CreatedAt.Format(timeLayout)})
 	_ = t.Append([]string{"Updated:", run.UpdatedAt.Format(timeLayout)})
 	return t.Render()
