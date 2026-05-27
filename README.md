@@ -432,6 +432,7 @@ s0 sandbox service update --services-file services.yaml -s <sandbox-id>
 
 # Function service: public ingress is still configured as a sandbox service.
 # The function source is carried in the service config and executed by procd.
+# The same service config can serve HTTP, SSE, and WebSocket routes.
 cat <<'EOF' > function-services.yaml
 services:
   - id: handler
