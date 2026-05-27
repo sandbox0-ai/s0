@@ -429,6 +429,36 @@ services:
           resume: true
 EOF
 s0 sandbox service update --services-file services.yaml -s <sandbox-id>
+
+# Function service: public ingress is still configured as a sandbox service.
+# The function source is carried in the service config and executed by procd.
+cat <<'EOF' > function-services.yaml
+services:
+  - id: handler
+    port: 49983
+    runtime:
+      type: function
+      function:
+        runtime: python
+        handler: handler
+        source:
+          type: inline
+          filename: main.py
+          code: |
+            def handler(request):
+                return {
+                    "status": 200,
+                    "headers": {"content-type": "text/plain"},
+                    "body": "ok",
+                }
+    ingress:
+      public: true
+      routes:
+        - id: handler
+          path_prefix: /
+          resume: true
+EOF
+s0 sandbox service update --services-file function-services.yaml -s <sandbox-id>
 ```
 
 ### Template
