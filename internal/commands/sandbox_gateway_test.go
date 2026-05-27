@@ -56,6 +56,62 @@ services:
 	}
 }
 
+func TestParseSandboxServicesSupportsFunctionRuntime(t *testing.T) {
+	services, err := parseSandboxServices([]byte(`
+services:
+  - id: handler
+    port: 49983
+    runtime:
+      type: function
+      function:
+        runtime: python
+        handler: handler
+        source:
+          type: inline
+          filename: main.py
+          code: |
+            def handler(request):
+                return {"status": 200, "body": "ok"}
+    ingress:
+      public: true
+      routes:
+        - id: handler
+          path_prefix: /
+          resume: true
+`))
+	if err != nil {
+		t.Fatalf("parseSandboxServices() error = %v", err)
+	}
+
+	if len(services.Services) != 1 {
+		t.Fatalf("services count = %d, want 1", len(services.Services))
+	}
+	service := services.Services[0]
+	if service.Port != 49983 {
+		t.Fatalf("port = %d, want 49983", service.Port)
+	}
+	runtime, ok := service.Runtime.Get()
+	if !ok {
+		t.Fatal("runtime not set")
+	}
+	if runtime.Type != apispec.SandboxAppServiceRuntimeTypeFunction {
+		t.Fatalf("runtime type = %q, want function", runtime.Type)
+	}
+	fn, ok := runtime.Function.Get()
+	if !ok {
+		t.Fatal("function config not set")
+	}
+	if fn.Runtime != apispec.SandboxFunctionRuntimePython {
+		t.Fatalf("function runtime = %q, want python", fn.Runtime)
+	}
+	if fn.Source.Type != apispec.SandboxFunctionSourceTypeInline {
+		t.Fatalf("source type = %q, want inline", fn.Source.Type)
+	}
+	if fn.Source.Code == "" {
+		t.Fatal("source code is empty")
+	}
+}
+
 func TestReadSandboxServicesFileRequiresPath(t *testing.T) {
 	_, err := readSandboxServicesFile("")
 	if err == nil {
