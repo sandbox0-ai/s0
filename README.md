@@ -436,7 +436,6 @@ s0 sandbox service update --services-file services.yaml -s <sandbox-id>
 cat <<'EOF' > function-services.yaml
 services:
   - id: handler
-    port: 49983
     runtime:
       type: function
       function:
@@ -444,7 +443,6 @@ services:
         handler: handler
         source:
           type: inline
-          filename: main.py
           code: |
             def handler(request):
                 return {

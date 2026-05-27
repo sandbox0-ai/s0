@@ -120,6 +120,10 @@ github.com/sandbox0-ai/sdk-go v0.5.2 h1:ZvY2kSXIPpjt+mSEY0f2nVNHph7WURDxWiW6OfGx
 github.com/sandbox0-ai/sdk-go v0.5.2/go.mod h1:aF/r6jQLiVTuFP3628yokTxOUoZESEDB50txzDrOgq4=
 github.com/sandbox0-ai/sdk-go v0.5.4-0.20260527110315-4443e275ae3d h1:vsWrPduadgZhJWSbRtMbw26/6IM8ZkXe9KkCUCDLHO0=
 github.com/sandbox0-ai/sdk-go v0.5.4-0.20260527110315-4443e275ae3d/go.mod h1:aF/r6jQLiVTuFP3628yokTxOUoZESEDB50txzDrOgq4=
+github.com/sandbox0-ai/sdk-go v0.5.4-0.20260527195915-679deda7f705 h1:3FxSRESVGqHJOnoPUhzCUX5fbuZQTfx6YwajXpBs/vw=
+github.com/sandbox0-ai/sdk-go v0.5.4-0.20260527195915-679deda7f705/go.mod h1:aF/r6jQLiVTuFP3628yokTxOUoZESEDB50txzDrOgq4=
+github.com/sandbox0-ai/sdk-go v0.5.5-0.20260527200343-5ea1731c8d94 h1:EySzpWFjvRlhsx8E7G+HxRaJQlugPLfp3/BGdpjn+nU=
+github.com/sandbox0-ai/sdk-go v0.5.5-0.20260527200343-5ea1731c8d94/go.mod h1:aF/r6jQLiVTuFP3628yokTxOUoZESEDB50txzDrOgq4=
 github.com/segmentio/asm v1.2.1 h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=
 github.com/segmentio/asm v1.2.1/go.mod h1:BqMnlJP91P8d+4ibuonYZw9mfnzI9HfxselHZr5aAcs=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
