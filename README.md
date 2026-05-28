@@ -400,6 +400,7 @@ s0 sandbox network update --mode block-all \
 ```bash
 s0 sandbox service get -s <sandbox-id>
 s0 sandbox service update --services-file services.yaml -s <sandbox-id>
+s0 sandbox service delete <service-id> -s <sandbox-id>
 s0 sandbox service clear -s <sandbox-id>
 
 # Claim-time sandbox services via sandbox config file
