@@ -19,7 +19,7 @@ var (
 var sandboxGatewayCmd = &cobra.Command{
 	Use:   "service",
 	Short: "Manage sandbox services",
-	Long:  `Get, update, and clear canonical services for a sandbox.`,
+	Long:  `Get, update, delete, and clear canonical services for a sandbox.`,
 }
 
 // sandboxGatewayGetCmd gets sandbox services.
@@ -103,6 +103,45 @@ var sandboxGatewayClearCmd = &cobra.Command{
 	},
 }
 
+// sandboxGatewayDeleteCmd deletes one sandbox service by replacing the service list.
+var sandboxGatewayDeleteCmd = &cobra.Command{
+	Use:   "delete <service-id>",
+	Short: "Delete a sandbox service",
+	Long:  `Delete one canonical sandbox service by service ID.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		serviceID := args[0]
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		sandbox := client.Sandbox(gatewaySandboxID)
+		current, err := sandbox.GetServices(cmd.Context())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting sandbox services: %v\n", err)
+			os.Exit(1)
+		}
+		remaining, err := deleteSandboxServiceByID(current.Services, serviceID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error deleting sandbox service: %v\n", err)
+			os.Exit(1)
+		}
+
+		result, err := sandbox.UpdateServices(cmd.Context(), remaining)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error updating sandbox services: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := getFormatter().Format(os.Stdout, result); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
 func readSandboxServicesFile(path string) (*apispec.SandboxServicesUpdateRequest, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("--services-file is required")
@@ -128,10 +167,42 @@ func parseSandboxServices(data []byte) (*apispec.SandboxServicesUpdateRequest, e
 	return &services, nil
 }
 
+func deleteSandboxServiceByID(services []apispec.SandboxAppServiceView, serviceID string) ([]apispec.SandboxAppService, error) {
+	serviceID = strings.TrimSpace(serviceID)
+	if serviceID == "" {
+		return nil, fmt.Errorf("service ID is required")
+	}
+	remaining := make([]apispec.SandboxAppService, 0, len(services))
+	found := false
+	for _, service := range services {
+		if service.ID == serviceID {
+			found = true
+			continue
+		}
+		remaining = append(remaining, sandboxServiceViewToService(service))
+	}
+	if !found {
+		return nil, fmt.Errorf("service %q not found", serviceID)
+	}
+	return remaining, nil
+}
+
+func sandboxServiceViewToService(service apispec.SandboxAppServiceView) apispec.SandboxAppService {
+	return apispec.SandboxAppService{
+		ID:          service.ID,
+		DisplayName: service.DisplayName,
+		Port:        service.Port,
+		Runtime:     service.Runtime,
+		Ingress:     service.Ingress,
+		HealthCheck: service.HealthCheck,
+	}
+}
+
 func init() {
 	sandboxGatewayCmd.AddCommand(sandboxGatewayGetCmd)
 	sandboxGatewayCmd.AddCommand(sandboxGatewayUpdateCmd)
 	sandboxGatewayCmd.AddCommand(sandboxGatewayClearCmd)
+	sandboxGatewayCmd.AddCommand(sandboxGatewayDeleteCmd)
 
 	sandboxGatewayCmd.PersistentFlags().StringVarP(&gatewaySandboxID, "sandbox-id", "s", "", "sandbox ID (required)")
 	_ = sandboxGatewayCmd.MarkPersistentFlagRequired("sandbox-id")

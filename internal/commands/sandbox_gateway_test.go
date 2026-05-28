@@ -118,3 +118,55 @@ func TestReadSandboxServicesFileRequiresPath(t *testing.T) {
 		t.Fatal("readSandboxServicesFile() error = nil, want error")
 	}
 }
+
+func TestDeleteSandboxServiceByID(t *testing.T) {
+	runtime := apispec.SandboxAppServiceRuntime{
+		Type: apispec.SandboxAppServiceRuntimeTypeFunction,
+		Function: apispec.NewOptSandboxFunction(apispec.SandboxFunction{
+			Runtime: apispec.SandboxFunctionRuntimePython,
+			Handler: apispec.NewOptString("handler"),
+			Source: apispec.SandboxFunctionSource{
+				Type: apispec.SandboxFunctionSourceTypeInline,
+				Code: "def handler(request):\n    return {'status': 200}\n",
+			},
+		}),
+	}
+	remaining, err := deleteSandboxServiceByID([]apispec.SandboxAppServiceView{
+		{
+			ID:      "api",
+			Port:    8080,
+			Ingress: apispec.SandboxAppServiceIngress{Public: true},
+		},
+		{
+			ID:      "hello",
+			Port:    49983,
+			Runtime: apispec.NewOptSandboxAppServiceRuntime(runtime),
+			Ingress: apispec.SandboxAppServiceIngress{
+				Public: true,
+				Routes: []apispec.SandboxAppServiceRoute{{
+					ID:         "hello",
+					PathPrefix: apispec.NewOptString("/hello"),
+					Resume:     true,
+				}},
+			},
+			Publishable: true,
+			PublicURL:   apispec.NewOptString("https://example.sandbox0.app"),
+		},
+	}, "hello")
+	if err != nil {
+		t.Fatalf("deleteSandboxServiceByID() error = %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Fatalf("remaining count = %d, want 1", len(remaining))
+	}
+	if remaining[0].ID != "api" || remaining[0].Port != 8080 {
+		t.Fatalf("remaining service = %#v, want api service", remaining[0])
+	}
+}
+
+func TestDeleteSandboxServiceByIDNotFound(t *testing.T) {
+	_, err := deleteSandboxServiceByID([]apispec.SandboxAppServiceView{{ID: "api"}}, "missing")
+	if err == nil {
+		t.Fatal("deleteSandboxServiceByID() error = nil, want error")
+	}
+}
