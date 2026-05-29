@@ -478,7 +478,7 @@ s0 template delete <template-id>
 ```bash
 s0 volume list
 s0 volume get <volume-id>
-s0 volume create [--access-mode RWO|RWX]
+s0 volume create [--access-mode RWO|ROX|RWX] [--snapshot-id <snapshot-id>]
 s0 volume delete <volume-id> [--force]
 ```
 

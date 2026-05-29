@@ -11,8 +11,9 @@ import (
 
 // Volume create flags.
 var (
-	volumeAccessMode  string
-	volumeDeleteForce bool
+	volumeAccessMode       string
+	volumeCreateSnapshotID string
+	volumeDeleteForce      bool
 )
 
 // volumeCmd represents the volume command.
@@ -87,11 +88,7 @@ var volumeCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		req := apispec.CreateSandboxVolumeRequest{}
-
-		if volumeAccessMode != "" {
-			req.AccessMode = apispec.NewOptVolumeAccessMode(apispec.VolumeAccessMode(volumeAccessMode))
-		}
+		req := buildCreateVolumeRequest(volumeAccessMode, volumeCreateSnapshotID)
 
 		volume, err := client.CreateVolume(cmd.Context(), req)
 		if err != nil {
@@ -104,6 +101,19 @@ var volumeCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
+}
+
+func buildCreateVolumeRequest(accessMode, snapshotID string) apispec.CreateSandboxVolumeRequest {
+	req := apispec.CreateSandboxVolumeRequest{}
+
+	if accessMode != "" {
+		req.AccessMode = apispec.NewOptVolumeAccessMode(apispec.VolumeAccessMode(accessMode))
+	}
+	if snapshotID != "" {
+		req.SnapshotID = apispec.NewOptString(snapshotID)
+	}
+
+	return req
 }
 
 // volumeDeleteCmd deletes a volume.
@@ -179,9 +189,10 @@ func init() {
 	volumeCmd.AddCommand(volumeForkCmd)
 
 	// Volume create flags
-	volumeCreateCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode (RWO or RWX)")
+	volumeCreateCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode (RWO, ROX, or RWX)")
+	volumeCreateCmd.Flags().StringVar(&volumeCreateSnapshotID, "snapshot-id", "", "snapshot ID used to initialize the new volume")
 	volumeDeleteCmd.Flags().BoolVar(&volumeDeleteForce, "force", false, "force delete volume even if it has active mounts")
 
 	// Volume fork flags
-	volumeForkCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode override (RWO or RWX)")
+	volumeForkCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode override (RWO, ROX, or RWX)")
 }
