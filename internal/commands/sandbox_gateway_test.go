@@ -34,7 +34,7 @@ services:
 		t.Fatalf("services count = %d, want 1", len(services.Services))
 	}
 	service := services.Services[0]
-	if service.ID != "app" || service.Port != 8080 {
+	if service.ID != "app" || service.Port.Or(0) != 8080 {
 		t.Fatalf("service = %#v, want id app and port 8080", service)
 	}
 	if !service.Ingress.Public || len(service.Ingress.Routes) != 1 {
@@ -60,7 +60,6 @@ func TestParseSandboxServicesSupportsFunctionRuntime(t *testing.T) {
 	services, err := parseSandboxServices([]byte(`
 services:
   - id: handler
-    port: 49983
     runtime:
       type: function
       function:
@@ -68,7 +67,6 @@ services:
         handler: handler
         source:
           type: inline
-          filename: main.py
           code: |
             def handler(request):
                 return {"status": 200, "body": "ok"}
@@ -87,8 +85,8 @@ services:
 		t.Fatalf("services count = %d, want 1", len(services.Services))
 	}
 	service := services.Services[0]
-	if service.Port != 49983 {
-		t.Fatalf("port = %d, want 49983", service.Port)
+	if service.Port.Set {
+		t.Fatalf("port = %#v, want unset for function service", service.Port)
 	}
 	runtime, ok := service.Runtime.Get()
 	if !ok {

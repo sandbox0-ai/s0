@@ -240,6 +240,13 @@ func intOrDash(value int) string {
 	return fmt.Sprintf("%d", value)
 }
 
+func optInt32OrDash(value apispec.OptInt32) string {
+	if !value.Set || value.Value == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%d", value.Value)
+}
+
 func (f *TableFormatter) formatSnapshot(w io.Writer, s *apispec.Snapshot) error {
 	t := newTable(w)
 	_ = t.Append([]string{"ID:", s.ID})
@@ -678,7 +685,7 @@ func (f *TableFormatter) formatSandboxServices(w io.Writer, resp *sandbox0.Sandb
 		if len(routes) == 0 {
 			_ = t.Append([]string{
 				service.ID,
-				fmt.Sprintf("%d", service.Port),
+				optInt32OrDash(service.Port),
 				fmt.Sprintf("%v", service.Ingress.Public),
 				service.PublicURL.Or("-"),
 				"-",
@@ -695,7 +702,7 @@ func (f *TableFormatter) formatSandboxServices(w io.Writer, resp *sandbox0.Sandb
 		for _, route := range routes {
 			_ = t.Append([]string{
 				service.ID,
-				fmt.Sprintf("%d", service.Port),
+				optInt32OrDash(service.Port),
 				fmt.Sprintf("%v", service.Ingress.Public),
 				service.PublicURL.Or("-"),
 				route.ID,

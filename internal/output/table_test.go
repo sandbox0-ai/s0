@@ -208,7 +208,7 @@ func TestTableFormatterFormatSandboxServicesIncludesPublicURL(t *testing.T) {
 		Services: []apispec.SandboxAppServiceView{
 			{
 				ID:   "api",
-				Port: 8080,
+				Port: apispec.NewOptInt32(8080),
 				Ingress: apispec.SandboxAppServiceIngress{
 					Public: true,
 					Routes: []apispec.SandboxAppServiceRoute{
