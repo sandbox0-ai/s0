@@ -132,12 +132,12 @@ func TestDeleteSandboxServiceByID(t *testing.T) {
 	remaining, err := deleteSandboxServiceByID([]apispec.SandboxAppServiceView{
 		{
 			ID:      "api",
-			Port:    8080,
+			Port:    apispec.NewOptInt32(8080),
 			Ingress: apispec.SandboxAppServiceIngress{Public: true},
 		},
 		{
 			ID:      "hello",
-			Port:    49983,
+			Port:    apispec.NewOptInt32(49983),
 			Runtime: apispec.NewOptSandboxAppServiceRuntime(runtime),
 			Ingress: apispec.SandboxAppServiceIngress{
 				Public: true,
@@ -157,7 +157,7 @@ func TestDeleteSandboxServiceByID(t *testing.T) {
 	if len(remaining) != 1 {
 		t.Fatalf("remaining count = %d, want 1", len(remaining))
 	}
-	if remaining[0].ID != "api" || remaining[0].Port != 8080 {
+	if remaining[0].ID != "api" || remaining[0].Port.Or(0) != 8080 {
 		t.Fatalf("remaining service = %#v, want api service", remaining[0])
 	}
 }

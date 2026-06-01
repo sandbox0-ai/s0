@@ -77,3 +77,81 @@ func TestBuildTemplateCreateRequestPreservesWarmProcessSpec(t *testing.T) {
 		t.Fatalf("WarmProcesses[0].EnvVars = %+v, want PORT and WORKSPACE_DIR", envVars)
 	}
 }
+
+func TestBuildTemplateCreateRequestPreservesSystemTemplateFields(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	specFile := filepath.Join(dir, "dins-template.yaml")
+	specYAML := `spec:
+  displayName: Docker in Sandbox
+  mainContainer:
+    image: sandbox0ai/otemplates:default-v0.1.0
+    imagePullPolicy: IfNotPresent
+    resources:
+      cpu: "2"
+      memory: 4Gi
+      ephemeralStorage: 20Gi
+    securityContext:
+      privileged: true
+      allowPrivilegeEscalation: true
+  pod:
+    emptyDirMounts:
+      - mountPath: /var/lib/docker
+        sizeLimit: 20Gi
+  warmProcesses:
+    - name: dockerd
+      type: cmd
+      command:
+        - /usr/local/bin/sandbox0-dockerd-entrypoint
+  network:
+    mode: allow-all
+  pool:
+    minIdle: 1
+    maxIdle: 5
+`
+	if err := os.WriteFile(specFile, []byte(specYAML), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	req, err := buildTemplateCreateRequest("dins", specFile)
+	if err != nil {
+		t.Fatalf("buildTemplateCreateRequest() error = %v", err)
+	}
+
+	main, ok := req.Spec.MainContainer.Get()
+	if !ok {
+		t.Fatal("mainContainer should be set")
+	}
+	if main.Image != "sandbox0ai/otemplates:default-v0.1.0" {
+		t.Fatalf("mainContainer.image = %q, want default image", main.Image)
+	}
+	if policy, ok := main.ImagePullPolicy.Get(); !ok || policy != "IfNotPresent" {
+		t.Fatalf("mainContainer.imagePullPolicy = %q, want IfNotPresent", policy)
+	}
+	securityContext, ok := main.SecurityContext.Get()
+	if !ok {
+		t.Fatal("mainContainer.securityContext should be set")
+	}
+	privileged, ok := securityContext.Privileged.Get()
+	if !ok || !privileged {
+		t.Fatalf("securityContext.privileged = %v, want true", privileged)
+	}
+	allowPrivilegeEscalation, ok := securityContext.AllowPrivilegeEscalation.Get()
+	if !ok || !allowPrivilegeEscalation {
+		t.Fatalf("securityContext.allowPrivilegeEscalation = %v, want true", allowPrivilegeEscalation)
+	}
+	pod, ok := req.Spec.Pod.Get()
+	if !ok {
+		t.Fatal("pod should be set")
+	}
+	if len(pod.EmptyDirMounts) != 1 {
+		t.Fatalf("len(pod.emptyDirMounts) = %d, want 1", len(pod.EmptyDirMounts))
+	}
+	if got := pod.EmptyDirMounts[0].MountPath; got != "/var/lib/docker" {
+		t.Fatalf("pod.emptyDirMounts[0].mountPath = %q, want /var/lib/docker", got)
+	}
+	if got, ok := pod.EmptyDirMounts[0].SizeLimit.Get(); !ok || got != "20Gi" {
+		t.Fatalf("pod.emptyDirMounts[0].sizeLimit = %q, want 20Gi", got)
+	}
+}
