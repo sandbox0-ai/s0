@@ -91,6 +91,7 @@ hard_ttl: 120
 		resetSandboxFlagsForTest()
 		sandboxConfigFile = writeTempFile(t, `
 template: from-file
+filesystem_id: fs_123
 mounts:
   - sandboxvolume_id: vol_123
     mount_point: /workspace/data
@@ -105,6 +106,10 @@ config:
 		template, ok := request.Template.Get()
 		if !ok || template != "from-file" {
 			t.Fatalf("template = %q, want from-file", template)
+		}
+		filesystemID, ok := request.FilesystemID.Get()
+		if !ok || filesystemID != "fs_123" {
+			t.Fatalf("filesystem_id = %q, want fs_123", filesystemID)
 		}
 		if len(request.Mounts) != 1 {
 			t.Fatalf("mount count = %d, want 1", len(request.Mounts))
@@ -125,6 +130,21 @@ config:
 		}
 		if len(request.Mounts) != 1 {
 			t.Fatalf("mount count = %d, want 1", len(request.Mounts))
+		}
+	})
+
+	t.Run("filesystem flag sets claim filesystem id", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		sandboxTemplate = "default"
+		sandboxFilesystemID = "fs_flag"
+
+		request, err := buildSandboxCreateRequest()
+		if err != nil {
+			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
+		}
+		filesystemID, ok := request.FilesystemID.Get()
+		if !ok || filesystemID != "fs_flag" {
+			t.Fatalf("filesystem_id = %q, want fs_flag", filesystemID)
 		}
 	})
 
@@ -236,6 +256,22 @@ auto_resume: false
 	})
 }
 
+func TestSandboxFilesystemCommandRegistration(t *testing.T) {
+	subcommands := map[string]bool{}
+	for _, cmd := range sandboxCmd.Commands() {
+		subcommands[cmd.Name()] = true
+	}
+
+	for _, name := range []string{"clean", "restore"} {
+		if !subcommands[name] {
+			t.Fatalf("expected sandbox subcommand %q to be registered", name)
+		}
+	}
+	if flag := sandboxCreateCmd.Flags().Lookup("filesystem-id"); flag == nil {
+		t.Fatal("sandbox create --filesystem-id flag is not registered")
+	}
+}
+
 func writeTempFile(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -251,6 +287,7 @@ func resetSandboxFlagsForTest() {
 	sandboxHardTTL = 0
 	sandboxConfigFile = ""
 	sandboxMounts = nil
+	sandboxFilesystemID = ""
 	sandboxListStatus = ""
 	sandboxListTemplateID = ""
 	sandboxListPaused = ""

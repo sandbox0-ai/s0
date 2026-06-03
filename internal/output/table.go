@@ -37,6 +37,14 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSnapshots(w, v)
 	case *apispec.Snapshot:
 		return f.formatSnapshot(w, v)
+	case []apispec.SandboxFilesystem:
+		return f.formatFilesystems(w, v)
+	case *apispec.SandboxFilesystem:
+		return f.formatFilesystem(w, v)
+	case []apispec.SandboxFilesystemSnapshot:
+		return f.formatFilesystemSnapshots(w, v)
+	case *apispec.SandboxFilesystemSnapshot:
+		return f.formatFilesystemSnapshot(w, v)
 	case *apispec.Sandbox:
 		return f.formatSandbox(w, v)
 	case *apispec.SandboxStatus:
@@ -260,6 +268,80 @@ func (f *TableFormatter) formatSnapshot(w io.Writer, s *apispec.Snapshot) error 
 	return t.Render()
 }
 
+func (f *TableFormatter) formatFilesystems(w io.Writer, filesystems []apispec.SandboxFilesystem) error {
+	if len(filesystems) == 0 {
+		_, _ = fmt.Fprintln(w, "No filesystems found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "TEMPLATE ID", "STATE", "BASE IMAGE DIGEST", "UPDATED AT"})
+
+	for _, filesystem := range filesystems {
+		_ = t.Append([]string{
+			filesystem.ID,
+			formatOptNilString(filesystem.TemplateID),
+			string(filesystem.State),
+			valueOrDash(filesystem.BaseImageDigest),
+			formatTimestamp(filesystem.UpdatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFilesystem(w io.Writer, filesystem *apispec.SandboxFilesystem) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", filesystem.ID})
+	_ = t.Append([]string{"Team ID:", filesystem.TeamID})
+	_ = t.Append([]string{"User ID:", filesystem.UserID})
+	_ = t.Append([]string{"Source Filesystem ID:", formatOptNilString(filesystem.SourceFilesystemID)})
+	_ = t.Append([]string{"Template ID:", formatOptNilString(filesystem.TemplateID)})
+	_ = t.Append([]string{"Base Image Digest:", valueOrDash(filesystem.BaseImageDigest)})
+	_ = t.Append([]string{"S0FS Head:", valueOrDash(filesystem.S0fsHead)})
+	_ = t.Append([]string{"State:", string(filesystem.State)})
+	_ = t.Append([]string{"Deleted At:", formatOptNilDateTime(filesystem.DeletedAt)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(filesystem.CreatedAt)})
+	_ = t.Append([]string{"Updated At:", formatTimestamp(filesystem.UpdatedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFilesystemSnapshots(w io.Writer, snapshots []apispec.SandboxFilesystemSnapshot) error {
+	if len(snapshots) == 0 {
+		_, _ = fmt.Fprintln(w, "No filesystem snapshots found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "FILESYSTEM ID", "NAME", "SIZE", "CREATED AT"})
+
+	for _, snapshot := range snapshots {
+		_ = t.Append([]string{
+			snapshot.ID,
+			snapshot.FilesystemID,
+			valueOrDash(snapshot.Name),
+			fmt.Sprintf("%d bytes", snapshot.SizeBytes),
+			formatTimestamp(snapshot.CreatedAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatFilesystemSnapshot(w io.Writer, snapshot *apispec.SandboxFilesystemSnapshot) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", snapshot.ID})
+	_ = t.Append([]string{"Filesystem ID:", snapshot.FilesystemID})
+	_ = t.Append([]string{"Team ID:", snapshot.TeamID})
+	_ = t.Append([]string{"User ID:", snapshot.UserID})
+	_ = t.Append([]string{"Base Image Digest:", valueOrDash(snapshot.BaseImageDigest)})
+	_ = t.Append([]string{"S0FS Head:", valueOrDash(snapshot.S0fsHead)})
+	_ = t.Append([]string{"Name:", valueOrDash(snapshot.Name)})
+	_ = t.Append([]string{"Description:", formatOptString(snapshot.Description)})
+	_ = t.Append([]string{"Size:", fmt.Sprintf("%d bytes", snapshot.SizeBytes)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(snapshot.CreatedAt)})
+	_ = t.Append([]string{"Expires At:", formatOptNilDateTime(snapshot.ExpiresAt)})
+	return t.Render()
+}
+
 func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 	t := newTable(w)
 	_ = t.Append([]string{"ID:", s.ID})
@@ -268,9 +350,10 @@ func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 	if v, ok := s.UserID.Get(); ok {
 		_ = t.Append([]string{"User ID:", v})
 	}
+	_ = t.Append([]string{"Filesystem ID:", formatOptNilString(s.FilesystemID)})
 	_ = t.Append([]string{"Status:", string(s.Status)})
 	_ = t.Append([]string{"Paused:", fmt.Sprintf("%v", s.Paused)})
-	_ = t.Append([]string{"Pod Name:", s.PodName})
+	_ = t.Append([]string{"Pod Name:", formatNilString(s.PodName)})
 	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format(timeLayout)})
 	_ = t.Append([]string{"Soft Expires At:", formatTimestamp(s.ExpiresAt)})
 	_ = t.Append([]string{"Hard Expires At:", formatTimestamp(s.HardExpiresAt)})
@@ -399,6 +482,9 @@ func (f *TableFormatter) formatSDKSandbox(w io.Writer, s *sandbox0.Sandbox) erro
 	}
 	if s.PodName != "" {
 		_ = t.Append([]string{"Pod Name:", s.PodName})
+	}
+	if s.FilesystemID != nil {
+		_ = t.Append([]string{"Filesystem ID:", *s.FilesystemID})
 	}
 	return t.Render()
 }
@@ -1008,6 +1094,16 @@ func formatOptInt64(v apispec.OptInt64) string {
 }
 
 func formatOptNilString(v apispec.OptNilString) string {
+	if v.IsNull() {
+		return "-"
+	}
+	if s, ok := v.Get(); ok && s != "" {
+		return s
+	}
+	return "-"
+}
+
+func formatNilString(v apispec.NilString) string {
 	if v.IsNull() {
 		return "-"
 	}

@@ -13,11 +13,12 @@ import (
 )
 
 var (
-	sandboxTemplate   string
-	sandboxTTL        int32
-	sandboxHardTTL    int32
-	sandboxConfigFile string
-	sandboxMounts     []string
+	sandboxTemplate     string
+	sandboxTTL          int32
+	sandboxHardTTL      int32
+	sandboxConfigFile   string
+	sandboxMounts       []string
+	sandboxFilesystemID string
 	// list flags
 	sandboxListStatus     string
 	sandboxListTemplateID string
@@ -177,6 +178,62 @@ var sandboxResumeCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Resume requested for sandbox %s\n", sandboxID)
+	},
+}
+
+// sandboxCleanCmd cleans a sandbox runtime while preserving durable state.
+var sandboxCleanCmd = &cobra.Command{
+	Use:   "clean <sandbox-id>",
+	Short: "Clean a sandbox runtime",
+	Long:  `Clean a sandbox runtime pod while preserving durable sandbox state.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		sandboxID := args[0]
+
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		sandbox, err := client.CleanSandbox(cmd.Context(), sandboxID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error cleaning sandbox: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := getFormatter().Format(os.Stdout, sandbox); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
+// sandboxRestoreCmd restores a cleaned sandbox runtime.
+var sandboxRestoreCmd = &cobra.Command{
+	Use:   "restore <sandbox-id>",
+	Short: "Restore a cleaned sandbox",
+	Long:  `Restore a cleaned sandbox runtime from its durable sandbox state.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		sandboxID := args[0]
+
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		sandbox, err := client.RestoreSandbox(cmd.Context(), sandboxID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error restoring sandbox: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := getFormatter().Format(os.Stdout, sandbox); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
@@ -383,12 +440,15 @@ func init() {
 	sandboxCreateCmd.Flags().Int32Var(&sandboxTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
 	sandboxCreateCmd.Flags().StringArrayVar(&sandboxMounts, "mount", nil, "bootstrap mount in the form <sandboxvolume-id>:/absolute/path (repeatable)")
+	sandboxCreateCmd.Flags().StringVar(&sandboxFilesystemID, "filesystem-id", "", "persistent sandbox filesystem ID")
 
 	sandboxCmd.AddCommand(sandboxCreateCmd)
 	sandboxCmd.AddCommand(sandboxGetCmd)
 	sandboxCmd.AddCommand(sandboxDeleteCmd)
 	sandboxCmd.AddCommand(sandboxPauseCmd)
 	sandboxCmd.AddCommand(sandboxResumeCmd)
+	sandboxCmd.AddCommand(sandboxCleanCmd)
+	sandboxCmd.AddCommand(sandboxRestoreCmd)
 	sandboxCmd.AddCommand(sandboxRefreshCmd)
 	sandboxCmd.AddCommand(sandboxStatusCmd)
 	sandboxCmd.AddCommand(sandboxUpdateCmd)
@@ -429,6 +489,9 @@ func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
 	}
 	if sandboxTemplate != "" {
 		request.Template = apispec.NewOptString(sandboxTemplate)
+	}
+	if sandboxFilesystemID != "" {
+		request.FilesystemID = apispec.NewOptNilString(sandboxFilesystemID)
 	}
 
 	configOverrides, hasConfigOverrides, err := buildSandboxCreateConfigOverrides()
@@ -574,7 +637,7 @@ func isSandboxCreateClaimRequest(data []byte) (bool, error) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return false, fmt.Errorf("parse sandbox create file: %w", err)
 	}
-	for _, key := range []string{"template", "config", "mounts"} {
+	for _, key := range []string{"template", "config", "mounts", "filesystem_id"} {
 		if _, ok := raw[key]; ok {
 			return true, nil
 		}

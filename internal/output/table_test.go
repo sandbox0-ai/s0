@@ -163,14 +163,15 @@ func TestTableFormatterFormatRegion(t *testing.T) {
 func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 	formatter := &TableFormatter{}
 	sandbox := &apispec.Sandbox{
-		ID:         "sb_123",
-		TemplateID: "default",
-		TeamID:     "team_123",
-		Status:     "running",
-		Paused:     false,
-		PowerState: apispec.SandboxPowerState{},
-		AutoResume: true,
-		PodName:    "sb-123-pod",
+		ID:           "sb_123",
+		TemplateID:   "default",
+		TeamID:       "team_123",
+		Status:       "running",
+		Paused:       false,
+		PowerState:   apispec.SandboxPowerState{},
+		AutoResume:   true,
+		PodName:      apispec.NilString{Value: "sb-123-pod"},
+		FilesystemID: apispec.NewOptNilString("fs_123"),
 		SSH: apispec.NewOptSandboxSSHConnection(apispec.SandboxSSHConnection{
 			Host:     "aws-us-east-1.ssh.sandbox0.app",
 			Port:     30222,
@@ -194,6 +195,118 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		"30222",
 		"SSH Username:",
 		"sb_123",
+		"Filesystem ID:",
+		"fs_123",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFilesystem(t *testing.T) {
+	formatter := &TableFormatter{}
+	filesystem := &apispec.SandboxFilesystem{
+		ID:                 "fs_123",
+		TeamID:             "team_123",
+		UserID:             "user_123",
+		SourceFilesystemID: apispec.NewOptNilString("fs_source"),
+		TemplateID:         apispec.NewOptNilString("ubuntu-24"),
+		BaseImageDigest:    "sha256:base",
+		S0fsHead:           "manifests/0001.json",
+		State:              apispec.SandboxFilesystemStateAvailable,
+		CreatedAt:          time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC),
+		UpdatedAt:          time.Date(2026, 6, 3, 13, 0, 0, 0, time.UTC),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, filesystem); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID:",
+		"fs_123",
+		"Source Filesystem ID:",
+		"fs_source",
+		"Template ID:",
+		"ubuntu-24",
+		"Base Image Digest:",
+		"sha256:base",
+		"S0FS Head:",
+		"manifests/0001.json",
+		"available",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFilesystemList(t *testing.T) {
+	formatter := &TableFormatter{}
+	filesystems := []apispec.SandboxFilesystem{
+		{
+			ID:              "fs_123",
+			TemplateID:      apispec.NewOptNilString("ubuntu-24"),
+			BaseImageDigest: "sha256:base",
+			State:           apispec.SandboxFilesystemStateAvailable,
+			UpdatedAt:       time.Date(2026, 6, 3, 13, 0, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, filesystems); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID",
+		"TEMPLATE ID",
+		"STATE",
+		"BASE IMAGE DIGEST",
+		"fs_123",
+		"ubuntu-24",
+		"available",
+		"sha256:base",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatFilesystemSnapshot(t *testing.T) {
+	formatter := &TableFormatter{}
+	snapshot := &apispec.SandboxFilesystemSnapshot{
+		ID:              "fssnap_123",
+		FilesystemID:    "fs_123",
+		TeamID:          "team_123",
+		UserID:          "user_123",
+		BaseImageDigest: "sha256:base",
+		S0fsHead:        "manifests/0001.json",
+		Name:            "before-upgrade",
+		Description:     apispec.NewOptString("before package changes"),
+		SizeBytes:       1024,
+		CreatedAt:       time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, snapshot); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID:",
+		"fssnap_123",
+		"Filesystem ID:",
+		"fs_123",
+		"before-upgrade",
+		"before package changes",
+		"1024 bytes",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
