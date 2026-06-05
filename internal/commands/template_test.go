@@ -4,31 +4,24 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
 
-func TestBuildTemplateCreateRequestPreservesWarmProcessSpec(t *testing.T) {
+func TestBuildTemplateCreateRequestPreservesTemplateEnvVars(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	specFile := filepath.Join(dir, "template.yaml")
 	specYAML := `spec:
-  displayName: "Claude Code Warm Process Kind Test"
-  description: "Minimal template for verifying warm process startup"
+  displayName: "Template Env Vars Test"
+  description: "Minimal template for verifying template env vars"
   mainContainer:
     image: cc-demo:test
     resources:
       cpu: "250m"
       memory: 256Mi
-  warmProcesses:
-    - type: cmd
-      alias: claude-code
-      command: ["sh", "-lc", "touch /tmp/cc-warm-ready; tail -f /dev/null"]
-      cwd: /workspace
-      envVars:
-        PORT: "8081"
-        WORKSPACE_DIR: /workspace
+  envVars:
+    PORT: "8081"
+    WORKSPACE_DIR: /workspace
   network:
     mode: allow-all
   pool:
@@ -47,34 +40,16 @@ func TestBuildTemplateCreateRequestPreservesWarmProcessSpec(t *testing.T) {
 	if req.TemplateID != "cc-demo-kind-test" {
 		t.Fatalf("TemplateID = %q, want cc-demo-kind-test", req.TemplateID)
 	}
-	if len(req.Spec.WarmProcesses) != 1 {
-		t.Fatalf("len(Spec.WarmProcesses) = %d, want 1", len(req.Spec.WarmProcesses))
+	displayName, ok := req.Spec.DisplayName.Get()
+	if !ok || displayName != "Template Env Vars Test" {
+		t.Fatalf("DisplayName = %q, want Template Env Vars Test", displayName)
 	}
-
-	process := req.Spec.WarmProcesses[0]
-	if process.Type != apispec.WarmProcessSpecTypeCmd {
-		t.Fatalf("WarmProcesses[0].Type = %q, want cmd", process.Type)
-	}
-	alias, ok := process.Alias.Get()
-	if !ok || alias != "claude-code" {
-		t.Fatalf("WarmProcesses[0].Alias = %q, want claude-code", alias)
-	}
-	if len(process.Command) != 3 {
-		t.Fatalf("len(WarmProcesses[0].Command) = %d, want 3", len(process.Command))
-	}
-	if process.Command[2] != "touch /tmp/cc-warm-ready; tail -f /dev/null" {
-		t.Fatalf("WarmProcesses[0].Command[2] = %q, want warm command", process.Command[2])
-	}
-	cwd, ok := process.Cwd.Get()
-	if !ok || cwd != "/workspace" {
-		t.Fatalf("WarmProcesses[0].Cwd = %q, want /workspace", cwd)
-	}
-	envVars, ok := process.EnvVars.Get()
+	envVars, ok := req.Spec.EnvVars.Get()
 	if !ok {
-		t.Fatal("WarmProcesses[0].EnvVars should be set")
+		t.Fatal("Spec.EnvVars should be set")
 	}
 	if envVars["PORT"] != "8081" || envVars["WORKSPACE_DIR"] != "/workspace" {
-		t.Fatalf("WarmProcesses[0].EnvVars = %+v, want PORT and WORKSPACE_DIR", envVars)
+		t.Fatalf("Spec.EnvVars = %+v, want PORT and WORKSPACE_DIR", envVars)
 	}
 }
 
@@ -99,11 +74,6 @@ func TestBuildTemplateCreateRequestPreservesSystemTemplateFields(t *testing.T) {
     emptyDirMounts:
       - mountPath: /var/lib/docker
         sizeLimit: 20Gi
-  warmProcesses:
-    - name: dockerd
-      type: cmd
-      command:
-        - /usr/local/bin/sandbox0-dockerd-entrypoint
   network:
     mode: allow-all
   pool:
