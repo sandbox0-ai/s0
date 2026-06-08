@@ -168,7 +168,6 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		TeamID:     "team_123",
 		Status:     "running",
 		Paused:     false,
-		PowerState: apispec.SandboxPowerState{},
 		AutoResume: true,
 		PodName:    "sb-123-pod",
 		SSH: apispec.NewOptSandboxSSHConnection(apispec.SandboxSSHConnection{
