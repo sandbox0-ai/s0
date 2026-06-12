@@ -331,7 +331,7 @@ s0 sandbox exec <sandbox-id> --stream -- sh -c 'echo hello && sleep 1 && exit 7'
 ```bash
 s0 sandbox create -t <template-id> -f sandbox-config.yaml
 s0 sandbox network get -s <sandbox-id>
-s0 sandbox network update --mode allow-all|block-all [--allow-cidr <cidr>] [--allow-domain <domain>] [--allow-port <port[/proto]|start-end[/proto]>] [--deny-cidr <cidr>] [--deny-domain <domain>] [--deny-port <port[/proto]|start-end[/proto]>] [--traffic-rule '<json>'] [--credential-rule '<json>'] [--credential-binding '<json>'] -s <sandbox-id>
+s0 sandbox network update --mode allow-all|block-all [--allow-cidr <cidr>] [--allow-domain <domain>] [--allow-port <port[/proto]|start-end[/proto]>] [--deny-cidr <cidr>] [--deny-domain <domain>] [--deny-port <port[/proto]|start-end[/proto]>] [--traffic-rule '<json>'] [--protocol-rule '<json>'] [--credential-rule '<json>'] [--credential-binding '<json>'] -s <sandbox-id>
 s0 sandbox network update --policy-file network.yaml -s <sandbox-id>
 
 # Claim-time network policy via sandbox config file
@@ -375,6 +375,20 @@ egress:
       ports:
         - port: 22
           protocol: tcp
+  protocolRules:
+    - name: api-http-readonly
+      protocol: http
+      domains: [api.example.com]
+      ports:
+        - port: 8080
+          protocol: tcp
+      http:
+        methods:
+          allowed: [GET, HEAD]
+          denied: [POST]
+        paths:
+          allowedPrefixes: [/api/]
+          deniedPrefixes: [/admin/]
 credentialBindings:
   - ref: gh-token
     sourceRef: github-source
@@ -387,9 +401,10 @@ credentialBindings:
 EOF
 s0 sandbox network update --policy-file network.yaml -s <sandbox-id>
 
-# Script-oriented structured flags: allow SSH traffic first, then inject outbound auth for GitHub API
+# Script-oriented structured flags: allow SSH traffic, control HTTP operations, then inject outbound auth for GitHub API
 s0 sandbox network update --mode block-all \
   --traffic-rule '{"name":"allow-ssh","action":"allow","appProtocols":["ssh"],"ports":[{"port":22,"protocol":"tcp"}]}' \
+  --protocol-rule '{"name":"api-http-readonly","protocol":"http","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}],"http":{"methods":{"allowed":["GET","HEAD"],"denied":["POST"]},"paths":{"allowedPrefixes":["/api/"],"deniedPrefixes":["/admin/"]}}}' \
   --credential-binding '{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}' \
   --credential-rule '{"name":"github-auth","credentialRef":"gh-token","protocol":"https","domains":["api.github.com"],"ports":[{"port":443,"protocol":"tcp"}]}' \
   -s <sandbox-id>

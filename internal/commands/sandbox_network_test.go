@@ -90,6 +90,7 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 			},
 			ProtocolRules: []string{
 				`{"name":"docs-mcp","protocol":"mcp","domains":["mcp.example.com"],"ports":[{"port":443,"protocol":"tcp"}],"tlsMode":"terminate-reoriginate","httpMatch":{"methods":["POST"],"paths":["/mcp"]},"mcp":{"tools":{"allowed":["read_file"],"denied":["run_command"]}}}`,
+				`{"name":"api-http-readonly","protocol":"http","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}],"http":{"methods":{"allowed":["GET","HEAD"],"denied":["POST"]},"paths":{"allowed":["/healthz"],"allowedPrefixes":["/api/"],"deniedPrefixes":["/admin/"]}}}`,
 			},
 			CredentialBinds: []string{
 				`{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}`,
@@ -108,8 +109,8 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 		if len(egress.TrafficRules) != 1 {
 			t.Fatalf("trafficRules count = %d, want 1", len(egress.TrafficRules))
 		}
-		if len(egress.ProtocolRules) != 1 {
-			t.Fatalf("protocolRules count = %d, want 1", len(egress.ProtocolRules))
+		if len(egress.ProtocolRules) != 2 {
+			t.Fatalf("protocolRules count = %d, want 2", len(egress.ProtocolRules))
 		}
 		if egress.ProtocolRules[0].Protocol != apispec.ProtocolRuleProtocolMcp {
 			t.Fatalf("protocol rule protocol = %q, want mcp", egress.ProtocolRules[0].Protocol)
@@ -121,6 +122,21 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 		tools, ok := mcp.Tools.Get()
 		if !ok || len(tools.Allowed) != 1 || tools.Allowed[0] != "read_file" {
 			t.Fatalf("mcp tools = %#v, want read_file allowed", mcp.Tools)
+		}
+		if egress.ProtocolRules[1].Protocol != apispec.ProtocolRuleProtocolHTTP {
+			t.Fatalf("protocol rule protocol = %q, want http", egress.ProtocolRules[1].Protocol)
+		}
+		httpRule, ok := egress.ProtocolRules[1].HTTP.Get()
+		if !ok {
+			t.Fatal("http policy not set")
+		}
+		methods, ok := httpRule.Methods.Get()
+		if !ok || len(methods.Allowed) != 2 || methods.Allowed[0] != "GET" || methods.Allowed[1] != "HEAD" {
+			t.Fatalf("http methods = %#v, want GET and HEAD allowed", httpRule.Methods)
+		}
+		paths, ok := httpRule.Paths.Get()
+		if !ok || len(paths.DeniedPrefixes) != 1 || paths.DeniedPrefixes[0] != "/admin/" {
+			t.Fatalf("http paths = %#v, want /admin/ denied prefix", httpRule.Paths)
 		}
 		if len(egress.CredentialRules) != 1 {
 			t.Fatalf("credentialRules count = %d, want 1", len(egress.CredentialRules))
@@ -268,6 +284,20 @@ egress:
         tools:
           allowed: [read_file]
           denied: [run_command]
+    - name: api-http-readonly
+      protocol: http
+      domains: [api.example.com]
+      ports:
+        - port: 8080
+          protocol: tcp
+      http:
+        methods:
+          allowed: [GET, HEAD]
+          denied: [POST]
+        paths:
+          allowed: [/healthz]
+          allowedPrefixes: [/api/]
+          deniedPrefixes: [/admin/]
   credentialRules:
     - name: github-auth
       credentialRef: gh-token
@@ -299,8 +329,19 @@ credentialBindings:
 	if len(egress.TrafficRules) != 1 {
 		t.Fatalf("trafficRules count = %d, want 1", len(egress.TrafficRules))
 	}
-	if len(egress.ProtocolRules) != 1 {
-		t.Fatalf("protocolRules count = %d, want 1", len(egress.ProtocolRules))
+	if len(egress.ProtocolRules) != 2 {
+		t.Fatalf("protocolRules count = %d, want 2", len(egress.ProtocolRules))
+	}
+	if egress.ProtocolRules[1].Protocol != apispec.ProtocolRuleProtocolHTTP {
+		t.Fatalf("protocol rule protocol = %q, want http", egress.ProtocolRules[1].Protocol)
+	}
+	httpRule, ok := egress.ProtocolRules[1].HTTP.Get()
+	if !ok {
+		t.Fatal("http policy not set")
+	}
+	paths, ok := httpRule.Paths.Get()
+	if !ok || len(paths.AllowedPrefixes) != 1 || paths.AllowedPrefixes[0] != "/api/" {
+		t.Fatalf("http paths = %#v, want /api/ allowed prefix", httpRule.Paths)
 	}
 	if len(egress.CredentialRules) != 1 {
 		t.Fatalf("credentialRules count = %d, want 1", len(egress.CredentialRules))
