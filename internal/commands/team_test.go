@@ -46,6 +46,58 @@ func TestTeamCreateCommandDoesNotExposeActivateFlag(t *testing.T) {
 	}
 }
 
+func TestParseTeamMemberRolesUseGeneratedSDKEnums(t *testing.T) {
+	for _, value := range apispec.AddTeamMemberRequestRole("").AllValues() {
+		got, err := parseAddTeamMemberRole(strings.ToUpper(string(value)))
+		if err != nil {
+			t.Fatalf("parseAddTeamMemberRole(%q) error = %v", value, err)
+		}
+		if got != value {
+			t.Fatalf("parseAddTeamMemberRole(%q) = %q, want %q", value, got, value)
+		}
+	}
+
+	for _, value := range apispec.UpdateTeamMemberRequestRole("").AllValues() {
+		got, err := parseUpdateTeamMemberRole(strings.ToUpper(string(value)))
+		if err != nil {
+			t.Fatalf("parseUpdateTeamMemberRole(%q) error = %v", value, err)
+		}
+		if got != value {
+			t.Fatalf("parseUpdateTeamMemberRole(%q) = %q, want %q", value, got, value)
+		}
+	}
+}
+
+func TestParseTeamMemberRoleDefaultsToDeveloper(t *testing.T) {
+	addRole, err := parseAddTeamMemberRole(" ")
+	if err != nil {
+		t.Fatalf("parseAddTeamMemberRole() error = %v", err)
+	}
+	if addRole != apispec.AddTeamMemberRequestRoleDeveloper {
+		t.Fatalf("default add role = %q, want developer", addRole)
+	}
+
+	updateRole, err := parseUpdateTeamMemberRole(" ")
+	if err != nil {
+		t.Fatalf("parseUpdateTeamMemberRole() error = %v", err)
+	}
+	if updateRole != apispec.UpdateTeamMemberRequestRoleDeveloper {
+		t.Fatalf("default update role = %q, want developer", updateRole)
+	}
+}
+
+func TestParseTeamMemberRoleErrorIncludesGeneratedValues(t *testing.T) {
+	_, err := parseAddTeamMemberRole("owner")
+	if err == nil {
+		t.Fatal("expected invalid role error")
+	}
+	for _, want := range []string{"admin", "developer", "builder", "viewer"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err.Error(), want)
+		}
+	}
+}
+
 func TestResolveTeamHomeRegionID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/teams/team-1" {

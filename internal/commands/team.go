@@ -637,29 +637,45 @@ var teamMemberRemoveCmd = &cobra.Command{
 }
 
 func parseAddTeamMemberRole(s string) (apispec.AddTeamMemberRequestRole, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", string(apispec.AddTeamMemberRequestRoleDeveloper):
-		return apispec.AddTeamMemberRequestRoleDeveloper, nil
-	case string(apispec.AddTeamMemberRequestRoleAdmin):
-		return apispec.AddTeamMemberRequestRoleAdmin, nil
-	case string(apispec.AddTeamMemberRequestRoleViewer):
-		return apispec.AddTeamMemberRequestRoleViewer, nil
-	default:
-		return "", fmt.Errorf("invalid --role %q, must be one of: admin, developer, viewer", s)
-	}
+	return parseTeamMemberRole(
+		s,
+		apispec.AddTeamMemberRequestRoleDeveloper,
+		apispec.AddTeamMemberRequestRole("").AllValues(),
+	)
 }
 
 func parseUpdateTeamMemberRole(s string) (apispec.UpdateTeamMemberRequestRole, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", string(apispec.UpdateTeamMemberRequestRoleDeveloper):
-		return apispec.UpdateTeamMemberRequestRoleDeveloper, nil
-	case string(apispec.UpdateTeamMemberRequestRoleAdmin):
-		return apispec.UpdateTeamMemberRequestRoleAdmin, nil
-	case string(apispec.UpdateTeamMemberRequestRoleViewer):
-		return apispec.UpdateTeamMemberRequestRoleViewer, nil
-	default:
-		return "", fmt.Errorf("invalid --role %q, must be one of: admin, developer, viewer", s)
+	return parseTeamMemberRole(
+		s,
+		apispec.UpdateTeamMemberRequestRoleDeveloper,
+		apispec.UpdateTeamMemberRequestRole("").AllValues(),
+	)
+}
+
+func parseTeamMemberRole[T ~string](s string, defaultRole T, values []T) (T, error) {
+	normalized := strings.ToLower(strings.TrimSpace(s))
+	if normalized == "" {
+		return defaultRole, nil
 	}
+	for _, value := range values {
+		if string(value) == normalized {
+			return value, nil
+		}
+	}
+	var zero T
+	return zero, fmt.Errorf("invalid --role %q, must be one of: %s", s, strings.Join(teamMemberRoleNames(values), ", "))
+}
+
+func teamMemberRoleNames[T ~string](values []T) []string {
+	names := make([]string, 0, len(values))
+	for _, value := range values {
+		names = append(names, string(value))
+	}
+	return names
+}
+
+func teamMemberRoleFlagHelp() string {
+	return fmt.Sprintf("member role (%s)", strings.Join(teamMemberRoleNames(apispec.AddTeamMemberRequestRole("").AllValues()), ", "))
 }
 
 func buildCreateTeamRequest(name, slug, homeRegion string) *apispec.CreateTeamRequest {
@@ -701,6 +717,6 @@ func init() {
 	teamUpdateCmd.Flags().StringVar(&teamSlug, "slug", "", "new team slug")
 
 	teamMemberAddCmd.Flags().StringVar(&teamMemberEmail, "email", "", "member email (required)")
-	teamMemberAddCmd.Flags().StringVar(&teamMemberRole, "role", "developer", "member role (admin, developer, viewer)")
-	teamMemberUpdateCmd.Flags().StringVar(&teamMemberRole, "role", "developer", "member role (admin, developer, viewer)")
+	teamMemberAddCmd.Flags().StringVar(&teamMemberRole, "role", "developer", teamMemberRoleFlagHelp())
+	teamMemberUpdateCmd.Flags().StringVar(&teamMemberRole, "role", "developer", teamMemberRoleFlagHelp())
 }
