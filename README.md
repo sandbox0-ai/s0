@@ -354,7 +354,7 @@ network:
         httpHeaders:
           headers:
             - name: Authorization
-              valueTemplate: "Bearer {{token}}"
+              valueTemplate: "Bearer {{ .token }}"
 EOF
 s0 sandbox create -t default -f sandbox-config.yaml
 
@@ -397,7 +397,7 @@ credentialBindings:
       httpHeaders:
         headers:
           - name: Authorization
-            valueTemplate: "Bearer {{token}}"
+            valueTemplate: "Bearer {{ .token }}"
 EOF
 s0 sandbox network update --policy-file network.yaml -s <sandbox-id>
 
@@ -438,7 +438,7 @@ s0 sandbox network update --policy-file placeholder-network.yaml -s <sandbox-id>
 s0 sandbox network update --mode block-all \
   --traffic-rule '{"name":"allow-ssh","action":"allow","appProtocols":["ssh"],"ports":[{"port":22,"protocol":"tcp"}]}' \
   --protocol-rule '{"name":"api-http-readonly","protocol":"http","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}],"http":{"methods":{"allowed":["GET","HEAD"],"denied":["POST"]},"paths":{"allowedPrefixes":["/api/"],"deniedPrefixes":["/admin/"]}}}' \
-  --credential-binding '{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}' \
+  --credential-binding '{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{ .token }}"}]}}}' \
   --credential-rule '{"name":"github-auth","credentialRef":"gh-token","protocol":"https","domains":["api.github.com"],"ports":[{"port":443,"protocol":"tcp"}]}' \
   -s <sandbox-id>
 ```

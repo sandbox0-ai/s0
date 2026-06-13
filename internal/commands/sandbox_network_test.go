@@ -93,7 +93,7 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 				`{"name":"api-http-readonly","protocol":"http","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}],"http":{"methods":{"allowed":["GET","HEAD"],"denied":["POST"]},"paths":{"allowed":["/healthz"],"allowedPrefixes":["/api/"],"deniedPrefixes":["/admin/"]}}}`,
 			},
 			CredentialBinds: []string{
-				`{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}`,
+				`{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{ .token }}"}]}}}`,
 			},
 			CredentialRules: []string{
 				`{"name":"github-auth","credentialRef":"gh-token","protocol":"https","domains":["api.github.com"],"ports":[{"port":443,"protocol":"tcp"}]}`,
@@ -370,7 +370,7 @@ credentialBindings:
       httpHeaders:
         headers:
           - name: Authorization
-            valueTemplate: "Bearer {{token}}"
+            valueTemplate: "Bearer {{ .token }}"
 `))
 	if err != nil {
 		t.Fatalf("parseNetworkPolicyUpdateFile() error = %v", err)
