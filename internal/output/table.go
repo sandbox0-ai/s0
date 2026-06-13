@@ -952,11 +952,13 @@ func (f *TableFormatter) formatTeamMemberList(w io.Writer, members []apispec.Tea
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "USER ID", "ROLE", "JOINED AT"})
+	t.Header([]string{"ID", "USER ID", "EMAIL", "NAME", "ROLE", "JOINED AT"})
 	for _, m := range members {
 		_ = t.Append([]string{
 			m.ID,
 			m.UserID,
+			formatOptString(m.Email),
+			formatOptString(m.Name),
 			m.Role,
 			formatTimestamp(m.JoinedAt),
 		})
@@ -968,6 +970,9 @@ func (f *TableFormatter) formatTeamMember(w io.Writer, m *apispec.TeamMember) er
 	t := newTable(w)
 	_ = t.Append([]string{"ID:", m.ID})
 	_ = t.Append([]string{"User ID:", m.UserID})
+	_ = t.Append([]string{"Email:", formatOptString(m.Email)})
+	_ = t.Append([]string{"Name:", formatOptString(m.Name)})
+	_ = t.Append([]string{"Avatar URL:", formatOptString(m.AvatarURL)})
 	_ = t.Append([]string{"Role:", m.Role})
 	_ = t.Append([]string{"Joined At:", formatTimestamp(m.JoinedAt)})
 	return t.Render()

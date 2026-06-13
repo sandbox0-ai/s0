@@ -160,6 +160,76 @@ func TestTableFormatterFormatRegion(t *testing.T) {
 	}
 }
 
+func TestTableFormatterFormatTeamMemberListIncludesProfileFields(t *testing.T) {
+	formatter := &TableFormatter{}
+	members := []apispec.TeamMember{
+		{
+			ID:        "tm_123",
+			TeamID:    "team_123",
+			UserID:    "user_123",
+			Email:     apispec.NewOptString("dev@example.com"),
+			Name:      apispec.NewOptString("Dev User"),
+			AvatarURL: apispec.NewOptString("https://example.com/avatar.png"),
+			Role:      "developer",
+			JoinedAt:  time.Date(2026, 6, 13, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, members); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"EMAIL",
+		"NAME",
+		"dev@example.com",
+		"Dev User",
+		"developer",
+		"2026-06-13 12:00:00",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatTeamMemberIncludesProfileFields(t *testing.T) {
+	formatter := &TableFormatter{}
+	member := &apispec.TeamMember{
+		ID:        "tm_123",
+		TeamID:    "team_123",
+		UserID:    "user_123",
+		Email:     apispec.NewOptString("dev@example.com"),
+		Name:      apispec.NewOptString("Dev User"),
+		AvatarURL: apispec.NewOptString("https://example.com/avatar.png"),
+		Role:      "developer",
+		JoinedAt:  time.Date(2026, 6, 13, 12, 0, 0, 0, time.UTC),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, member); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Email:",
+		"dev@example.com",
+		"Name:",
+		"Dev User",
+		"Avatar URL:",
+		"https://example.com/avatar.png",
+		"Role:",
+		"developer",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
 func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 	formatter := &TableFormatter{}
 	sandbox := &apispec.Sandbox{
