@@ -401,6 +401,39 @@ credentialBindings:
 EOF
 s0 sandbox network update --policy-file network.yaml -s <sandbox-id>
 
+# Placeholder substitution: sandbox code sends an opaque placeholder, and egress auth replaces it at the boundary
+cat <<'EOF' > placeholder-network.yaml
+mode: block-all
+egress:
+  trafficRules:
+    - name: allow-example-api
+      action: allow
+      domains: [api.example.com]
+      ports:
+        - port: 8080
+          protocol: tcp
+  credentialRules:
+    - name: api-token
+      credentialRef: api-token
+      protocol: http
+      domains: [api.example.com]
+      ports:
+        - port: 8080
+          protocol: tcp
+      failurePolicy: fail-closed
+credentialBindings:
+  - ref: api-token
+    sourceRef: api-token-source
+    projection:
+      type: placeholder_substitution
+      placeholderSubstitution:
+        replacements:
+          - placeholder: s0env_api_token
+            valueTemplate: "{{ .token }}"
+            locations: [query, header, body]
+EOF
+s0 sandbox network update --policy-file placeholder-network.yaml -s <sandbox-id>
+
 # Script-oriented structured flags: allow SSH traffic, control HTTP operations, then inject outbound auth for GitHub API
 s0 sandbox network update --mode block-all \
   --traffic-rule '{"name":"allow-ssh","action":"allow","appProtocols":["ssh"],"ports":[{"port":22,"protocol":"tcp"}]}' \
