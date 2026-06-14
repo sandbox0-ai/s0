@@ -33,7 +33,7 @@ network:
         httpHeaders:
           headers:
             - name: Authorization
-              valueTemplate: "Bearer {{token}}"
+              valueTemplate: "Bearer {{ .token }}"
 `)
 
 		request, err := buildSandboxCreateRequest()

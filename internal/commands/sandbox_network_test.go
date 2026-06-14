@@ -93,7 +93,7 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 				`{"name":"api-http-readonly","protocol":"http","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}],"http":{"methods":{"allowed":["GET","HEAD"],"denied":["POST"]},"paths":{"allowed":["/healthz"],"allowedPrefixes":["/api/"],"deniedPrefixes":["/admin/"]}}}`,
 			},
 			CredentialBinds: []string{
-				`{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}`,
+				`{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{ .token }}"}]}}}`,
 			},
 			CredentialRules: []string{
 				`{"name":"github-auth","credentialRef":"gh-token","protocol":"https","domains":["api.github.com"],"ports":[{"port":443,"protocol":"tcp"}]}`,
@@ -143,6 +143,62 @@ func TestBuildNetworkPolicyFromUpdateOptions(t *testing.T) {
 		}
 		if len(policy.CredentialBindings) != 1 {
 			t.Fatalf("credentialBindings count = %d, want 1", len(policy.CredentialBindings))
+		}
+	})
+
+	t.Run("placeholder substitution credential binding flag", func(t *testing.T) {
+		policy, err := buildNetworkPolicyFromUpdateOptions(networkUpdateOptions{
+			Mode: "block-all",
+			TrafficRules: []string{
+				`{"name":"allow-example-api","action":"allow","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}]}`,
+			},
+			CredentialRules: []string{
+				`{"name":"api-token","credentialRef":"api-token","protocol":"http","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}],"failurePolicy":"fail-closed"}`,
+			},
+			CredentialBinds: []string{
+				`{"ref":"api-token","sourceRef":"api-token-source","projection":{"type":"placeholder_substitution","placeholderSubstitution":{"replacements":[{"placeholder":"s0env_api_token","valueTemplate":"{{ .token }}","locations":["query","header","body"]}]}}}`,
+			},
+		})
+		if err != nil {
+			t.Fatalf("buildNetworkPolicyFromUpdateOptions() error = %v", err)
+		}
+		egress, ok := policy.Egress.Get()
+		if !ok {
+			t.Fatal("egress not set")
+		}
+		if len(egress.CredentialRules) != 1 {
+			t.Fatalf("credentialRules count = %d, want 1", len(egress.CredentialRules))
+		}
+		if egress.CredentialRules[0].CredentialRef != "api-token" {
+			t.Fatalf("credentialRef = %q, want api-token", egress.CredentialRules[0].CredentialRef)
+		}
+		protocol, ok := egress.CredentialRules[0].Protocol.Get()
+		if !ok || protocol != apispec.EgressAuthProtocolHTTP {
+			t.Fatalf("protocol = %q, want http", protocol)
+		}
+		if len(policy.CredentialBindings) != 1 {
+			t.Fatalf("credentialBindings count = %d, want 1", len(policy.CredentialBindings))
+		}
+		binding := policy.CredentialBindings[0]
+		if binding.Ref != "api-token" || binding.SourceRef != "api-token-source" {
+			t.Fatalf("credential binding = %#v, want api-token/api-token-source", binding)
+		}
+		if binding.Projection.Type != apispec.CredentialProjectionTypePlaceholderSubstitution {
+			t.Fatalf("projection type = %q, want placeholder_substitution", binding.Projection.Type)
+		}
+		placeholderProjection, ok := binding.Projection.PlaceholderSubstitution.Get()
+		if !ok {
+			t.Fatal("placeholderSubstitution projection not set")
+		}
+		if len(placeholderProjection.Replacements) != 1 {
+			t.Fatalf("replacement count = %d, want 1", len(placeholderProjection.Replacements))
+		}
+		replacement := placeholderProjection.Replacements[0]
+		if replacement.Placeholder != "s0env_api_token" {
+			t.Fatalf("placeholder = %q, want s0env_api_token", replacement.Placeholder)
+		}
+		if len(replacement.Locations) != 3 {
+			t.Fatalf("locations = %#v, want query/header/body", replacement.Locations)
 		}
 	})
 
@@ -314,7 +370,7 @@ credentialBindings:
       httpHeaders:
         headers:
           - name: Authorization
-            valueTemplate: "Bearer {{token}}"
+            valueTemplate: "Bearer {{ .token }}"
 `))
 	if err != nil {
 		t.Fatalf("parseNetworkPolicyUpdateFile() error = %v", err)

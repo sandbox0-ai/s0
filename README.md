@@ -354,7 +354,7 @@ network:
         httpHeaders:
           headers:
             - name: Authorization
-              valueTemplate: "Bearer {{token}}"
+              valueTemplate: "Bearer {{ .token }}"
 EOF
 s0 sandbox create -t default -f sandbox-config.yaml
 
@@ -397,15 +397,48 @@ credentialBindings:
       httpHeaders:
         headers:
           - name: Authorization
-            valueTemplate: "Bearer {{token}}"
+            valueTemplate: "Bearer {{ .token }}"
 EOF
 s0 sandbox network update --policy-file network.yaml -s <sandbox-id>
+
+# Placeholder substitution: sandbox code sends an opaque placeholder, and egress auth replaces it at the boundary
+cat <<'EOF' > placeholder-network.yaml
+mode: block-all
+egress:
+  trafficRules:
+    - name: allow-example-api
+      action: allow
+      domains: [api.example.com]
+      ports:
+        - port: 8080
+          protocol: tcp
+  credentialRules:
+    - name: api-token
+      credentialRef: api-token
+      protocol: http
+      domains: [api.example.com]
+      ports:
+        - port: 8080
+          protocol: tcp
+      failurePolicy: fail-closed
+credentialBindings:
+  - ref: api-token
+    sourceRef: api-token-source
+    projection:
+      type: placeholder_substitution
+      placeholderSubstitution:
+        replacements:
+          - placeholder: s0env_api_token
+            valueTemplate: "{{ .token }}"
+            locations: [query, header, body]
+EOF
+s0 sandbox network update --policy-file placeholder-network.yaml -s <sandbox-id>
 
 # Script-oriented structured flags: allow SSH traffic, control HTTP operations, then inject outbound auth for GitHub API
 s0 sandbox network update --mode block-all \
   --traffic-rule '{"name":"allow-ssh","action":"allow","appProtocols":["ssh"],"ports":[{"port":22,"protocol":"tcp"}]}' \
   --protocol-rule '{"name":"api-http-readonly","protocol":"http","domains":["api.example.com"],"ports":[{"port":8080,"protocol":"tcp"}],"http":{"methods":{"allowed":["GET","HEAD"],"denied":["POST"]},"paths":{"allowedPrefixes":["/api/"],"deniedPrefixes":["/admin/"]}}}' \
-  --credential-binding '{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{token}}"}]}}}' \
+  --credential-binding '{"ref":"gh-token","sourceRef":"github-source","projection":{"type":"http_headers","httpHeaders":{"headers":[{"name":"Authorization","valueTemplate":"Bearer {{ .token }}"}]}}}' \
   --credential-rule '{"name":"github-auth","credentialRef":"gh-token","protocol":"https","domains":["api.github.com"],"ports":[{"port":443,"protocol":"tcp"}]}' \
   -s <sandbox-id>
 ```
