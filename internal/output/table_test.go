@@ -270,6 +270,83 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 	}
 }
 
+func TestTableFormatterFormatSandboxRootFSSnapshotList(t *testing.T) {
+	formatter := &TableFormatter{}
+	snapshots := &apispec.SandboxRootFSSnapshotList{
+		Snapshots: []apispec.SandboxRootFSSnapshot{
+			{
+				ID:        "snap_123",
+				SandboxID: "sb_123",
+				Name:      apispec.NewOptString("checkpoint"),
+				CreatedAt: time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC),
+				ExpiresAt: apispec.NewOptDateTime(time.Date(2026, 4, 11, 12, 0, 0, 0, time.UTC)),
+			},
+		},
+		Count: 1,
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, snapshots); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"ID",
+		"SANDBOX ID",
+		"snap_123",
+		"sb_123",
+		"checkpoint",
+		"2026-04-10 12:00:00",
+		"2026-04-11 12:00:00",
+		"Total: 1",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatSandboxRootFSSnapshotActions(t *testing.T) {
+	formatter := &TableFormatter{}
+
+	restore := &apispec.RestoreSandboxRootFSResponse{
+		SandboxID:  "sb_123",
+		SnapshotID: "snap_123",
+		Status:     apispec.SandboxLifecycleStatusPaused,
+	}
+	var restoreBuf bytes.Buffer
+	if err := formatter.Format(&restoreBuf, restore); err != nil {
+		t.Fatalf("Format() restore error = %v", err)
+	}
+	restoreOutput := restoreBuf.String()
+	for _, want := range []string{"Sandbox ID:", "sb_123", "Snapshot ID:", "snap_123", "paused"} {
+		if !strings.Contains(restoreOutput, want) {
+			t.Fatalf("restore output missing %q:\n%s", want, restoreOutput)
+		}
+	}
+
+	fork := &apispec.ForkSandboxResponse{
+		SourceSandboxID: "sb_123",
+		Sandbox: apispec.Sandbox{
+			ID:         "sb_456",
+			TemplateID: "default",
+			Status:     apispec.SandboxLifecycleStatusPaused,
+			Paused:     true,
+		},
+	}
+	var forkBuf bytes.Buffer
+	if err := formatter.Format(&forkBuf, fork); err != nil {
+		t.Fatalf("Format() fork error = %v", err)
+	}
+	forkOutput := forkBuf.String()
+	for _, want := range []string{"Source Sandbox ID:", "sb_123", "Fork Sandbox ID:", "sb_456", "default", "paused", "true"} {
+		if !strings.Contains(forkOutput, want) {
+			t.Fatalf("fork output missing %q:\n%s", want, forkOutput)
+		}
+	}
+}
+
 func TestTableFormatterFormatSandboxServicesIncludesPublicURL(t *testing.T) {
 	formatter := &TableFormatter{}
 	services := &sandbox0.SandboxServicesResponse{

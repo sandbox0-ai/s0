@@ -37,6 +37,16 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSnapshots(w, v)
 	case *apispec.Snapshot:
 		return f.formatSnapshot(w, v)
+	case []apispec.SandboxRootFSSnapshot:
+		return f.formatSandboxRootFSSnapshots(w, v)
+	case *apispec.SandboxRootFSSnapshotList:
+		return f.formatSandboxRootFSSnapshotList(w, v)
+	case *apispec.SandboxRootFSSnapshot:
+		return f.formatSandboxRootFSSnapshot(w, v)
+	case *apispec.RestoreSandboxRootFSResponse:
+		return f.formatRestoreSandboxRootFSResponse(w, v)
+	case *apispec.ForkSandboxResponse:
+		return f.formatForkSandboxResponse(w, v)
 	case *apispec.Sandbox:
 		return f.formatSandbox(w, v)
 	case *apispec.SandboxStatus:
@@ -257,6 +267,69 @@ func (f *TableFormatter) formatSnapshot(w io.Writer, s *apispec.Snapshot) error 
 	}
 	_ = t.Append([]string{"Size:", fmt.Sprintf("%d bytes", s.SizeBytes)})
 	_ = t.Append([]string{"Created:", s.CreatedAt})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSandboxRootFSSnapshotList(w io.Writer, snapshots *apispec.SandboxRootFSSnapshotList) error {
+	if snapshots == nil {
+		_, _ = fmt.Fprintln(w, "No sandbox rootfs snapshots found.")
+		return nil
+	}
+	if err := f.formatSandboxRootFSSnapshots(w, snapshots.Snapshots); err != nil {
+		return err
+	}
+	if len(snapshots.Snapshots) > 0 {
+		_, _ = fmt.Fprintf(w, "Total: %d\n", snapshots.Count)
+	}
+	return nil
+}
+
+func (f *TableFormatter) formatSandboxRootFSSnapshots(w io.Writer, snapshots []apispec.SandboxRootFSSnapshot) error {
+	if len(snapshots) == 0 {
+		_, _ = fmt.Fprintln(w, "No sandbox rootfs snapshots found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "SANDBOX ID", "NAME", "CREATED", "EXPIRES"})
+	for _, s := range snapshots {
+		_ = t.Append([]string{
+			s.ID,
+			s.SandboxID,
+			formatOptString(s.Name),
+			formatTimestamp(s.CreatedAt),
+			formatOptDateTime(s.ExpiresAt),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSandboxRootFSSnapshot(w io.Writer, s *apispec.SandboxRootFSSnapshot) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", s.ID})
+	_ = t.Append([]string{"Sandbox ID:", s.SandboxID})
+	_ = t.Append([]string{"Name:", formatOptString(s.Name)})
+	_ = t.Append([]string{"Description:", formatOptString(s.Description)})
+	_ = t.Append([]string{"Created At:", formatTimestamp(s.CreatedAt)})
+	_ = t.Append([]string{"Expires At:", formatOptDateTime(s.ExpiresAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatRestoreSandboxRootFSResponse(w io.Writer, r *apispec.RestoreSandboxRootFSResponse) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Sandbox ID:", r.SandboxID})
+	_ = t.Append([]string{"Snapshot ID:", r.SnapshotID})
+	_ = t.Append([]string{"Status:", string(r.Status)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatForkSandboxResponse(w io.Writer, r *apispec.ForkSandboxResponse) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Source Sandbox ID:", r.SourceSandboxID})
+	_ = t.Append([]string{"Fork Sandbox ID:", r.Sandbox.ID})
+	_ = t.Append([]string{"Template ID:", r.Sandbox.TemplateID})
+	_ = t.Append([]string{"Status:", string(r.Sandbox.Status)})
+	_ = t.Append([]string{"Paused:", fmt.Sprintf("%v", r.Sandbox.Paused)})
 	return t.Render()
 }
 
