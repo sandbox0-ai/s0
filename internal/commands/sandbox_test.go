@@ -260,4 +260,7 @@ func resetSandboxFlagsForTest() {
 	sandboxUpdateHardTTL = 0
 	sandboxUpdateAutoResume = ""
 	sandboxUpdateConfigFile = ""
+	sandboxRootFSSnapshotName = ""
+	sandboxRootFSSnapshotDescription = ""
+	sandboxRootFSSnapshotExpiresAt = ""
 }
