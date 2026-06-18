@@ -18,6 +18,7 @@ var (
 	sandboxHardTTL    int32
 	sandboxConfigFile string
 	sandboxMounts     []string
+	sandboxSnapshotID string
 	// list flags
 	sandboxListStatus     string
 	sandboxListTemplateID string
@@ -383,6 +384,7 @@ func init() {
 	sandboxCreateCmd.Flags().Int32Var(&sandboxTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
 	sandboxCreateCmd.Flags().StringArrayVar(&sandboxMounts, "mount", nil, "bootstrap mount in the form <sandboxvolume-id>:/absolute/path (repeatable)")
+	sandboxCreateCmd.Flags().StringVar(&sandboxSnapshotID, "snapshot-id", "", "rootfs snapshot ID used to initialize the new sandbox")
 
 	sandboxCmd.AddCommand(sandboxCreateCmd)
 	sandboxCmd.AddCommand(sandboxGetCmd)
@@ -429,6 +431,9 @@ func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
 	}
 	if sandboxTemplate != "" {
 		request.Template = apispec.NewOptString(sandboxTemplate)
+	}
+	if sandboxSnapshotID != "" {
+		request.SnapshotID = apispec.NewOptString(sandboxSnapshotID)
 	}
 
 	configOverrides, hasConfigOverrides, err := buildSandboxCreateConfigOverrides()
@@ -574,7 +579,7 @@ func isSandboxCreateClaimRequest(data []byte) (bool, error) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return false, fmt.Errorf("parse sandbox create file: %w", err)
 	}
-	for _, key := range []string{"template", "config", "mounts"} {
+	for _, key := range []string{"template", "config", "mounts", "snapshot_id"} {
 		if _, ok := raw[key]; ok {
 			return true, nil
 		}
