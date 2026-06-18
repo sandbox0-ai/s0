@@ -126,3 +126,21 @@ func TestIsTerminalDoneExecMessage(t *testing.T) {
 		t.Fatal("process done should terminate exec stream")
 	}
 }
+
+func TestRemoteExecFailureCode(t *testing.T) {
+	t.Parallel()
+
+	if code, failed := remoteExecFailureCode(nil); failed || code != 0 {
+		t.Fatalf("nil exit code = (%d, %v), want (0, false)", code, failed)
+	}
+
+	zero := 0
+	if code, failed := remoteExecFailureCode(&zero); failed || code != 0 {
+		t.Fatalf("zero exit code = (%d, %v), want (0, false)", code, failed)
+	}
+
+	nonzero := 7
+	if code, failed := remoteExecFailureCode(&nonzero); !failed || code != 7 {
+		t.Fatalf("nonzero exit code = (%d, %v), want (7, true)", code, failed)
+	}
+}

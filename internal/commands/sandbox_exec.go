@@ -124,7 +124,17 @@ Examples:
 		}
 
 		fmt.Print(result.OutputRaw)
+		if code, failed := remoteExecFailureCode(result.ExitCode); failed {
+			os.Exit(code)
+		}
 	},
+}
+
+func remoteExecFailureCode(exitCode *int) (int, bool) {
+	if exitCode == nil || *exitCode == 0 {
+		return 0, false
+	}
+	return *exitCode, true
 }
 
 func extractExecCommand(args []string) []string {
