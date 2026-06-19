@@ -91,6 +91,7 @@ hard_ttl: 120
 		resetSandboxFlagsForTest()
 		sandboxConfigFile = writeTempFile(t, `
 template: from-file
+snapshot_id: snap_file
 mounts:
   - sandboxvolume_id: vol_123
     mount_point: /workspace/data
@@ -105,6 +106,10 @@ config:
 		template, ok := request.Template.Get()
 		if !ok || template != "from-file" {
 			t.Fatalf("template = %q, want from-file", template)
+		}
+		snapshotID, ok := request.SnapshotID.Get()
+		if !ok || snapshotID != "snap_file" {
+			t.Fatalf("snapshot_id = %q, want snap_file", snapshotID)
 		}
 		if len(request.Mounts) != 1 {
 			t.Fatalf("mount count = %d, want 1", len(request.Mounts))
@@ -131,8 +136,10 @@ config:
 	t.Run("mount flags append to request file mounts and template flag overrides", func(t *testing.T) {
 		resetSandboxFlagsForTest()
 		sandboxTemplate = "flag-template"
+		sandboxSnapshotID = "snap_flag"
 		sandboxConfigFile = writeTempFile(t, `
 template: from-file
+snapshot_id: snap_file
 mounts:
   - sandboxvolume_id: vol_file
     mount_point: /workspace/from-file
@@ -146,6 +153,10 @@ mounts:
 		template, ok := request.Template.Get()
 		if !ok || template != "flag-template" {
 			t.Fatalf("template = %q, want flag-template", template)
+		}
+		snapshotID, ok := request.SnapshotID.Get()
+		if !ok || snapshotID != "snap_flag" {
+			t.Fatalf("snapshot_id = %q, want snap_flag", snapshotID)
 		}
 		if len(request.Mounts) != 2 {
 			t.Fatalf("mount count = %d, want 2", len(request.Mounts))
@@ -251,6 +262,7 @@ func resetSandboxFlagsForTest() {
 	sandboxHardTTL = 0
 	sandboxConfigFile = ""
 	sandboxMounts = nil
+	sandboxSnapshotID = ""
 	sandboxListStatus = ""
 	sandboxListTemplateID = ""
 	sandboxListPaused = ""

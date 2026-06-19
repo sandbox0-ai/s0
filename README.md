@@ -244,7 +244,7 @@ s0 admin region delete <region-id>
 
 ```bash
 s0 sandbox run <sandbox-id> <input> [--alias <alias>] [--context-id <ctx-id>]
-s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200] [--mount <volume-id>:/absolute/path] [--wait-for-mounts] [--mount-wait-timeout-ms 45000]
+s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200] [--snapshot-id <rootfs-snapshot-id>] [--mount <volume-id>:/absolute/path] [--wait-for-mounts] [--mount-wait-timeout-ms 45000]
 s0 sandbox get <sandbox-id>
 s0 sandbox update <sandbox-id> [-f sandbox-update.yaml] [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
 s0 sandbox delete <sandbox-id>
@@ -273,11 +273,13 @@ Bootstrap mounts can be requested as part of sandbox creation:
 ```bash
 s0 volume create
 s0 sandbox create -t default \
+  --snapshot-id <rootfs-snapshot-id> \
   --mount <volume-id>:/workspace/data
 
 # Or provide a full claim request file.
 cat <<'EOF' > sandbox-claim.yaml
 template: default
+snapshot_id: <rootfs-snapshot-id>
 mounts:
   - sandboxvolume_id: <volume-id>
     mount_point: /workspace/data
