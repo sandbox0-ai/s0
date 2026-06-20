@@ -383,7 +383,7 @@ func init() {
 	sandboxCreateCmd.Flags().StringVarP(&sandboxConfigFile, "config-file", "f", "", "path to sandbox config or claim request YAML/JSON file, or - for stdin")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
-	sandboxCreateCmd.Flags().StringArrayVar(&sandboxMounts, "mount", nil, "bootstrap mount in the form <sandboxvolume-id>:/absolute/path (repeatable)")
+	sandboxCreateCmd.Flags().StringArrayVar(&sandboxMounts, "mount", nil, "bind an existing volume to a template-declared mount point in the form <sandboxvolume-id>:/absolute/path (repeatable)")
 	sandboxCreateCmd.Flags().StringVar(&sandboxSnapshotID, "snapshot-id", "", "rootfs snapshot ID used to initialize the new sandbox")
 
 	sandboxCmd.AddCommand(sandboxCreateCmd)

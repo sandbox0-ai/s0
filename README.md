@@ -270,6 +270,8 @@ s0 user ssh-key delete <ssh-key-id>
 
 Bootstrap mounts can be requested as part of sandbox creation:
 
+Mount paths must be declared by the sandbox template's `volumeMounts`. If the template declares volume mounts, provide a `--mount` flag or `mounts` entry for every declared path in the claim request.
+
 ```bash
 s0 volume create
 s0 sandbox create -t default \
