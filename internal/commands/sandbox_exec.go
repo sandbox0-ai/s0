@@ -123,11 +123,26 @@ Examples:
 			os.Exit(1)
 		}
 
-		fmt.Print(result.OutputRaw)
+		if err := writeCmdResultOutput(os.Stdout, os.Stderr, result); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing command output: %v\n", err)
+			os.Exit(1)
+		}
 		if code, failed := remoteExecFailureCode(result.ExitCode); failed {
 			os.Exit(code)
 		}
 	},
+}
+
+func writeCmdResultOutput(stdout io.Writer, stderr io.Writer, result sandbox0.CmdResult) error {
+	if result.Stdout == "" && result.Stderr == "" {
+		_, err := io.WriteString(stdout, result.OutputRaw)
+		return err
+	}
+	if _, err := io.WriteString(stdout, result.Stdout); err != nil {
+		return err
+	}
+	_, err := io.WriteString(stderr, result.Stderr)
+	return err
 }
 
 func remoteExecFailureCode(exitCode *int) (int, bool) {

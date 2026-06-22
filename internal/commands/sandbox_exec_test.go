@@ -1,8 +1,11 @@
 package commands
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
+
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 )
 
 func TestExtractExecCommand(t *testing.T) {
@@ -142,5 +145,47 @@ func TestRemoteExecFailureCode(t *testing.T) {
 	nonzero := 7
 	if code, failed := remoteExecFailureCode(&nonzero); !failed || code != 7 {
 		t.Fatalf("nonzero exit code = (%d, %v), want (7, true)", code, failed)
+	}
+}
+
+func TestWriteCmdResultOutputSplitsStreams(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := writeCmdResultOutput(&stdout, &stderr, sandbox0.CmdResult{
+		OutputRaw: "outerr",
+		Stdout:    "out",
+		Stderr:    "err",
+	})
+	if err != nil {
+		t.Fatalf("writeCmdResultOutput() error = %v", err)
+	}
+	if got := stdout.String(); got != "out" {
+		t.Fatalf("stdout = %q, want out", got)
+	}
+	if got := stderr.String(); got != "err" {
+		t.Fatalf("stderr = %q, want err", got)
+	}
+}
+
+func TestWriteCmdResultOutputFallsBackToOutputRaw(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	err := writeCmdResultOutput(&stdout, &stderr, sandbox0.CmdResult{
+		OutputRaw: "legacy",
+	})
+	if err != nil {
+		t.Fatalf("writeCmdResultOutput() error = %v", err)
+	}
+	if got := stdout.String(); got != "legacy" {
+		t.Fatalf("stdout = %q, want legacy", got)
+	}
+	if got := stderr.String(); got != "" {
+		t.Fatalf("stderr = %q, want empty", got)
 	}
 }
