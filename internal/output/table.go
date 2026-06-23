@@ -93,6 +93,8 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatCreatedAPIKey(w, v)
 	case []apispec.Team:
 		return f.formatTeamList(w, v)
+	case TeamList:
+		return f.formatTeamListWithCurrent(w, v)
 	case apispec.Team:
 		return f.formatTeam(w, &v)
 	case *apispec.Team:
@@ -958,20 +960,29 @@ func formatAPIKeyScope(scope string) string {
 }
 
 func (f *TableFormatter) formatTeamList(w io.Writer, teams []apispec.Team) error {
+	return f.formatTeamListWithCurrent(w, NewTeamList(teams, ""))
+}
+
+func (f *TableFormatter) formatTeamListWithCurrent(w io.Writer, teams TeamList) error {
 	if len(teams) == 0 {
 		_, _ = fmt.Fprintln(w, "No teams found.")
 		return nil
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "NAME", "SLUG", "OWNER ID", "CREATED AT"})
-	for _, team := range teams {
+	t.Header([]string{"CURRENT", "ID", "NAME", "SLUG", "OWNER ID", "CREATED AT"})
+	for _, item := range teams {
+		current := ""
+		if item.Current {
+			current = "*"
+		}
 		_ = t.Append([]string{
-			team.ID,
-			team.Name,
-			team.Slug,
-			formatOptNilString(team.OwnerID),
-			formatTimestamp(team.CreatedAt),
+			current,
+			item.ID,
+			item.Name,
+			item.Slug,
+			formatStringPtr(item.OwnerID),
+			formatTimestamp(item.CreatedAt),
 		})
 	}
 	return t.Render()
@@ -1091,6 +1102,13 @@ func formatOptNilString(v apispec.OptNilString) string {
 	}
 	if s, ok := v.Get(); ok && s != "" {
 		return s
+	}
+	return "-"
+}
+
+func formatStringPtr(v *string) string {
+	if v != nil && *v != "" {
+		return *v
 	}
 	return "-"
 }

@@ -2,6 +2,7 @@ package output
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -157,6 +158,97 @@ func TestTableFormatterFormatRegion(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
 		}
+	}
+}
+
+func TestNewTeamListMarksCurrentTeam(t *testing.T) {
+	teams := []apispec.Team{
+		{ID: "team-1", Name: "Team One"},
+		{ID: "team-2", Name: "Team Two"},
+	}
+
+	list := NewTeamList(teams, " team-2 ")
+
+	if len(list) != 2 {
+		t.Fatalf("len(list) = %d, want 2", len(list))
+	}
+	if list[0].Current {
+		t.Fatal("team-1 should not be current")
+	}
+	if !list[1].Current {
+		t.Fatal("team-2 should be current")
+	}
+}
+
+func TestTableFormatterFormatTeamListShowsCurrentMarker(t *testing.T) {
+	formatter := &TableFormatter{}
+	now := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	teams := NewTeamList([]apispec.Team{
+		{
+			ID:        "team-1",
+			Name:      "Team One",
+			Slug:      "team-one",
+			CreatedAt: now,
+		},
+		{
+			ID:        "team-2",
+			Name:      "Team Two",
+			Slug:      "team-two",
+			CreatedAt: now,
+		},
+	}, "team-2")
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, teams); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"CURRENT",
+		"ID",
+		"team-1",
+		"team-2",
+		"*",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "team-1") && strings.Contains(line, "*") {
+			t.Fatalf("non-current team row contains current marker:\n%s", output)
+		}
+		if strings.Contains(line, "team-2") && !strings.Contains(line, "*") {
+			t.Fatalf("current team row missing current marker:\n%s", output)
+		}
+	}
+}
+
+func TestJSONFormatterTeamListIncludesCurrentField(t *testing.T) {
+	formatter := &JSONFormatter{}
+	teams := NewTeamList([]apispec.Team{
+		{ID: "team-1", Name: "Team One", Slug: "team-one"},
+		{ID: "team-2", Name: "Team Two", Slug: "team-two"},
+	}, "team-1")
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, teams); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0]["id"] != "team-1" || got[0]["current"] != true {
+		t.Fatalf("first team = %#v, want current team-1", got[0])
+	}
+	if got[1]["id"] != "team-2" || got[1]["current"] != false {
+		t.Fatalf("second team = %#v, want non-current team-2", got[1])
 	}
 }
 

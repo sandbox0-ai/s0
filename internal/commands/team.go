@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sandbox0-ai/s0/internal/config"
+	"github.com/sandbox0-ai/s0/internal/output"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
@@ -57,11 +58,29 @@ var teamListCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if err := getFormatter().Format(os.Stdout, data.Teams); err != nil {
+		currentTeamID, err := getCurrentTeamID()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading current team: %v\n", err)
+			os.Exit(1)
+		}
+		teams := output.NewTeamList(data.Teams, currentTeamID)
+		if err := getFormatter().Format(os.Stdout, teams); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
 		}
 	},
+}
+
+func getCurrentTeamID() (string, error) {
+	cfg, err := getConfig()
+	if err != nil {
+		return "", err
+	}
+	profile, err := cfg.GetProfile(cfg.GetActiveProfile())
+	if err != nil {
+		return "", err
+	}
+	return profile.GetCurrentTeamID(), nil
 }
 
 var teamGetCmd = &cobra.Command{
