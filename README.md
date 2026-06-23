@@ -224,9 +224,12 @@ s0 team use <team-id>
 ### Team
 
 ```bash
+s0 team list
 s0 team create --name <name> [--slug <slug>] [--home-region <region-id>]
 s0 team use <team-id>
 ```
+
+`s0 team list` marks the locally selected current team in the `CURRENT` column. JSON and YAML output include a `current` boolean for each team.
 
 ### Admin Region
 
