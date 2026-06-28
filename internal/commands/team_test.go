@@ -98,6 +98,42 @@ func TestParseTeamMemberRoleErrorIncludesGeneratedValues(t *testing.T) {
 	}
 }
 
+func TestFormatTeamDeleteConflictIncludesResourceCounts(t *testing.T) {
+	resp := &apispec.TeamDeleteConflictResponse{
+		Success: false,
+		Error: apispec.TeamDeleteConflictResponseError{
+			Code:    "conflict",
+			Message: "team has resources that must be removed before deletion",
+			Details: apispec.NewOptTeamDeleteConflictDetails(apispec.TeamDeleteConflictDetails{
+				TeamID: "team-1",
+				BlockingResources: []apispec.TeamDeleteResourceCount{
+					{Category: "sandboxes", Count: 2},
+					{Category: "api_keys", Count: 1},
+				},
+				RetainedResources: []apispec.TeamDeleteResourceCount{
+					{Category: "usage_events", Count: 3},
+				},
+				RetentionPolicy: apispec.NewOptString("historical metering records are retained"),
+			}),
+		},
+	}
+
+	got := formatTeamDeleteConflict(resp)
+	for _, want := range []string{
+		"team has resources that must be removed before deletion",
+		"Blocking resources:",
+		"  - sandboxes: 2",
+		"  - api_keys: 1",
+		"Retained resources that do not block deletion:",
+		"  - usage_events: 3",
+		"Retention policy: historical metering records are retained",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("formatted conflict missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestResolveTeamHomeRegionID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/teams/team-1" {

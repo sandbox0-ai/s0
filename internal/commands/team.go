@@ -448,6 +448,11 @@ var teamDeleteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		if conflictRes, ok := res.(*apispec.TeamDeleteConflictResponse); ok {
+			fmt.Fprintf(os.Stderr, "Error deleting team: %s\n", formatTeamDeleteConflict(conflictRes))
+			os.Exit(1)
+		}
+
 		successRes, ok := res.(*apispec.SuccessMessageResponse)
 		if !ok {
 			fmt.Fprintln(os.Stderr, "Error deleting team: unexpected response type")
@@ -462,6 +467,44 @@ var teamDeleteCmd = &cobra.Command{
 		}
 		fmt.Printf("Team %s deleted successfully\n", args[0])
 	},
+}
+
+func formatTeamDeleteConflict(resp *apispec.TeamDeleteConflictResponse) string {
+	message := "team has resources that must be removed before deletion"
+	if resp != nil && strings.TrimSpace(resp.Error.Message) != "" {
+		message = strings.TrimSpace(resp.Error.Message)
+	}
+
+	var b strings.Builder
+	b.WriteString(message)
+	if resp == nil {
+		return b.String()
+	}
+
+	details, ok := resp.Error.Details.Get()
+	if !ok {
+		return b.String()
+	}
+
+	if len(details.BlockingResources) > 0 {
+		b.WriteString("\nBlocking resources:")
+		for _, resource := range details.BlockingResources {
+			fmt.Fprintf(&b, "\n  - %s: %d", resource.Category, resource.Count)
+		}
+	}
+
+	if len(details.RetainedResources) > 0 {
+		b.WriteString("\nRetained resources that do not block deletion:")
+		for _, resource := range details.RetainedResources {
+			fmt.Fprintf(&b, "\n  - %s: %d", resource.Category, resource.Count)
+		}
+	}
+
+	if policy, ok := details.RetentionPolicy.Get(); ok && strings.TrimSpace(policy) != "" {
+		fmt.Fprintf(&b, "\nRetention policy: %s", strings.TrimSpace(policy))
+	}
+
+	return b.String()
 }
 
 var teamMemberCmd = &cobra.Command{
