@@ -331,7 +331,10 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		Status:     "running",
 		Paused:     false,
 		AutoResume: true,
-		PodName:    "sb-123-pod",
+		Resources: apispec.NewOptSandboxResourceConfig(apispec.SandboxResourceConfig{
+			Memory: apispec.NewOptString("2Gi"),
+		}),
+		PodName: "sb-123-pod",
 		SSH: apispec.NewOptSandboxSSHConnection(apispec.SandboxSSHConnection{
 			Host:     "aws-us-east-1.ssh.sandbox0.app",
 			Port:     30222,
@@ -355,6 +358,8 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		"30222",
 		"SSH Username:",
 		"sb_123",
+		"Memory:",
+		"2Gi",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)

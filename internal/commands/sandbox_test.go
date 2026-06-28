@@ -68,6 +68,7 @@ ttl: 60
 hard_ttl: 120
 `)
 		sandboxTTL = 300
+		sandboxMemory = "512Mi"
 
 		request, err := buildSandboxCreateRequest()
 		if err != nil {
@@ -84,6 +85,14 @@ hard_ttl: 120
 		hardTTL, ok := config.HardTTL.Get()
 		if !ok || hardTTL != 120 {
 			t.Fatalf("hardTTL = %d, want 120", hardTTL)
+		}
+		resources, ok := config.Resources.Get()
+		if !ok {
+			t.Fatal("resources not set")
+		}
+		memory, ok := resources.Memory.Get()
+		if !ok || memory != "512Mi" {
+			t.Fatalf("memory = %q, want 512Mi", memory)
 		}
 	})
 
@@ -222,12 +231,10 @@ network:
 
 	t.Run("update flags override file values", func(t *testing.T) {
 		resetSandboxFlagsForTest()
-		sandboxUpdateConfigFile = writeTempFile(t, `
-ttl: 60
-auto_resume: false
-`)
+		sandboxUpdateConfigFile = writeTempFile(t, "ttl: 60\nauto_resume: false\n")
 		sandboxUpdateTTL = 600
 		sandboxUpdateAutoResume = "true"
+		sandboxUpdateMemory = "2Gi"
 
 		config, hasConfig, err := buildSandboxUpdateConfig()
 		if err != nil {
@@ -243,6 +250,14 @@ auto_resume: false
 		autoResume, ok := config.AutoResume.Get()
 		if !ok || !autoResume {
 			t.Fatalf("autoResume = %v, want true", autoResume)
+		}
+		resources, ok := config.Resources.Get()
+		if !ok {
+			t.Fatal("resources not set")
+		}
+		memory, ok := resources.Memory.Get()
+		if !ok || memory != "2Gi" {
+			t.Fatalf("memory = %q, want 2Gi", memory)
 		}
 	})
 }
@@ -260,6 +275,7 @@ func resetSandboxFlagsForTest() {
 	sandboxTemplate = ""
 	sandboxTTL = 0
 	sandboxHardTTL = 0
+	sandboxMemory = ""
 	sandboxConfigFile = ""
 	sandboxMounts = nil
 	sandboxSnapshotID = ""
@@ -270,6 +286,7 @@ func resetSandboxFlagsForTest() {
 	sandboxListOffset = 0
 	sandboxUpdateTTL = 0
 	sandboxUpdateHardTTL = 0
+	sandboxUpdateMemory = ""
 	sandboxUpdateAutoResume = ""
 	sandboxUpdateConfigFile = ""
 	sandboxRootFSSnapshotName = ""

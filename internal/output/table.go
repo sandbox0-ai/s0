@@ -345,6 +345,11 @@ func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 	}
 	_ = t.Append([]string{"Status:", string(s.Status)})
 	_ = t.Append([]string{"Paused:", fmt.Sprintf("%v", s.Paused)})
+	if resources, ok := s.Resources.Get(); ok {
+		if memory, ok := resources.Memory.Get(); ok {
+			_ = t.Append([]string{"Memory:", memory})
+		}
+	}
 	_ = t.Append([]string{"Pod Name:", s.PodName})
 	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format(timeLayout)})
 	_ = t.Append([]string{"Soft Expires At:", formatTimestamp(s.ExpiresAt)})
