@@ -257,6 +257,7 @@ s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
 s0 sandbox logs <sandbox-id> [--tail 200] [--container procd] [--follow]
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
+s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200]
 ```
 
 `s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
@@ -576,6 +577,9 @@ s0 template list
 
 # Create a sandbox
 s0 sandbox create -t my-template --ttl 3600
+
+# Fork a paused sandbox with a new lifecycle
+s0 sandbox fork <sandbox-id> --ttl 3600 --hard-ttl 7200
 
 # List files in sandbox
 s0 sandbox files ls /home/user -s <sandbox-id>
