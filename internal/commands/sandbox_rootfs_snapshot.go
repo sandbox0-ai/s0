@@ -13,6 +13,8 @@ var (
 	sandboxRootFSSnapshotName        string
 	sandboxRootFSSnapshotDescription string
 	sandboxRootFSSnapshotExpiresAt   string
+	sandboxForkTTL                   int32
+	sandboxForkHardTTL               int32
 )
 
 // sandboxSnapshotCmd represents the sandbox rootfs snapshot command group.
@@ -183,7 +185,7 @@ var sandboxForkCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		response, err := client.ForkSandbox(cmd.Context(), sandboxID, nil)
+		response, err := client.ForkSandbox(cmd.Context(), sandboxID, buildSandboxForkRequest(cmd))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error forking sandbox: %v\n", err)
 			os.Exit(1)
@@ -200,6 +202,8 @@ func init() {
 	sandboxSnapshotCreateCmd.Flags().StringVarP(&sandboxRootFSSnapshotName, "name", "n", "", "snapshot name")
 	sandboxSnapshotCreateCmd.Flags().StringVarP(&sandboxRootFSSnapshotDescription, "description", "d", "", "snapshot description")
 	sandboxSnapshotCreateCmd.Flags().StringVar(&sandboxRootFSSnapshotExpiresAt, "expires-at", "", "snapshot expiration timestamp (RFC3339)")
+	sandboxForkCmd.Flags().Int32Var(&sandboxForkTTL, "ttl", 0, "soft TTL in seconds for the forked sandbox")
+	sandboxForkCmd.Flags().Int32Var(&sandboxForkHardTTL, "hard-ttl", 0, "hard TTL in seconds for the forked sandbox")
 
 	sandboxSnapshotCmd.AddCommand(sandboxSnapshotListCmd)
 	sandboxSnapshotCmd.AddCommand(sandboxSnapshotGetCmd)
@@ -235,4 +239,24 @@ func buildSandboxRootFSSnapshotCreateRequest() (*apispec.CreateSandboxRootFSSnap
 		return nil, nil
 	}
 	return &request, nil
+}
+
+func buildSandboxForkRequest(cmd *cobra.Command) *apispec.ForkSandboxRequest {
+	config := apispec.ForkSandboxConfig{}
+	hasConfig := false
+
+	if cmd.Flags().Changed("ttl") {
+		config.TTL = apispec.NewOptInt32(sandboxForkTTL)
+		hasConfig = true
+	}
+	if cmd.Flags().Changed("hard-ttl") {
+		config.HardTTL = apispec.NewOptInt32(sandboxForkHardTTL)
+		hasConfig = true
+	}
+	if !hasConfig {
+		return nil
+	}
+	return &apispec.ForkSandboxRequest{
+		Config: apispec.NewOptForkSandboxConfig(config),
+	}
 }

@@ -292,4 +292,6 @@ func resetSandboxFlagsForTest() {
 	sandboxRootFSSnapshotName = ""
 	sandboxRootFSSnapshotDescription = ""
 	sandboxRootFSSnapshotExpiresAt = ""
+	sandboxForkTTL = 0
+	sandboxForkHardTTL = 0
 }
