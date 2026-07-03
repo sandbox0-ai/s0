@@ -256,34 +256,6 @@ var sandboxContextExecCmd = &cobra.Command{
 	},
 }
 
-// sandboxContextStatsCmd gets resource stats for a context.
-var sandboxContextStatsCmd = &cobra.Command{
-	Use:   "stats <context-id>",
-	Short: "Get context resource stats",
-	Long:  `Get resource usage statistics for a context.`,
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		contextID := args[0]
-
-		client, err := getClientRaw(cmd)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
-			os.Exit(1)
-		}
-
-		result, err := client.Sandbox(contextSandboxID).ContextStats(cmd.Context(), contextID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting context stats: %v\n", err)
-			os.Exit(1)
-		}
-
-		if err := getFormatter().Format(os.Stdout, result); err != nil {
-			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
-			os.Exit(1)
-		}
-	},
-}
-
 func init() {
 	sandboxContextCmd.AddCommand(sandboxContextListCmd)
 	sandboxContextCmd.AddCommand(sandboxContextGetCmd)
@@ -292,7 +264,6 @@ func init() {
 	sandboxContextCmd.AddCommand(sandboxContextRestartCmd)
 	sandboxContextCmd.AddCommand(sandboxContextExecCmd)
 	sandboxContextCmd.AddCommand(sandboxContextSignalCmd)
-	sandboxContextCmd.AddCommand(sandboxContextStatsCmd)
 
 	// Sandbox ID flag (required for all subcommands)
 	sandboxContextCmd.PersistentFlags().StringVarP(&contextSandboxID, "sandbox-id", "s", "", "sandbox ID (required)")

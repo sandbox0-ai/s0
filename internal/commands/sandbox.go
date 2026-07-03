@@ -1,10 +1,12 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ghodss/yaml"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
@@ -26,14 +28,22 @@ var (
 	sandboxListPaused     string
 	sandboxListLimit      int
 	sandboxListOffset     int
-	// logs flags
-	sandboxLogsContainer    string
-	sandboxLogsTailLines    int64
-	sandboxLogsLimitBytes   int64
-	sandboxLogsFollow       bool
-	sandboxLogsPrevious     bool
-	sandboxLogsTimestamps   bool
-	sandboxLogsSinceSeconds int64
+	// observability flags
+	sandboxObsLimit      int
+	sandboxObsCursor     string
+	sandboxObsStartTime  string
+	sandboxObsEndTime    string
+	sandboxObsSince      string
+	sandboxObsWatch      bool
+	sandboxObsContextID  string
+	sandboxObsStream     string
+	sandboxObsNames      []string
+	sandboxObsSource     string
+	sandboxObsEventType  string
+	sandboxObsOutcome    string
+	sandboxLogsFollow    bool
+	sandboxLogsTailLines int
+	sandboxLogsSinceSecs int64
 	// update flags
 	sandboxUpdateTTL        int32
 	sandboxUpdateHardTTL    int32
@@ -325,11 +335,11 @@ var sandboxListCmd = &cobra.Command{
 	},
 }
 
-// sandboxLogsCmd gets sandbox pod logs.
+// sandboxLogsCmd queries sandbox log observability.
 var sandboxLogsCmd = &cobra.Command{
 	Use:   "logs <sandbox-id>",
-	Short: "Get sandbox pod logs",
-	Long:  `Get Kubernetes pod logs for a sandbox container. Use --follow to stream logs until interrupted.`,
+	Short: "Query sandbox logs",
+	Long:  `Query sandbox logs from the per-sandbox observability backend. Use --watch for realtime NDJSON streaming.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
@@ -340,28 +350,28 @@ var sandboxLogsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		options, err := buildSandboxLogsOptions(cmd)
+		options, watch, err := buildSandboxLogObservabilityOptions(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error building sandbox logs request: %v\n", err)
 			os.Exit(1)
 		}
 
 		sandbox := client.Sandbox(sandboxID)
-		if sandboxLogsFollow {
-			stream, err := sandbox.StreamLogs(cmd.Context(), options)
+		if watch {
+			stream, err := sandbox.WatchLogs(cmd.Context(), options)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error streaming sandbox logs: %v\n", err)
 				os.Exit(1)
 			}
 			defer stream.Close()
-			if _, err := io.Copy(os.Stdout, stream); err != nil {
+			if err := writeObservabilityWatch(stream); err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading sandbox log stream: %v\n", err)
 				os.Exit(1)
 			}
 			return
 		}
 
-		logs, err := sandbox.GetLogs(cmd.Context(), options)
+		logs, err := sandbox.ListLogs(cmd.Context(), options)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting sandbox logs: %v\n", err)
 			os.Exit(1)
@@ -373,7 +383,139 @@ var sandboxLogsCmd = &cobra.Command{
 			}
 			return
 		}
-		_, _ = io.WriteString(os.Stdout, logs.Logs)
+		writeObservabilityLogs(os.Stdout, logs.Logs)
+	},
+}
+
+// sandboxEventsCmd queries sandbox observability events.
+var sandboxEventsCmd = &cobra.Command{
+	Use:   "events <sandbox-id>",
+	Short: "Query sandbox observability events",
+	Long:  `Query sandbox lifecycle, network audit, and runtime stats events from the per-sandbox observability backend.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		sandboxID := args[0]
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+		options, watch, err := buildSandboxEventObservabilityOptions(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building sandbox events request: %v\n", err)
+			os.Exit(1)
+		}
+		sandbox := client.Sandbox(sandboxID)
+		if watch {
+			stream, err := sandbox.WatchObservabilityEvents(cmd.Context(), options)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error streaming sandbox events: %v\n", err)
+				os.Exit(1)
+			}
+			defer stream.Close()
+			if err := writeObservabilityWatch(stream); err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading sandbox event stream: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		events, err := sandbox.ListObservabilityEvents(cmd.Context(), options)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting sandbox events: %v\n", err)
+			os.Exit(1)
+		}
+		if err := getFormatter().Format(os.Stdout, events); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
+// sandboxAuditCmd queries sandbox audit events.
+var sandboxAuditCmd = &cobra.Command{
+	Use:   "audit <sandbox-id>",
+	Short: "Query sandbox audit events",
+	Long:  `Query audit-focused sandbox events from the per-sandbox observability backend.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		sandboxID := args[0]
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+		options, watch, err := buildSandboxEventObservabilityOptions(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building sandbox audit request: %v\n", err)
+			os.Exit(1)
+		}
+		sandbox := client.Sandbox(sandboxID)
+		if watch {
+			stream, err := sandbox.WatchAuditEvents(cmd.Context(), options)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error streaming sandbox audit events: %v\n", err)
+				os.Exit(1)
+			}
+			defer stream.Close()
+			if err := writeObservabilityWatch(stream); err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading sandbox audit stream: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		events, err := sandbox.ListAuditEvents(cmd.Context(), options)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting sandbox audit events: %v\n", err)
+			os.Exit(1)
+		}
+		if err := getFormatter().Format(os.Stdout, events); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
+// sandboxMetricsCmd queries sandbox metric samples.
+var sandboxMetricsCmd = &cobra.Command{
+	Use:   "metrics <sandbox-id>",
+	Short: "Query sandbox metrics",
+	Long:  `Query sandbox runtime metric samples from the per-sandbox observability backend.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		sandboxID := args[0]
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+		options, watch, err := buildSandboxMetricObservabilityOptions(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building sandbox metrics request: %v\n", err)
+			os.Exit(1)
+		}
+		sandbox := client.Sandbox(sandboxID)
+		if watch {
+			stream, err := sandbox.WatchMetrics(cmd.Context(), options)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error streaming sandbox metrics: %v\n", err)
+				os.Exit(1)
+			}
+			defer stream.Close()
+			if err := writeObservabilityWatch(stream); err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading sandbox metric stream: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		metrics, err := sandbox.ListMetrics(cmd.Context(), options)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting sandbox metrics: %v\n", err)
+			os.Exit(1)
+		}
+		if err := getFormatter().Format(os.Stdout, metrics); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
@@ -398,6 +540,9 @@ func init() {
 	sandboxCmd.AddCommand(sandboxStatusCmd)
 	sandboxCmd.AddCommand(sandboxUpdateCmd)
 	sandboxCmd.AddCommand(sandboxLogsCmd)
+	sandboxCmd.AddCommand(sandboxEventsCmd)
+	sandboxCmd.AddCommand(sandboxAuditCmd)
+	sandboxCmd.AddCommand(sandboxMetricsCmd)
 
 	// Update command flags
 	sandboxUpdateCmd.Flags().StringVarP(&sandboxUpdateConfigFile, "config-file", "f", "", "path to sandbox update config YAML/JSON file, or - for stdin")
@@ -414,14 +559,25 @@ func init() {
 	sandboxListCmd.Flags().IntVar(&sandboxListOffset, "offset", 0, "pagination offset")
 	sandboxCmd.AddCommand(sandboxListCmd)
 
-	// Logs command flags
-	sandboxLogsCmd.Flags().StringVar(&sandboxLogsContainer, "container", "", "pod container name (default: procd)")
-	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsTailLines, "tail", 0, "maximum number of log lines from the end")
-	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsLimitBytes, "limit-bytes", 0, "maximum snapshot log payload bytes")
-	sandboxLogsCmd.Flags().BoolVarP(&sandboxLogsFollow, "follow", "f", false, "stream logs until interrupted")
-	sandboxLogsCmd.Flags().BoolVar(&sandboxLogsPrevious, "previous", false, "return logs for the previously terminated container instance")
-	sandboxLogsCmd.Flags().BoolVar(&sandboxLogsTimestamps, "timestamps", false, "include Kubernetes log timestamps")
-	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsSinceSeconds, "since-seconds", 0, "only return logs newer than this many seconds")
+	addSandboxObservabilityFlags(sandboxLogsCmd)
+	sandboxLogsCmd.Flags().StringVar(&sandboxObsContextID, "context-id", "", "filter by context ID")
+	sandboxLogsCmd.Flags().StringVar(&sandboxObsStream, "stream", "", "filter by log stream (stdout, stderr, pty)")
+	sandboxLogsCmd.Flags().BoolVarP(&sandboxLogsFollow, "follow", "f", false, "deprecated alias for --watch")
+	sandboxLogsCmd.Flags().IntVar(&sandboxLogsTailLines, "tail", 0, "deprecated alias for --limit")
+	sandboxLogsCmd.Flags().Int64Var(&sandboxLogsSinceSecs, "since-seconds", 0, "deprecated alias for --since")
+	_ = sandboxLogsCmd.Flags().MarkDeprecated("follow", "use --watch")
+	_ = sandboxLogsCmd.Flags().MarkDeprecated("tail", "use --limit")
+	_ = sandboxLogsCmd.Flags().MarkDeprecated("since-seconds", "use --since")
+
+	addSandboxObservabilityFlags(sandboxEventsCmd)
+	addSandboxEventFilterFlags(sandboxEventsCmd)
+
+	addSandboxObservabilityFlags(sandboxAuditCmd)
+	addSandboxEventFilterFlags(sandboxAuditCmd)
+
+	addSandboxObservabilityFlags(sandboxMetricsCmd)
+	sandboxMetricsCmd.Flags().StringVar(&sandboxObsContextID, "context-id", "", "filter by context ID")
+	sandboxMetricsCmd.Flags().StringArrayVar(&sandboxObsNames, "name", nil, "filter by metric name (repeatable or comma-separated)")
 }
 
 func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
@@ -472,36 +628,313 @@ func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
 	return request, nil
 }
 
-func buildSandboxLogsOptions(cmd *cobra.Command) (*sandbox0.SandboxLogsOptions, error) {
-	options := &sandbox0.SandboxLogsOptions{}
-	if sandboxLogsContainer != "" {
-		options.Container = sandboxLogsContainer
+func addSandboxObservabilityFlags(cmd *cobra.Command) {
+	cmd.Flags().IntVar(&sandboxObsLimit, "limit", 100, "maximum number of records to return per query or watch poll")
+	cmd.Flags().StringVar(&sandboxObsCursor, "cursor", "", "resume cursor")
+	cmd.Flags().StringVar(&sandboxObsStartTime, "start-time", "", "inclusive start time (RFC3339)")
+	cmd.Flags().StringVar(&sandboxObsEndTime, "end-time", "", "exclusive end time (RFC3339, not valid with --watch)")
+	cmd.Flags().StringVar(&sandboxObsSince, "since", "", "relative start time, for example 10m or 1h")
+	cmd.Flags().BoolVar(&sandboxObsWatch, "watch", false, "watch realtime records as they are ingested")
+}
+
+func addSandboxEventFilterFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&sandboxObsSource, "source", "", "filter by event source (manager, netd, procd)")
+	cmd.Flags().StringVar(&sandboxObsEventType, "event-type", "", "filter by event type (lifecycle, network_audit, runtime_stats)")
+	cmd.Flags().StringVar(&sandboxObsOutcome, "outcome", "", "filter by outcome (completed, denied, error, succeeded, failed)")
+}
+
+func buildSandboxLogObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityLogOptions, bool, error) {
+	query, watch, err := buildSandboxObservabilityQueryOptions(cmd)
+	if err != nil {
+		return nil, false, err
+	}
+	if sandboxLogsFollow {
+		if query.EndTime != nil {
+			return nil, false, fmt.Errorf("--end-time cannot be used with --follow")
+		}
+		watch = true
 	}
 	if cmd.Flags().Changed("tail") {
 		if sandboxLogsTailLines < 1 {
-			return nil, fmt.Errorf("--tail must be greater than 0")
+			return nil, false, fmt.Errorf("--tail must be greater than 0")
 		}
-		options.TailLines = &sandboxLogsTailLines
-	}
-	if cmd.Flags().Changed("limit-bytes") {
-		if sandboxLogsLimitBytes < 1 {
-			return nil, fmt.Errorf("--limit-bytes must be greater than 0")
+		if cmd.Flags().Changed("limit") {
+			return nil, false, fmt.Errorf("--tail and --limit cannot both be set")
 		}
-		options.LimitBytes = &sandboxLogsLimitBytes
-	}
-	if sandboxLogsPrevious {
-		options.Previous = true
-	}
-	if sandboxLogsTimestamps {
-		options.Timestamps = true
+		query.Limit = sandboxLogsTailLines
 	}
 	if cmd.Flags().Changed("since-seconds") {
-		if sandboxLogsSinceSeconds < 1 {
-			return nil, fmt.Errorf("--since-seconds must be greater than 0")
+		if sandboxLogsSinceSecs < 1 {
+			return nil, false, fmt.Errorf("--since-seconds must be greater than 0")
 		}
-		options.SinceSeconds = &sandboxLogsSinceSeconds
+		if cmd.Flags().Changed("since") || cmd.Flags().Changed("start-time") {
+			return nil, false, fmt.Errorf("--since-seconds cannot be combined with --since or --start-time")
+		}
+		start := time.Now().Add(-time.Duration(sandboxLogsSinceSecs) * time.Second)
+		query.StartTime = &start
 	}
-	return options, nil
+	options := &sandbox0.SandboxObservabilityLogOptions{SandboxObservabilityQueryOptions: query}
+	if sandboxObsContextID != "" {
+		options.ContextID = sandboxObsContextID
+	}
+	if sandboxObsStream != "" {
+		stream, err := parseSandboxObservabilityLogStream(sandboxObsStream)
+		if err != nil {
+			return nil, false, err
+		}
+		options.Stream = stream
+	}
+	return options, watch, nil
+}
+
+func buildSandboxEventObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityEventOptions, bool, error) {
+	query, watch, err := buildSandboxObservabilityQueryOptions(cmd)
+	if err != nil {
+		return nil, false, err
+	}
+	options := &sandbox0.SandboxObservabilityEventOptions{SandboxObservabilityQueryOptions: query}
+	if sandboxObsSource != "" {
+		source, err := parseObservabilityEventSource(sandboxObsSource)
+		if err != nil {
+			return nil, false, err
+		}
+		options.Source = source
+	}
+	if sandboxObsEventType != "" {
+		eventType, err := parseSandboxObservabilityEventType(sandboxObsEventType)
+		if err != nil {
+			return nil, false, err
+		}
+		options.EventType = eventType
+	}
+	if sandboxObsOutcome != "" {
+		outcome, err := parseSandboxObservabilityOutcome(sandboxObsOutcome)
+		if err != nil {
+			return nil, false, err
+		}
+		options.Outcome = outcome
+	}
+	return options, watch, nil
+}
+
+func buildSandboxMetricObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityMetricOptions, bool, error) {
+	query, watch, err := buildSandboxObservabilityQueryOptions(cmd)
+	if err != nil {
+		return nil, false, err
+	}
+	options := &sandbox0.SandboxObservabilityMetricOptions{SandboxObservabilityQueryOptions: query}
+	if sandboxObsContextID != "" {
+		options.ContextID = sandboxObsContextID
+	}
+	options.Names = splitObservabilityNames(sandboxObsNames)
+	return options, watch, nil
+}
+
+func buildSandboxObservabilityQueryOptions(cmd *cobra.Command) (sandbox0.SandboxObservabilityQueryOptions, bool, error) {
+	options := sandbox0.SandboxObservabilityQueryOptions{}
+	if sandboxObsLimit < 1 {
+		return options, false, fmt.Errorf("--limit must be greater than 0")
+	}
+	options.Limit = sandboxObsLimit
+	if sandboxObsCursor != "" {
+		options.Cursor = sandboxObsCursor
+	}
+	if sandboxObsStartTime != "" && sandboxObsSince != "" {
+		return options, false, fmt.Errorf("--start-time and --since cannot both be set")
+	}
+	if sandboxObsStartTime != "" {
+		start, err := time.Parse(time.RFC3339, sandboxObsStartTime)
+		if err != nil {
+			return options, false, fmt.Errorf("parse --start-time: %w", err)
+		}
+		options.StartTime = &start
+	}
+	if sandboxObsSince != "" {
+		duration, err := time.ParseDuration(sandboxObsSince)
+		if err != nil {
+			return options, false, fmt.Errorf("parse --since: %w", err)
+		}
+		start := time.Now().Add(-duration)
+		options.StartTime = &start
+	}
+	if sandboxObsEndTime != "" {
+		if sandboxObsWatch {
+			return options, false, fmt.Errorf("--end-time cannot be used with --watch")
+		}
+		end, err := time.Parse(time.RFC3339, sandboxObsEndTime)
+		if err != nil {
+			return options, false, fmt.Errorf("parse --end-time: %w", err)
+		}
+		options.EndTime = &end
+	}
+	return options, sandboxObsWatch, nil
+}
+
+func writeObservabilityLogs(w io.Writer, logs []apispec.SandboxObservabilityLogEntry) {
+	for _, entry := range logs {
+		if strings.HasSuffix(entry.Message, "\n") {
+			_, _ = io.WriteString(w, entry.Message)
+			continue
+		}
+		_, _ = fmt.Fprintln(w, entry.Message)
+	}
+}
+
+func writeObservabilityWatch(stream *sandbox0.SandboxObservabilityStream) error {
+	for {
+		line, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := writeObservabilityWatchLine(line); err != nil {
+			return err
+		}
+	}
+}
+
+func writeObservabilityWatchLine(line *sandbox0.SandboxObservabilityWatchLine) error {
+	if cfgFormat == "json" || cfgFormat == "yaml" {
+		return json.NewEncoder(os.Stdout).Encode(line)
+	}
+	switch line.Type {
+	case "heartbeat", "watermark":
+		return nil
+	case "error":
+		if line.Error != "" {
+			return fmt.Errorf("%s", line.Error)
+		}
+		return fmt.Errorf("observability watch stream returned an error")
+	case "log":
+		var entry apispec.SandboxObservabilityLogEntry
+		if err := json.Unmarshal(line.Data, &entry); err != nil {
+			return err
+		}
+		writeObservabilityLogs(os.Stdout, []apispec.SandboxObservabilityLogEntry{entry})
+	case "metric_sample":
+		var sample apispec.SandboxObservabilityMetricSample
+		if err := json.Unmarshal(line.Data, &sample); err != nil {
+			return err
+		}
+		writeObservabilityMetricSample(os.Stdout, sample)
+	case "event":
+		var event apispec.SandboxObservabilityEvent
+		if err := json.Unmarshal(line.Data, &event); err != nil {
+			return err
+		}
+		writeObservabilityEvent(os.Stdout, event)
+	default:
+		return nil
+	}
+	return nil
+}
+
+func writeObservabilityEvent(w io.Writer, event apispec.SandboxObservabilityEvent) {
+	outcome := ""
+	if value, ok := event.Outcome.Get(); ok {
+		outcome = string(value)
+	}
+	_, _ = fmt.Fprintf(
+		w,
+		"%s\t%s\t%s\t%s\t%s\n",
+		event.OccurredAt.Format(time.RFC3339),
+		event.Source,
+		event.EventType,
+		outcome,
+		event.Cursor,
+	)
+}
+
+func writeObservabilityMetricSample(w io.Writer, sample apispec.SandboxObservabilityMetricSample) {
+	unit := ""
+	if value, ok := sample.Unit.Get(); ok {
+		unit = value
+	}
+	contextID := ""
+	if value, ok := sample.ContextID.Get(); ok {
+		contextID = value
+	}
+	_, _ = fmt.Fprintf(
+		w,
+		"%s\t%s\t%.6g\t%s\t%s\t%s\n",
+		sample.OccurredAt.Format(time.RFC3339),
+		sample.Name,
+		sample.Value,
+		unit,
+		contextID,
+		sample.Cursor,
+	)
+}
+
+func parseSandboxObservabilityLogStream(value string) (apispec.SandboxObservabilityLogStream, error) {
+	switch strings.ToLower(value) {
+	case "stdout":
+		return apispec.SandboxObservabilityLogStreamStdout, nil
+	case "stderr":
+		return apispec.SandboxObservabilityLogStreamStderr, nil
+	case "pty":
+		return apispec.SandboxObservabilityLogStreamPty, nil
+	default:
+		return "", fmt.Errorf("invalid --stream %q: expected stdout, stderr, or pty", value)
+	}
+}
+
+func parseObservabilityEventSource(value string) (apispec.ObservabilityEventSource, error) {
+	switch strings.ToLower(value) {
+	case "manager":
+		return apispec.ObservabilityEventSourceManager, nil
+	case "netd":
+		return apispec.ObservabilityEventSourceNetd, nil
+	case "procd":
+		return apispec.ObservabilityEventSourceProcd, nil
+	default:
+		return "", fmt.Errorf("invalid --source %q: expected manager, netd, or procd", value)
+	}
+}
+
+func parseSandboxObservabilityEventType(value string) (apispec.SandboxObservabilityEventType, error) {
+	switch strings.ToLower(value) {
+	case "lifecycle":
+		return apispec.SandboxObservabilityEventTypeLifecycle, nil
+	case "network_audit":
+		return apispec.SandboxObservabilityEventTypeNetworkAudit, nil
+	case "runtime_stats":
+		return apispec.SandboxObservabilityEventTypeRuntimeStats, nil
+	default:
+		return "", fmt.Errorf("invalid --event-type %q: expected lifecycle, network_audit, or runtime_stats", value)
+	}
+}
+
+func parseSandboxObservabilityOutcome(value string) (apispec.SandboxObservabilityOutcome, error) {
+	switch strings.ToLower(value) {
+	case "completed":
+		return apispec.SandboxObservabilityOutcomeCompleted, nil
+	case "denied":
+		return apispec.SandboxObservabilityOutcomeDenied, nil
+	case "error":
+		return apispec.SandboxObservabilityOutcomeError, nil
+	case "succeeded":
+		return apispec.SandboxObservabilityOutcomeSucceeded, nil
+	case "failed":
+		return apispec.SandboxObservabilityOutcomeFailed, nil
+	default:
+		return "", fmt.Errorf("invalid --outcome %q: expected completed, denied, error, succeeded, or failed", value)
+	}
+}
+
+func splitObservabilityNames(values []string) []string {
+	var out []string
+	for _, raw := range values {
+		for _, part := range strings.Split(raw, ",") {
+			name := strings.TrimSpace(part)
+			if name != "" {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
 }
 
 func buildSandboxCreateConfigOverrides() (apispec.SandboxConfig, bool, error) {
