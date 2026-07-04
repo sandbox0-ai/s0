@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
+	"github.com/spf13/cobra"
 )
 
 func TestBuildSandboxCreateConfig(t *testing.T) {
@@ -262,6 +263,83 @@ network:
 	})
 }
 
+func TestBuildSandboxObservabilityOptions(t *testing.T) {
+	t.Run("logs options use observability filters", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		cmd := newSandboxLogsOptionsTestCommand()
+		if err := cmd.Flags().Set("limit", "25"); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Flags().Set("context-id", "ctx_123"); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Flags().Set("stream", "stderr"); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Flags().Set("watch", "true"); err != nil {
+			t.Fatal(err)
+		}
+
+		options, watch, err := buildSandboxLogObservabilityOptions(cmd)
+		if err != nil {
+			t.Fatalf("buildSandboxLogObservabilityOptions() error = %v", err)
+		}
+		if !watch {
+			t.Fatal("watch = false, want true")
+		}
+		if options.Limit != 25 {
+			t.Fatalf("limit = %d, want 25", options.Limit)
+		}
+		if options.ContextID != "ctx_123" {
+			t.Fatalf("context_id = %q, want ctx_123", options.ContextID)
+		}
+		if options.Stream != apispec.SandboxObservabilityLogStreamStderr {
+			t.Fatalf("stream = %q, want stderr", options.Stream)
+		}
+	})
+
+	t.Run("watch rejects end time", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		cmd := newSandboxLogsOptionsTestCommand()
+		if err := cmd.Flags().Set("watch", "true"); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Flags().Set("end-time", "2026-07-03T00:00:00Z"); err != nil {
+			t.Fatal(err)
+		}
+
+		_, _, err := buildSandboxLogObservabilityOptions(cmd)
+		if err == nil {
+			t.Fatal("buildSandboxLogObservabilityOptions() error = nil, want error")
+		}
+	})
+
+	t.Run("metrics split repeated and comma separated names", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		cmd := newSandboxMetricsOptionsTestCommand()
+		if err := cmd.Flags().Set("name", "cpu.percent,memory.rss"); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Flags().Set("name", "io.read_bytes"); err != nil {
+			t.Fatal(err)
+		}
+
+		options, _, err := buildSandboxMetricObservabilityOptions(cmd)
+		if err != nil {
+			t.Fatalf("buildSandboxMetricObservabilityOptions() error = %v", err)
+		}
+		want := []string{"cpu.percent", "memory.rss", "io.read_bytes"}
+		if len(options.Names) != len(want) {
+			t.Fatalf("names = %#v, want %#v", options.Names, want)
+		}
+		for i := range want {
+			if options.Names[i] != want[i] {
+				t.Fatalf("names = %#v, want %#v", options.Names, want)
+			}
+		}
+	})
+}
+
 func writeTempFile(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -269,6 +347,25 @@ func writeTempFile(t *testing.T, content string) string {
 		t.Fatalf("write temp file: %v", err)
 	}
 	return path
+}
+
+func newSandboxLogsOptionsTestCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "logs"}
+	addSandboxObservabilityFlags(cmd)
+	cmd.Flags().StringVar(&sandboxObsContextID, "context-id", "", "")
+	cmd.Flags().StringVar(&sandboxObsStream, "stream", "", "")
+	cmd.Flags().BoolVarP(&sandboxLogsFollow, "follow", "f", false, "")
+	cmd.Flags().IntVar(&sandboxLogsTailLines, "tail", 0, "")
+	cmd.Flags().Int64Var(&sandboxLogsSinceSecs, "since-seconds", 0, "")
+	return cmd
+}
+
+func newSandboxMetricsOptionsTestCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "metrics"}
+	addSandboxObservabilityFlags(cmd)
+	cmd.Flags().StringVar(&sandboxObsContextID, "context-id", "", "")
+	cmd.Flags().StringArrayVar(&sandboxObsNames, "name", nil, "")
+	return cmd
 }
 
 func resetSandboxFlagsForTest() {
@@ -284,6 +381,21 @@ func resetSandboxFlagsForTest() {
 	sandboxListPaused = ""
 	sandboxListLimit = 0
 	sandboxListOffset = 0
+	sandboxObsLimit = 0
+	sandboxObsCursor = ""
+	sandboxObsStartTime = ""
+	sandboxObsEndTime = ""
+	sandboxObsSince = ""
+	sandboxObsWatch = false
+	sandboxObsContextID = ""
+	sandboxObsStream = ""
+	sandboxObsNames = nil
+	sandboxObsSource = ""
+	sandboxObsEventType = ""
+	sandboxObsOutcome = ""
+	sandboxLogsFollow = false
+	sandboxLogsTailLines = 0
+	sandboxLogsSinceSecs = 0
 	sandboxUpdateTTL = 0
 	sandboxUpdateHardTTL = 0
 	sandboxUpdateMemory = ""

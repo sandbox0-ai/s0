@@ -77,8 +77,12 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatContextList(w, v)
 	case *apispec.ContextResponse:
 		return f.formatContext(w, v)
-	case *apispec.ContextStatsResponse:
-		return f.formatContextStats(w, v)
+	case *apispec.SandboxObservabilityEventsResponse:
+		return f.formatSandboxObservabilityEvents(w, v)
+	case *apispec.SandboxObservabilityLogsResponse:
+		return f.formatSandboxObservabilityLogs(w, v)
+	case *apispec.SandboxObservabilityMetricsResponse:
+		return f.formatSandboxObservabilityMetrics(w, v)
 	case *apispec.SandboxNetworkPolicy:
 		return f.formatSandboxNetworkPolicy(w, v)
 	case *sandbox0.SandboxServicesResponse:
@@ -649,50 +653,68 @@ func (f *TableFormatter) formatContext(w io.Writer, ctx *apispec.ContextResponse
 	return t.Render()
 }
 
-func (f *TableFormatter) formatContextStats(w io.Writer, stats *apispec.ContextStatsResponse) error {
+func (f *TableFormatter) formatSandboxObservabilityEvents(w io.Writer, resp *apispec.SandboxObservabilityEventsResponse) error {
 	t := newTable(w)
-	if contextID, ok := stats.ContextID.Get(); ok {
-		_ = t.Append([]string{"Context ID:", contextID})
+	t.Header([]string{"Occurred", "Source", "Type", "Outcome", "Cursor"})
+	for _, event := range resp.Events {
+		outcome := ""
+		if value, ok := event.Outcome.Get(); ok {
+			outcome = string(value)
+		}
+		_ = t.Append([]string{
+			event.OccurredAt.Format(timeLayout),
+			string(event.Source),
+			string(event.EventType),
+			outcome,
+			event.Cursor,
+		})
 	}
-	if ctxType, ok := stats.Type.Get(); ok {
-		_ = t.Append([]string{"Type:", ctxType})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSandboxObservabilityLogs(w io.Writer, resp *apispec.SandboxObservabilityLogsResponse) error {
+	t := newTable(w)
+	t.Header([]string{"Occurred", "Stream", "Context", "Message", "Cursor"})
+	for _, entry := range resp.Logs {
+		stream := ""
+		if value, ok := entry.Stream.Get(); ok {
+			stream = string(value)
+		}
+		contextID := ""
+		if value, ok := entry.ContextID.Get(); ok {
+			contextID = value
+		}
+		_ = t.Append([]string{
+			entry.OccurredAt.Format(timeLayout),
+			stream,
+			contextID,
+			strings.TrimRight(entry.Message, "\r\n"),
+			entry.Cursor,
+		})
 	}
-	if alias, ok := stats.Alias.Get(); ok {
-		_ = t.Append([]string{"Alias:", alias})
-	}
-	if running, ok := stats.Running.Get(); ok {
-		_ = t.Append([]string{"Running:", fmt.Sprintf("%v", running)})
-	}
-	if paused, ok := stats.Paused.Get(); ok {
-		_ = t.Append([]string{"Paused:", fmt.Sprintf("%v", paused)})
-	}
-	if usage, ok := stats.Usage.Get(); ok {
-		_ = t.Append([]string{"---", "---"})
-		_ = t.Append([]string{"Resource Usage:", ""})
-		if cpu, ok := usage.CPUPercent.Get(); ok {
-			_ = t.Append([]string{"CPU %:", fmt.Sprintf("%.2f", cpu)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatSandboxObservabilityMetrics(w io.Writer, resp *apispec.SandboxObservabilityMetricsResponse) error {
+	t := newTable(w)
+	t.Header([]string{"Occurred", "Name", "Value", "Unit", "Context", "Cursor"})
+	for _, sample := range resp.Samples {
+		unit := ""
+		if value, ok := sample.Unit.Get(); ok {
+			unit = value
 		}
-		if memRss, ok := usage.MemoryRss.Get(); ok {
-			_ = t.Append([]string{"Memory RSS:", formatBytes(memRss)})
+		contextID := ""
+		if value, ok := sample.ContextID.Get(); ok {
+			contextID = value
 		}
-		if memVms, ok := usage.MemoryVms.Get(); ok {
-			_ = t.Append([]string{"Memory VMS:", formatBytes(memVms)})
-		}
-		if memBytes, ok := usage.MemoryBytes.Get(); ok {
-			_ = t.Append([]string{"Memory Bytes:", formatBytes(memBytes)})
-		}
-		if threads, ok := usage.ThreadCount.Get(); ok {
-			_ = t.Append([]string{"Threads:", fmt.Sprintf("%d", threads)})
-		}
-		if openFiles, ok := usage.OpenFiles.Get(); ok {
-			_ = t.Append([]string{"Open Files:", fmt.Sprintf("%d", openFiles)})
-		}
-		if ioRead, ok := usage.IoReadBytes.Get(); ok {
-			_ = t.Append([]string{"IO Read:", formatBytes(ioRead)})
-		}
-		if ioWrite, ok := usage.IoWriteBytes.Get(); ok {
-			_ = t.Append([]string{"IO Write:", formatBytes(ioWrite)})
-		}
+		_ = t.Append([]string{
+			sample.OccurredAt.Format(timeLayout),
+			sample.Name,
+			fmt.Sprintf("%.6g", sample.Value),
+			unit,
+			contextID,
+			sample.Cursor,
+		})
 	}
 	return t.Render()
 }
