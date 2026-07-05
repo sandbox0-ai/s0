@@ -533,6 +533,7 @@ s0 template delete <template-id>
 s0 volume list
 s0 volume get <volume-id>
 s0 volume create [--access-mode RWO|ROX|RWX] [--snapshot-id <snapshot-id>]
+s0 volume create --backend s3 --s3-bucket <bucket> [--s3-provider aws|ali|r2] [--s3-prefix <prefix>] [--s3-region <region>] [--s3-endpoint-url <url>] [--s3-access-key <key> --s3-secret-key <secret>]
 s0 volume delete <volume-id> [--force]
 ```
 
