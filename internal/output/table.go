@@ -195,12 +195,13 @@ func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVol
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "TEAM ID", "CREATED"})
+	t.Header([]string{"ID", "TEAM ID", "BACKEND", "CREATED"})
 
 	for _, v := range volumes {
 		_ = t.Append([]string{
 			v.ID,
 			v.TeamID,
+			formatVolumeBackend(v.Backend),
 			v.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
@@ -212,9 +213,30 @@ func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) err
 	_ = t.Append([]string{"ID:", v.ID})
 	_ = t.Append([]string{"Team ID:", v.TeamID})
 	_ = t.Append([]string{"User ID:", v.UserID})
+	_ = t.Append([]string{"Backend:", formatVolumeBackend(v.Backend)})
+	if s3, ok := v.S3.Get(); ok {
+		_ = t.Append([]string{"S3 Provider:", string(s3.Provider)})
+		_ = t.Append([]string{"S3 Bucket:", s3.Bucket})
+		if prefix, ok := s3.Prefix.Get(); ok {
+			_ = t.Append([]string{"S3 Prefix:", prefix})
+		}
+		if region, ok := s3.Region.Get(); ok {
+			_ = t.Append([]string{"S3 Region:", region})
+		}
+		if endpointURL, ok := s3.EndpointURL.Get(); ok {
+			_ = t.Append([]string{"S3 Endpoint URL:", endpointURL})
+		}
+	}
 	_ = t.Append([]string{"Created:", v.CreatedAt.Format("2006-01-02 15:04:05")})
 	_ = t.Append([]string{"Updated:", v.UpdatedAt.Format("2006-01-02 15:04:05")})
 	return t.Render()
+}
+
+func formatVolumeBackend(backend apispec.VolumeBackend) string {
+	if backend == "" {
+		return "-"
+	}
+	return string(backend)
 }
 
 func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapshot) error {
