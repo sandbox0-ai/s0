@@ -13,8 +13,31 @@ import (
 var (
 	volumeAccessMode       string
 	volumeCreateSnapshotID string
+	volumeCreateBackend    string
+	volumeS3Provider       string
+	volumeS3Bucket         string
+	volumeS3Prefix         string
+	volumeS3Region         string
+	volumeS3EndpointURL    string
+	volumeS3AccessKey      string
+	volumeS3SecretKey      string
+	volumeS3SessionToken   string
 	volumeDeleteForce      bool
 )
+
+type createVolumeOptions struct {
+	accessMode     string
+	snapshotID     string
+	backend        string
+	s3Provider     string
+	s3Bucket       string
+	s3Prefix       string
+	s3Region       string
+	s3EndpointURL  string
+	s3AccessKey    string
+	s3SecretKey    string
+	s3SessionToken string
+}
 
 // volumeCmd represents the volume command.
 var volumeCmd = &cobra.Command{
@@ -88,7 +111,23 @@ var volumeCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		req := buildCreateVolumeRequest(volumeAccessMode, volumeCreateSnapshotID)
+		req, err := buildCreateVolumeRequest(createVolumeOptions{
+			accessMode:     volumeAccessMode,
+			snapshotID:     volumeCreateSnapshotID,
+			backend:        volumeCreateBackend,
+			s3Provider:     volumeS3Provider,
+			s3Bucket:       volumeS3Bucket,
+			s3Prefix:       volumeS3Prefix,
+			s3Region:       volumeS3Region,
+			s3EndpointURL:  volumeS3EndpointURL,
+			s3AccessKey:    volumeS3AccessKey,
+			s3SecretKey:    volumeS3SecretKey,
+			s3SessionToken: volumeS3SessionToken,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building volume request: %v\n", err)
+			os.Exit(1)
+		}
 
 		volume, err := client.CreateVolume(cmd.Context(), req)
 		if err != nil {
@@ -103,17 +142,102 @@ var volumeCreateCmd = &cobra.Command{
 	},
 }
 
-func buildCreateVolumeRequest(accessMode, snapshotID string) apispec.CreateSandboxVolumeRequest {
+func buildCreateVolumeRequest(opts createVolumeOptions) (apispec.CreateSandboxVolumeRequest, error) {
 	req := apispec.CreateSandboxVolumeRequest{}
 
-	if accessMode != "" {
-		req.AccessMode = apispec.NewOptVolumeAccessMode(apispec.VolumeAccessMode(accessMode))
+	if opts.accessMode != "" {
+		req.AccessMode = apispec.NewOptVolumeAccessMode(apispec.VolumeAccessMode(opts.accessMode))
 	}
-	if snapshotID != "" {
-		req.SnapshotID = apispec.NewOptString(snapshotID)
+	if opts.snapshotID != "" {
+		req.SnapshotID = apispec.NewOptString(opts.snapshotID)
 	}
 
-	return req
+	hasS3Config := opts.s3Provider != "" ||
+		opts.s3Bucket != "" ||
+		opts.s3Prefix != "" ||
+		opts.s3Region != "" ||
+		opts.s3EndpointURL != "" ||
+		opts.s3AccessKey != "" ||
+		opts.s3SecretKey != "" ||
+		opts.s3SessionToken != ""
+
+	switch opts.backend {
+	case "":
+	case string(apispec.VolumeBackendS0fs):
+		req.Backend = apispec.NewOptVolumeBackend(apispec.VolumeBackendS0fs)
+		if hasS3Config {
+			return req, fmt.Errorf("S3 flags require --backend s3")
+		}
+	case string(apispec.VolumeBackendS3):
+		req.Backend = apispec.NewOptVolumeBackend(apispec.VolumeBackendS3)
+		hasS3Config = true
+	default:
+		return req, fmt.Errorf("unsupported volume backend %q (expected s0fs or s3)", opts.backend)
+	}
+
+	if !hasS3Config {
+		return req, nil
+	}
+
+	if opts.snapshotID != "" {
+		return req, fmt.Errorf("S3 volumes do not support --snapshot-id")
+	}
+	if opts.accessMode == string(apispec.VolumeAccessModeRWX) {
+		return req, fmt.Errorf("S3 volumes do not support --access-mode RWX")
+	}
+	if opts.s3Bucket == "" {
+		return req, fmt.Errorf("--s3-bucket is required for S3 volumes")
+	}
+	if (opts.s3AccessKey == "") != (opts.s3SecretKey == "") {
+		return req, fmt.Errorf("--s3-access-key and --s3-secret-key must be provided together")
+	}
+
+	s3 := apispec.CreateSandboxVolumeS3Config{
+		Bucket: opts.s3Bucket,
+	}
+	if opts.s3Provider != "" {
+		provider, err := parseCreateVolumeS3Provider(opts.s3Provider)
+		if err != nil {
+			return req, err
+		}
+		s3.Provider = apispec.NewOptCreateSandboxVolumeS3ConfigProvider(provider)
+		if provider != apispec.CreateSandboxVolumeS3ConfigProviderAWS && opts.s3EndpointURL == "" {
+			return req, fmt.Errorf("--s3-endpoint-url is required for provider %s", provider)
+		}
+	}
+	if opts.s3Prefix != "" {
+		s3.Prefix = apispec.NewOptString(opts.s3Prefix)
+	}
+	if opts.s3Region != "" {
+		s3.Region = apispec.NewOptString(opts.s3Region)
+	}
+	if opts.s3EndpointURL != "" {
+		s3.EndpointURL = apispec.NewOptString(opts.s3EndpointURL)
+	}
+	if opts.s3AccessKey != "" {
+		s3.AccessKey = apispec.NewOptString(opts.s3AccessKey)
+		s3.SecretKey = apispec.NewOptString(opts.s3SecretKey)
+	}
+	if opts.s3SessionToken != "" {
+		s3.SessionToken = apispec.NewOptString(opts.s3SessionToken)
+	}
+
+	req.Backend = apispec.NewOptVolumeBackend(apispec.VolumeBackendS3)
+	req.S3 = apispec.NewOptCreateSandboxVolumeS3Config(s3)
+	return req, nil
+}
+
+func parseCreateVolumeS3Provider(value string) (apispec.CreateSandboxVolumeS3ConfigProvider, error) {
+	switch value {
+	case string(apispec.CreateSandboxVolumeS3ConfigProviderAWS):
+		return apispec.CreateSandboxVolumeS3ConfigProviderAWS, nil
+	case string(apispec.CreateSandboxVolumeS3ConfigProviderAli):
+		return apispec.CreateSandboxVolumeS3ConfigProviderAli, nil
+	case string(apispec.CreateSandboxVolumeS3ConfigProviderR2):
+		return apispec.CreateSandboxVolumeS3ConfigProviderR2, nil
+	default:
+		return "", fmt.Errorf("unsupported S3 provider %q (expected aws, ali, or r2)", value)
+	}
 }
 
 // volumeDeleteCmd deletes a volume.
@@ -191,6 +315,15 @@ func init() {
 	// Volume create flags
 	volumeCreateCmd.Flags().StringVar(&volumeAccessMode, "access-mode", "", "access mode (RWO, ROX, or RWX)")
 	volumeCreateCmd.Flags().StringVar(&volumeCreateSnapshotID, "snapshot-id", "", "snapshot ID used to initialize the new volume")
+	volumeCreateCmd.Flags().StringVar(&volumeCreateBackend, "backend", "", "volume backend (s0fs or s3)")
+	volumeCreateCmd.Flags().StringVar(&volumeS3Provider, "s3-provider", "", "S3-compatible provider (aws, ali, or r2; defaults to aws)")
+	volumeCreateCmd.Flags().StringVar(&volumeS3Bucket, "s3-bucket", "", "S3 bucket to expose as the volume root")
+	volumeCreateCmd.Flags().StringVar(&volumeS3Prefix, "s3-prefix", "", "S3 object key prefix to expose as the volume root")
+	volumeCreateCmd.Flags().StringVar(&volumeS3Region, "s3-region", "", "S3 region override")
+	volumeCreateCmd.Flags().StringVar(&volumeS3EndpointURL, "s3-endpoint-url", "", "S3-compatible endpoint URL override")
+	volumeCreateCmd.Flags().StringVar(&volumeS3AccessKey, "s3-access-key", "", "S3 access key override")
+	volumeCreateCmd.Flags().StringVar(&volumeS3SecretKey, "s3-secret-key", "", "S3 secret key override")
+	volumeCreateCmd.Flags().StringVar(&volumeS3SessionToken, "s3-session-token", "", "S3 temporary credential session token")
 	volumeDeleteCmd.Flags().BoolVar(&volumeDeleteForce, "force", false, "force delete volume even if it has active mounts")
 
 	// Volume fork flags

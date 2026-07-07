@@ -161,6 +161,51 @@ func TestTableFormatterFormatRegion(t *testing.T) {
 	}
 }
 
+func TestTableFormatterFormatVolumeShowsBackendAndS3Metadata(t *testing.T) {
+	formatter := &TableFormatter{}
+	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	volume := &apispec.SandboxVolume{
+		ID:        "vol_s3",
+		TeamID:    "team-1",
+		UserID:    "user-1",
+		Backend:   apispec.VolumeBackendS3,
+		CreatedAt: now,
+		UpdatedAt: now,
+		S3: apispec.NewOptSandboxVolumeS3Config(apispec.SandboxVolumeS3Config{
+			Provider:    apispec.SandboxVolumeS3ConfigProviderR2,
+			Bucket:      "agent-state",
+			Prefix:      apispec.NewOptString("team-a/"),
+			Region:      apispec.NewOptString("auto"),
+			EndpointURL: apispec.NewOptString("https://account.r2.cloudflarestorage.com"),
+		}),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, volume); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Backend:",
+		"s3",
+		"S3 Provider:",
+		"r2",
+		"S3 Bucket:",
+		"agent-state",
+		"S3 Prefix:",
+		"team-a/",
+		"S3 Region:",
+		"auto",
+		"S3 Endpoint URL:",
+		"https://account.r2.cloudflarestorage.com",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
 func TestNewTeamListMarksCurrentTeam(t *testing.T) {
 	teams := []apispec.Team{
 		{ID: "team-1", Name: "Team One"},
