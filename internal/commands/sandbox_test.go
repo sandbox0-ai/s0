@@ -1,13 +1,45 @@
 package commands
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
+
+func TestFormatSandboxCreateErrorClaimStartThrottled(t *testing.T) {
+	err := &sandbox0.APIError{
+		StatusCode:        429,
+		Code:              sandbox0.CodeClaimStartThrottled,
+		Message:           "claim start admission throttled",
+		RetryAfterSeconds: 2,
+	}
+
+	got := formatSandboxCreateError(err)
+	for _, want := range []string{
+		"claim_start_throttled",
+		"Hint: sandbox claim/start capacity is temporarily throttled.",
+		"Retry after 2 seconds.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("formatSandboxCreateError() = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestFormatSandboxCreateErrorNonThrottled(t *testing.T) {
+	err := errors.New("request failed")
+
+	got := formatSandboxCreateError(err)
+	if got != "request failed" {
+		t.Fatalf("formatSandboxCreateError() = %q, want original error", got)
+	}
+}
 
 func TestBuildSandboxCreateConfig(t *testing.T) {
 	resetSandboxFlagsForTest()

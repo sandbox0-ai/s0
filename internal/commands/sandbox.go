@@ -79,7 +79,7 @@ var sandboxCreateCmd = &cobra.Command{
 
 		sandbox, err := client.ClaimSandboxRequest(cmd.Context(), request)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating sandbox: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error creating sandbox: %s\n", formatSandboxCreateError(err))
 			os.Exit(1)
 		}
 
