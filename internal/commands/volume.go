@@ -215,8 +215,8 @@ func buildCreateVolumeRequest(opts createVolumeOptions) (apispec.CreateSandboxVo
 		s3.EndpointURL = apispec.NewOptString(opts.s3EndpointURL)
 	}
 	if opts.s3AccessKey != "" {
-		s3.AccessKey = apispec.NewOptString(opts.s3AccessKey)
-		s3.SecretKey = apispec.NewOptString(opts.s3SecretKey)
+		s3.AccessKey = opts.s3AccessKey
+		s3.SecretKey = opts.s3SecretKey
 	}
 	if opts.s3SessionToken != "" {
 		s3.SessionToken = apispec.NewOptString(opts.s3SessionToken)

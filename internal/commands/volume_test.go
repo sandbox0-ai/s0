@@ -69,11 +69,11 @@ func TestBuildCreateVolumeRequestSupportsS3Backend(t *testing.T) {
 	if prefix, ok := s3.Prefix.Get(); !ok || prefix != "team-a/" {
 		t.Fatalf("Prefix = %q, %v; want team-a/, true", prefix, ok)
 	}
-	if accessKey, ok := s3.AccessKey.Get(); !ok || accessKey != "access" {
-		t.Fatalf("AccessKey = %q, %v; want access, true", accessKey, ok)
+	if s3.AccessKey != "access" {
+		t.Fatalf("AccessKey = %q, want access", s3.AccessKey)
 	}
-	if secretKey, ok := s3.SecretKey.Get(); !ok || secretKey != "secret" {
-		t.Fatalf("SecretKey = %q, %v; want secret, true", secretKey, ok)
+	if s3.SecretKey != "secret" {
+		t.Fatalf("SecretKey = %q, want secret", s3.SecretKey)
 	}
 }
 
