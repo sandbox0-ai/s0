@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -61,6 +62,16 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSandboxList(w, v)
 	case *sandbox0.Sandbox:
 		return f.formatSDKSandbox(w, v)
+	case []apispec.ProcessSession:
+		return f.formatProcesses(w, v)
+	case apispec.ProcessSession:
+		return f.formatProcess(w, &v)
+	case *apispec.ProcessSession:
+		return f.formatProcess(w, v)
+	case apispec.ProcessEvent:
+		return f.formatProcessEvent(w, &v)
+	case *apispec.ProcessEvent:
+		return f.formatProcessEvent(w, v)
 	case *client.RegistryCredentials:
 		return f.formatRegistryCredentials(w, v)
 	case []apispec.CredentialSourceMetadata:
@@ -507,6 +518,98 @@ func (f *TableFormatter) formatSDKSandbox(w io.Writer, s *sandbox0.Sandbox) erro
 		_ = t.Append([]string{"Pod Name:", s.PodName})
 	}
 	return t.Render()
+}
+
+func (f *TableFormatter) formatProcesses(w io.Writer, processes []apispec.ProcessSession) error {
+	if len(processes) == 0 {
+		_, _ = fmt.Fprintln(w, "No processes found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"ID", "ALIAS", "STATE", "PID", "COMMAND", "CHANNELS", "NEXT SEQ", "CREATED"})
+	for _, process := range processes {
+		_ = t.Append([]string{
+			process.ID,
+			formatOptString(process.Alias),
+			string(process.State),
+			formatOptInt32(process.Pid),
+			strings.Join(process.Command, " "),
+			formatProcessChannels(process.Channels),
+			fmt.Sprintf("%d", process.EventLog.NextSeq),
+			process.CreatedAt.Format(timeLayout),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatProcess(w io.Writer, process *apispec.ProcessSession) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", process.ID})
+	_ = t.Append([]string{"Alias:", formatOptString(process.Alias)})
+	_ = t.Append([]string{"State:", string(process.State)})
+	_ = t.Append([]string{"PID:", formatOptInt32(process.Pid)})
+	_ = t.Append([]string{"Command:", strings.Join(process.Command, " ")})
+	if cwd, ok := process.Cwd.Get(); ok {
+		_ = t.Append([]string{"CWD:", cwd})
+	}
+	_ = t.Append([]string{"Channels:", formatProcessChannels(process.Channels)})
+	_ = t.Append([]string{"Event Next Seq:", fmt.Sprintf("%d", process.EventLog.NextSeq)})
+	_ = t.Append([]string{"Event Oldest Seq:", fmt.Sprintf("%d", process.EventLog.OldestSeq)})
+	_ = t.Append([]string{"Event Capacity:", fmt.Sprintf("%d", process.EventLog.Capacity)})
+	_ = t.Append([]string{"Created:", process.CreatedAt.Format(timeLayout)})
+	if startedAt, ok := process.StartedAt.Get(); ok {
+		_ = t.Append([]string{"Started:", startedAt.Format(timeLayout)})
+	}
+	if exitedAt, ok := process.ExitedAt.Get(); ok {
+		_ = t.Append([]string{"Exited:", exitedAt.Format(timeLayout)})
+	}
+	if exitCode, ok := process.ExitCode.Get(); ok {
+		_ = t.Append([]string{"Exit Code:", fmt.Sprintf("%d", exitCode)})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatProcessEvent(w io.Writer, event *apispec.ProcessEvent) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Seq:", fmt.Sprintf("%d", event.Seq)})
+	_ = t.Append([]string{"Event ID:", formatOptString(event.EventID)})
+	_ = t.Append([]string{"Process ID:", event.ProcessID})
+	_ = t.Append([]string{"Channel:", formatOptString(event.Channel)})
+	_ = t.Append([]string{"Type:", string(event.Type)})
+	_ = t.Append([]string{"Timestamp:", event.Timestamp.Format(timeLayout)})
+	_ = t.Append([]string{"Payload:", formatProcessEventPayload(event.Payload)})
+	return t.Render()
+}
+
+func formatProcessChannels(channels []apispec.ProcessChannelSpec) string {
+	if len(channels) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(channels))
+	for _, channel := range channels {
+		parts = append(parts, fmt.Sprintf("%s:%s", channel.Name, channel.Kind))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatOptInt32(value apispec.OptInt32) string {
+	if v, ok := value.Get(); ok {
+		return fmt.Sprintf("%d", v)
+	}
+	return "-"
+}
+
+func formatProcessEventPayload(value apispec.OptProcessEventPayload) string {
+	payload, ok := value.Get()
+	if !ok {
+		return "-"
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Sprintf("%v", payload)
+	}
+	return string(data)
 }
 
 func (f *TableFormatter) formatRegistryCredentials(w io.Writer, c *client.RegistryCredentials) error {
