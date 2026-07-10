@@ -372,6 +372,14 @@ func TestBuildSandboxObservabilityOptions(t *testing.T) {
 	})
 }
 
+func TestSandboxAuditCommandIsNotRegistered(t *testing.T) {
+	for _, cmd := range sandboxCmd.Commands() {
+		if cmd.Name() == "audit" {
+			t.Fatal("sandbox audit command should not be registered")
+		}
+	}
+}
+
 func writeTempFile(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")

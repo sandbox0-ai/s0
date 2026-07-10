@@ -257,7 +257,6 @@ s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
 s0 sandbox logs <sandbox-id> [--limit 100] [--context-id <ctx-id>] [--stream stdout|stderr|pty] [--watch]
 s0 sandbox events <sandbox-id> [--source manager|netd|procd] [--event-type lifecycle|network_audit|runtime_stats] [--watch]
-s0 sandbox audit <sandbox-id> [--source manager|netd|procd] [--event-type lifecycle|network_audit|runtime_stats] [--watch]
 s0 sandbox metrics <sandbox-id> [--name <metric-name>] [--context-id <ctx-id>] [--watch]
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
 s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200]
@@ -265,7 +264,7 @@ s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200]
 
 `s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
 
-`s0 sandbox logs/events/audit/metrics` query the per-sandbox observability backend. Use `--watch` for realtime records, `--cursor` to resume, `--start-time` / `--end-time` for absolute windows, or `--since 10m` for a relative window. `s0 sandbox logs` prints log messages by default; use `-o json` or `-o yaml` for structured records.
+`s0 sandbox logs/events/metrics` query the per-sandbox observability backend. Network audit events remain available through `s0 sandbox events --event-type network_audit`. Use `--watch` for realtime records, `--cursor` to resume, `--start-time` / `--end-time` for absolute windows, or `--since 10m` for a relative window. `s0 sandbox logs` prints log messages by default; use `-o json` or `-o yaml` for structured records.
 
 Manage the current user's SSH public keys with:
 
