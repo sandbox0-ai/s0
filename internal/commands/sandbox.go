@@ -431,50 +431,6 @@ var sandboxEventsCmd = &cobra.Command{
 	},
 }
 
-// sandboxAuditCmd queries sandbox audit events.
-var sandboxAuditCmd = &cobra.Command{
-	Use:   "audit <sandbox-id>",
-	Short: "Query sandbox audit events",
-	Long:  `Query audit-focused sandbox events from the per-sandbox observability backend.`,
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		sandboxID := args[0]
-		client, err := getClientRaw(cmd)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
-			os.Exit(1)
-		}
-		options, watch, err := buildSandboxEventObservabilityOptions(cmd)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error building sandbox audit request: %v\n", err)
-			os.Exit(1)
-		}
-		sandbox := client.Sandbox(sandboxID)
-		if watch {
-			stream, err := sandbox.WatchAuditEvents(cmd.Context(), options)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error streaming sandbox audit events: %v\n", err)
-				os.Exit(1)
-			}
-			defer stream.Close()
-			if err := writeObservabilityWatch(stream); err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading sandbox audit stream: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-		events, err := sandbox.ListAuditEvents(cmd.Context(), options)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting sandbox audit events: %v\n", err)
-			os.Exit(1)
-		}
-		if err := getFormatter().Format(os.Stdout, events); err != nil {
-			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
-			os.Exit(1)
-		}
-	},
-}
-
 // sandboxMetricsCmd queries sandbox metric samples.
 var sandboxMetricsCmd = &cobra.Command{
 	Use:   "metrics <sandbox-id>",
@@ -541,7 +497,6 @@ func init() {
 	sandboxCmd.AddCommand(sandboxUpdateCmd)
 	sandboxCmd.AddCommand(sandboxLogsCmd)
 	sandboxCmd.AddCommand(sandboxEventsCmd)
-	sandboxCmd.AddCommand(sandboxAuditCmd)
 	sandboxCmd.AddCommand(sandboxMetricsCmd)
 
 	// Update command flags
@@ -571,9 +526,6 @@ func init() {
 
 	addSandboxObservabilityFlags(sandboxEventsCmd)
 	addSandboxEventFilterFlags(sandboxEventsCmd)
-
-	addSandboxObservabilityFlags(sandboxAuditCmd)
-	addSandboxEventFilterFlags(sandboxAuditCmd)
 
 	addSandboxObservabilityFlags(sandboxMetricsCmd)
 	sandboxMetricsCmd.Flags().StringVar(&sandboxObsContextID, "context-id", "", "filter by context ID")
