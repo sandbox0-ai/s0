@@ -41,6 +41,9 @@ var (
 	sandboxObsSource     string
 	sandboxObsEventType  string
 	sandboxObsOutcome    string
+	sandboxMetricStep    int
+	sandboxMetricStat    string
+	sandboxMetricPoints  int
 	sandboxLogsFollow    bool
 	sandboxLogsTailLines int
 	sandboxLogsSinceSecs int64
@@ -431,11 +434,11 @@ var sandboxEventsCmd = &cobra.Command{
 	},
 }
 
-// sandboxMetricsCmd queries sandbox metric samples.
+// sandboxMetricsCmd queries chart-ready sandbox runtime metrics.
 var sandboxMetricsCmd = &cobra.Command{
 	Use:   "metrics <sandbox-id>",
 	Short: "Query sandbox metrics",
-	Long:  `Query sandbox runtime metric samples from the per-sandbox observability backend.`,
+	Long:  `Query bounded, downsampled sandbox runtime metric series.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
@@ -444,25 +447,12 @@ var sandboxMetricsCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
 			os.Exit(1)
 		}
-		options, watch, err := buildSandboxMetricObservabilityOptions(cmd)
+		options, err := buildSandboxMetricObservabilityOptions(cmd)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error building sandbox metrics request: %v\n", err)
 			os.Exit(1)
 		}
 		sandbox := client.Sandbox(sandboxID)
-		if watch {
-			stream, err := sandbox.WatchMetrics(cmd.Context(), options)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error streaming sandbox metrics: %v\n", err)
-				os.Exit(1)
-			}
-			defer stream.Close()
-			if err := writeObservabilityWatch(stream); err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading sandbox metric stream: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
 		metrics, err := sandbox.ListMetrics(cmd.Context(), options)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting sandbox metrics: %v\n", err)
@@ -527,9 +517,13 @@ func init() {
 	addSandboxObservabilityFlags(sandboxEventsCmd)
 	addSandboxEventFilterFlags(sandboxEventsCmd)
 
-	addSandboxObservabilityFlags(sandboxMetricsCmd)
-	sandboxMetricsCmd.Flags().StringVar(&sandboxObsContextID, "context-id", "", "filter by context ID")
-	sandboxMetricsCmd.Flags().StringArrayVar(&sandboxObsNames, "name", nil, "filter by metric name (repeatable or comma-separated)")
+	sandboxMetricsCmd.Flags().StringVar(&sandboxObsStartTime, "start-time", "", "inclusive start time (RFC3339)")
+	sandboxMetricsCmd.Flags().StringVar(&sandboxObsEndTime, "end-time", "", "inclusive end time (RFC3339)")
+	sandboxMetricsCmd.Flags().StringVar(&sandboxObsSince, "since", "", "relative start time, for example 10m or 1h")
+	sandboxMetricsCmd.Flags().StringArrayVar(&sandboxObsNames, "name", nil, "canonical metric name (repeatable or comma-separated)")
+	sandboxMetricsCmd.Flags().IntVar(&sandboxMetricStep, "step-seconds", 0, "requested bucket width in seconds")
+	sandboxMetricsCmd.Flags().StringVar(&sandboxMetricStat, "statistic", "", "aggregation (auto, average, minimum, maximum, last, rate)")
+	sandboxMetricsCmd.Flags().IntVar(&sandboxMetricPoints, "max-points", 240, "maximum points per returned series")
 }
 
 func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
@@ -669,17 +663,56 @@ func buildSandboxEventObservabilityOptions(cmd *cobra.Command) (*sandbox0.Sandbo
 	return options, watch, nil
 }
 
-func buildSandboxMetricObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityMetricOptions, bool, error) {
-	query, watch, err := buildSandboxObservabilityQueryOptions(cmd)
-	if err != nil {
-		return nil, false, err
+func buildSandboxMetricObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityMetricOptions, error) {
+	options := &sandbox0.SandboxObservabilityMetricOptions{}
+	if sandboxObsStartTime != "" && sandboxObsSince != "" {
+		return nil, fmt.Errorf("--start-time and --since cannot both be set")
 	}
-	options := &sandbox0.SandboxObservabilityMetricOptions{SandboxObservabilityQueryOptions: query}
-	if sandboxObsContextID != "" {
-		options.ContextID = sandboxObsContextID
+	if sandboxObsStartTime != "" {
+		start, err := time.Parse(time.RFC3339, sandboxObsStartTime)
+		if err != nil {
+			return nil, fmt.Errorf("parse --start-time: %w", err)
+		}
+		options.StartTime = &start
 	}
-	options.Names = splitObservabilityNames(sandboxObsNames)
-	return options, watch, nil
+	if sandboxObsSince != "" {
+		duration, err := time.ParseDuration(sandboxObsSince)
+		if err != nil {
+			return nil, fmt.Errorf("parse --since: %w", err)
+		}
+		start := time.Now().Add(-duration)
+		options.StartTime = &start
+	}
+	if sandboxObsEndTime != "" {
+		end, err := time.Parse(time.RFC3339, sandboxObsEndTime)
+		if err != nil {
+			return nil, fmt.Errorf("parse --end-time: %w", err)
+		}
+		options.EndTime = &end
+	}
+	for _, name := range splitObservabilityNames(sandboxObsNames) {
+		var metric apispec.SandboxRuntimeMetricName
+		if err := metric.UnmarshalText([]byte(name)); err != nil {
+			return nil, fmt.Errorf("invalid --name %q", name)
+		}
+		options.Metrics = append(options.Metrics, metric)
+	}
+	if sandboxMetricStep < 0 {
+		return nil, fmt.Errorf("--step-seconds cannot be negative")
+	}
+	options.StepSeconds = sandboxMetricStep
+	if sandboxMetricStat != "" {
+		var statistic apispec.SandboxRuntimeMetricStatistic
+		if err := statistic.UnmarshalText([]byte(strings.ToLower(sandboxMetricStat))); err != nil {
+			return nil, fmt.Errorf("invalid --statistic %q", sandboxMetricStat)
+		}
+		options.Statistic = statistic
+	}
+	if sandboxMetricPoints < 1 || sandboxMetricPoints > 1000 {
+		return nil, fmt.Errorf("--max-points must be between 1 and 1000")
+	}
+	options.MaxPoints = sandboxMetricPoints
+	return options, nil
 }
 
 func buildSandboxObservabilityQueryOptions(cmd *cobra.Command) (sandbox0.SandboxObservabilityQueryOptions, bool, error) {
@@ -765,12 +798,6 @@ func writeObservabilityWatchLine(line *sandbox0.SandboxObservabilityWatchLine) e
 			return err
 		}
 		writeObservabilityLogs(os.Stdout, []apispec.SandboxObservabilityLogEntry{entry})
-	case "metric_sample":
-		var sample apispec.SandboxObservabilityMetricSample
-		if err := json.Unmarshal(line.Data, &sample); err != nil {
-			return err
-		}
-		writeObservabilityMetricSample(os.Stdout, sample)
 	case "event":
 		var event apispec.SandboxObservabilityEvent
 		if err := json.Unmarshal(line.Data, &event); err != nil {
@@ -796,27 +823,6 @@ func writeObservabilityEvent(w io.Writer, event apispec.SandboxObservabilityEven
 		event.EventType,
 		outcome,
 		event.Cursor,
-	)
-}
-
-func writeObservabilityMetricSample(w io.Writer, sample apispec.SandboxObservabilityMetricSample) {
-	unit := ""
-	if value, ok := sample.Unit.Get(); ok {
-		unit = value
-	}
-	contextID := ""
-	if value, ok := sample.ContextID.Get(); ok {
-		contextID = value
-	}
-	_, _ = fmt.Fprintf(
-		w,
-		"%s\t%s\t%.6g\t%s\t%s\t%s\n",
-		sample.OccurredAt.Format(time.RFC3339),
-		sample.Name,
-		sample.Value,
-		unit,
-		contextID,
-		sample.Cursor,
 	)
 }
 

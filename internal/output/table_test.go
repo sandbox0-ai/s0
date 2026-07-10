@@ -529,6 +529,39 @@ func TestTableFormatterFormatSandboxServicesIncludesPublicURL(t *testing.T) {
 	}
 }
 
+func TestTableFormatterFormatExecutionSessions(t *testing.T) {
+	formatter := &TableFormatter{}
+	now := time.Date(2026, 7, 11, 4, 0, 0, 0, time.UTC)
+	sessions := []apispec.ExecutionSession{{
+		ID: "ses_123",
+		Spec: apispec.ExecutionSessionSpec{
+			Name:    apispec.NewOptString("worker"),
+			Command: []string{"/bin/sleep", "30"},
+		},
+		Phase:             apispec.ExecutionSessionPhaseRunning,
+		SpecVersion:       1,
+		RuntimeGeneration: 2,
+		Attempt: apispec.NewOptExecutionSessionAttempt(apispec.ExecutionSessionAttempt{
+			ID: "att_1", Number: 1, RuntimeGeneration: 2, Pid: apispec.NewOptInt32(42),
+		}),
+		Cursor:         apispec.ExecutionSessionEventCursor{Earliest: 1, Latest: 7},
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		LastActivityAt: now,
+	}}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, sessions); err != nil {
+		t.Fatal(err)
+	}
+	output := buf.String()
+	for _, want := range []string{"ses_123", "worker", "running", "att_1", "42"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
 func TestTableFormatterFormatSSHPublicKeyList(t *testing.T) {
 	formatter := &TableFormatter{}
 	keys := []apispec.SSHPublicKey{

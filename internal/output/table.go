@@ -1,9 +1,12 @@
 package output
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,12 +80,20 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatContextList(w, v)
 	case *apispec.ContextResponse:
 		return f.formatContext(w, v)
+	case []apispec.ExecutionSession:
+		return f.formatExecutionSessionList(w, v)
+	case *apispec.ExecutionSession:
+		return f.formatExecutionSession(w, v)
+	case *apispec.ExecutionSessionEventPage:
+		return f.formatExecutionSessionEvents(w, v)
+	case *apispec.ExecutionSessionInputResponse:
+		return f.formatExecutionSessionInput(w, v)
 	case *apispec.SandboxObservabilityEventsResponse:
 		return f.formatSandboxObservabilityEvents(w, v)
 	case *apispec.SandboxObservabilityLogsResponse:
 		return f.formatSandboxObservabilityLogs(w, v)
-	case *apispec.SandboxObservabilityMetricsResponse:
-		return f.formatSandboxObservabilityMetrics(w, v)
+	case *apispec.SandboxRuntimeMetricsResponse:
+		return f.formatSandboxRuntimeMetrics(w, v)
 	case *apispec.SandboxNetworkPolicy:
 		return f.formatSandboxNetworkPolicy(w, v)
 	case *sandbox0.SandboxServicesResponse:
@@ -675,6 +686,123 @@ func (f *TableFormatter) formatContext(w io.Writer, ctx *apispec.ContextResponse
 	return t.Render()
 }
 
+func (f *TableFormatter) formatExecutionSessionList(w io.Writer, sessions []apispec.ExecutionSession) error {
+	if len(sessions) == 0 {
+		_, _ = fmt.Fprintln(w, "No execution sessions found.")
+		return nil
+	}
+	t := newTable(w)
+	t.Header([]string{"ID", "Name", "Phase", "Attempt", "PID", "Restarts", "Latest event", "Updated"})
+	for _, session := range sessions {
+		name := "-"
+		if value, ok := session.Spec.Name.Get(); ok && value != "" {
+			name = value
+		}
+		attemptID := "-"
+		pid := "-"
+		if attempt, ok := session.Attempt.Get(); ok {
+			attemptID = attempt.ID
+			if value, ok := attempt.Pid.Get(); ok {
+				pid = strconv.Itoa(int(value))
+			}
+		}
+		_ = t.Append([]string{
+			session.ID,
+			name,
+			string(session.Phase),
+			attemptID,
+			pid,
+			strconv.Itoa(int(session.RestartCount)),
+			strconv.FormatInt(session.Cursor.Latest, 10),
+			session.UpdatedAt.Format(timeLayout),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatExecutionSession(w io.Writer, session *apispec.ExecutionSession) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", session.ID})
+	if name, ok := session.Spec.Name.Get(); ok {
+		_ = t.Append([]string{"Name:", name})
+	}
+	_ = t.Append([]string{"Phase:", string(session.Phase)})
+	_ = t.Append([]string{"Command:", strings.Join(session.Spec.Command, " ")})
+	if cwd, ok := session.Spec.Cwd.Get(); ok {
+		_ = t.Append([]string{"Working dir:", cwd})
+	}
+	_ = t.Append([]string{"Spec version:", strconv.FormatInt(session.SpecVersion, 10)})
+	_ = t.Append([]string{"Runtime generation:", strconv.FormatInt(session.RuntimeGeneration, 10)})
+	_ = t.Append([]string{"Restart count:", strconv.Itoa(int(session.RestartCount))})
+	_ = t.Append([]string{"Event cursor:", fmt.Sprintf("%d..%d", session.Cursor.Earliest, session.Cursor.Latest)})
+	if attempt, ok := session.Attempt.Get(); ok {
+		_ = t.Append([]string{"Attempt:", attempt.ID})
+		_ = t.Append([]string{"Attempt number:", strconv.FormatInt(attempt.Number, 10)})
+		if pid, ok := attempt.Pid.Get(); ok {
+			_ = t.Append([]string{"PID:", strconv.Itoa(int(pid))})
+		}
+		if exitCode, ok := attempt.ExitCode.Get(); ok {
+			_ = t.Append([]string{"Exit code:", strconv.Itoa(int(exitCode))})
+		}
+		if reason, ok := attempt.Reason.Get(); ok {
+			_ = t.Append([]string{"Attempt reason:", reason})
+		}
+	}
+	_ = t.Append([]string{"Created:", session.CreatedAt.Format(timeLayout)})
+	_ = t.Append([]string{"Updated:", session.UpdatedAt.Format(timeLayout)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatExecutionSessionEvents(w io.Writer, page *apispec.ExecutionSessionEventPage) error {
+	if len(page.Events) == 0 {
+		_, _ = fmt.Fprintf(w, "No execution session events found (cursor %d..%d).\n", page.Cursor.Earliest, page.Cursor.Latest)
+		return nil
+	}
+	t := newTable(w)
+	t.Header([]string{"Seq", "Occurred", "Attempt", "Type", "Stream", "Data", "Reason"})
+	for _, event := range page.Events {
+		attempt := "-"
+		if value, ok := event.AttemptID.Get(); ok {
+			attempt = value
+		}
+		stream := "-"
+		if value, ok := event.Stream.Get(); ok {
+			stream = string(value)
+		}
+		data := ""
+		if value, ok := event.DataBase64.Get(); ok {
+			if decoded, err := base64.StdEncoding.DecodeString(value); err == nil {
+				data = strings.TrimRight(string(decoded), "\r\n")
+			} else {
+				data = value
+			}
+		}
+		reason := ""
+		if value, ok := event.Reason.Get(); ok {
+			reason = value
+		}
+		_ = t.Append([]string{
+			strconv.FormatInt(event.Seq, 10),
+			event.OccurredAt.Format(timeLayout),
+			attempt,
+			event.Type,
+			stream,
+			data,
+			reason,
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatExecutionSessionInput(w io.Writer, response *apispec.ExecutionSessionInputResponse) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Input ID:", response.InputID})
+	_ = t.Append([]string{"Attempt ID:", response.AttemptID})
+	_ = t.Append([]string{"Accepted:", strconv.FormatBool(response.Accepted)})
+	_ = t.Append([]string{"Duplicate:", strconv.FormatBool(response.Duplicate)})
+	return t.Render()
+}
+
 func (f *TableFormatter) formatSandboxObservabilityEvents(w io.Writer, resp *apispec.SandboxObservabilityEventsResponse) error {
 	t := newTable(w)
 	t.Header([]string{"Occurred", "Source", "Type", "Outcome", "Cursor"})
@@ -717,26 +845,31 @@ func (f *TableFormatter) formatSandboxObservabilityLogs(w io.Writer, resp *apisp
 	return t.Render()
 }
 
-func (f *TableFormatter) formatSandboxObservabilityMetrics(w io.Writer, resp *apispec.SandboxObservabilityMetricsResponse) error {
+func (f *TableFormatter) formatSandboxRuntimeMetrics(w io.Writer, resp *apispec.SandboxRuntimeMetricsResponse) error {
 	t := newTable(w)
-	t.Header([]string{"Occurred", "Name", "Value", "Unit", "Context", "Cursor"})
-	for _, sample := range resp.Samples {
-		unit := ""
-		if value, ok := sample.Unit.Get(); ok {
-			unit = value
+	t.Header([]string{"Time", "Metric", "Value", "Unit", "Statistic", "Dimensions"})
+	for _, series := range resp.Series {
+		dimensions := ""
+		if value, ok := series.Dimensions.Get(); ok {
+			pairs := make([]string, 0, len(value))
+			for key, item := range value {
+				pairs = append(pairs, key+"="+item)
+			}
+			slices.Sort(pairs)
+			dimensions = strings.Join(pairs, ",")
 		}
-		contextID := ""
-		if value, ok := sample.ContextID.Get(); ok {
-			contextID = value
+		for _, segment := range series.Segments {
+			for _, point := range segment.Points {
+				_ = t.Append([]string{
+					point.Time.Format(timeLayout),
+					string(series.Metric),
+					fmt.Sprintf("%.6g", point.Value),
+					string(series.Unit),
+					string(series.Statistic),
+					dimensions,
+				})
+			}
 		}
-		_ = t.Append([]string{
-			sample.OccurredAt.Format(timeLayout),
-			sample.Name,
-			fmt.Sprintf("%.6g", sample.Value),
-			unit,
-			contextID,
-			sample.Cursor,
-		})
 	}
 	return t.Render()
 }

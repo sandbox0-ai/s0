@@ -349,24 +349,28 @@ func TestBuildSandboxObservabilityOptions(t *testing.T) {
 	t.Run("metrics split repeated and comma separated names", func(t *testing.T) {
 		resetSandboxFlagsForTest()
 		cmd := newSandboxMetricsOptionsTestCommand()
-		if err := cmd.Flags().Set("name", "cpu.percent,memory.rss"); err != nil {
+		if err := cmd.Flags().Set("name", "sandbox.cpu.utilization,sandbox.memory.usage"); err != nil {
 			t.Fatal(err)
 		}
-		if err := cmd.Flags().Set("name", "io.read_bytes"); err != nil {
+		if err := cmd.Flags().Set("name", "sandbox.network.io"); err != nil {
 			t.Fatal(err)
 		}
 
-		options, _, err := buildSandboxMetricObservabilityOptions(cmd)
+		options, err := buildSandboxMetricObservabilityOptions(cmd)
 		if err != nil {
 			t.Fatalf("buildSandboxMetricObservabilityOptions() error = %v", err)
 		}
-		want := []string{"cpu.percent", "memory.rss", "io.read_bytes"}
-		if len(options.Names) != len(want) {
-			t.Fatalf("names = %#v, want %#v", options.Names, want)
+		want := []apispec.SandboxRuntimeMetricName{
+			apispec.SandboxRuntimeMetricNameSandboxCPUUtilization,
+			apispec.SandboxRuntimeMetricNameSandboxMemoryUsage,
+			apispec.SandboxRuntimeMetricNameSandboxNetworkIo,
+		}
+		if len(options.Metrics) != len(want) {
+			t.Fatalf("metrics = %#v, want %#v", options.Metrics, want)
 		}
 		for i := range want {
-			if options.Names[i] != want[i] {
-				t.Fatalf("names = %#v, want %#v", options.Names, want)
+			if options.Metrics[i] != want[i] {
+				t.Fatalf("metrics = %#v, want %#v", options.Metrics, want)
 			}
 		}
 	})
@@ -402,9 +406,13 @@ func newSandboxLogsOptionsTestCommand() *cobra.Command {
 
 func newSandboxMetricsOptionsTestCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "metrics"}
-	addSandboxObservabilityFlags(cmd)
-	cmd.Flags().StringVar(&sandboxObsContextID, "context-id", "", "")
+	cmd.Flags().StringVar(&sandboxObsStartTime, "start-time", "", "")
+	cmd.Flags().StringVar(&sandboxObsEndTime, "end-time", "", "")
+	cmd.Flags().StringVar(&sandboxObsSince, "since", "", "")
 	cmd.Flags().StringArrayVar(&sandboxObsNames, "name", nil, "")
+	cmd.Flags().IntVar(&sandboxMetricStep, "step-seconds", 0, "")
+	cmd.Flags().StringVar(&sandboxMetricStat, "statistic", "", "")
+	cmd.Flags().IntVar(&sandboxMetricPoints, "max-points", 240, "")
 	return cmd
 }
 
@@ -433,6 +441,9 @@ func resetSandboxFlagsForTest() {
 	sandboxObsSource = ""
 	sandboxObsEventType = ""
 	sandboxObsOutcome = ""
+	sandboxMetricStep = 0
+	sandboxMetricStat = ""
+	sandboxMetricPoints = 240
 	sandboxLogsFollow = false
 	sandboxLogsTailLines = 0
 	sandboxLogsSinceSecs = 0
