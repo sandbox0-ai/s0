@@ -184,7 +184,16 @@ func (p *Profile) GetAPIURL() string {
 
 // GetConfiguredGatewayMode returns the explicitly configured gateway mode, if valid.
 func (p *Profile) GetConfiguredGatewayMode() (GatewayMode, bool) {
+	// Gateway mode is metadata for the profile endpoint. An explicit endpoint
+	// override may point at a different deployment, so it must be rediscovered.
+	if hasAPIURLOverride() {
+		return "", false
+	}
 	return ParseGatewayMode(p.GatewayMode)
+}
+
+func hasAPIURLOverride() bool {
+	return strings.TrimSpace(apiURL) != "" || strings.TrimSpace(os.Getenv(EnvBaseURL)) != ""
 }
 
 // GetToken returns the token with override and env support.
@@ -209,11 +218,17 @@ func (p *Profile) GetRefreshToken() string {
 
 // GetCurrentTeamID returns the locally selected current team ID.
 func (p *Profile) GetCurrentTeamID() string {
+	if hasAPIURLOverride() {
+		return ""
+	}
 	return strings.TrimSpace(expandEnvVars(p.CurrentTeamID))
 }
 
 // GetCurrentTeamTarget returns the cached region endpoint for the selected current team.
 func (p *Profile) GetCurrentTeamTarget() (*CurrentTeamTarget, bool) {
+	if hasAPIURLOverride() {
+		return nil, false
+	}
 	teamID := strings.TrimSpace(expandEnvVars(p.CurrentTeamID))
 	regionID := strings.TrimSpace(expandEnvVars(p.CurrentTeamRegionID))
 	gatewayURL := strings.TrimSpace(expandEnvVars(p.CurrentTeamGatewayURL))
