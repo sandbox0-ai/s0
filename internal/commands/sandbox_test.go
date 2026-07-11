@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +12,34 @@ import (
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
+
+func TestSandboxCreateOutputUsesAPIFieldNames(t *testing.T) {
+	previousFormat := cfgFormat
+	t.Cleanup(func() { cfgFormat = previousFormat })
+	cfgFormat = "json"
+
+	value := sandboxCreateOutputValue(&sandbox0.Sandbox{
+		ID:       "sb_123",
+		Template: "coding-agent",
+		PodName:  "coding-agent-pod",
+		Status:   "running",
+	})
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal(encoded, &output); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if got := output["id"]; got != "sb_123" {
+		t.Fatalf("id = %v, want sb_123", got)
+	}
+	if _, ok := output["ID"]; ok {
+		t.Fatal("unexpected legacy ID field")
+	}
+}
 
 func TestFormatSandboxCreateErrorClaimStartThrottled(t *testing.T) {
 	err := &sandbox0.APIError{
