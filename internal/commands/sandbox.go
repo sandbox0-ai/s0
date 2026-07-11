@@ -55,6 +55,29 @@ var (
 	sandboxUpdateConfigFile string
 )
 
+type sandboxCreateOutput struct {
+	ID              string                `json:"id"`
+	Template        string                `json:"template"`
+	ClusterID       *string               `json:"cluster_id,omitempty"`
+	PodName         string                `json:"pod_name"`
+	Status          string                `json:"status"`
+	BootstrapMounts []apispec.MountStatus `json:"bootstrap_mounts"`
+}
+
+func sandboxCreateOutputValue(sandbox *sandbox0.Sandbox) any {
+	if cfgFormat != "json" && cfgFormat != "yaml" {
+		return sandbox
+	}
+	return sandboxCreateOutput{
+		ID:              sandbox.ID,
+		Template:        sandbox.Template,
+		ClusterID:       sandbox.ClusterID,
+		PodName:         sandbox.PodName,
+		Status:          sandbox.Status,
+		BootstrapMounts: sandbox.BootstrapMounts,
+	}
+}
+
 // sandboxCmd represents the sandbox command.
 var sandboxCmd = &cobra.Command{
 	Use:   "sandbox",
@@ -86,7 +109,7 @@ var sandboxCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if err := getFormatter().Format(os.Stdout, sandbox); err != nil {
+		if err := getFormatter().Format(os.Stdout, sandboxCreateOutputValue(sandbox)); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
 		}
