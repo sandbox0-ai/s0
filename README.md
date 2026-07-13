@@ -256,7 +256,7 @@ s0 sandbox resume <sandbox-id>
 s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
 s0 sandbox logs <sandbox-id> [--limit 100] [--context-id <ctx-id>] [--stream stdout|stderr|pty] [--watch]
-s0 sandbox events <sandbox-id> [--source manager|netd|procd] [--event-type lifecycle|network_audit|runtime_stats] [--watch]
+s0 sandbox events <sandbox-id> [--source <source>] [--event-type <type>] [--outcome <outcome>] [--actor-kind <kind>] [--actor-id <id>] [--action <action>] [--resource-type <type>] [--operation-id <id>] [--event-id <uuid>] [--watch]
 s0 sandbox metrics <sandbox-id> [--name <metric-name>] [--context-id <ctx-id>] [--watch]
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
 s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200]
@@ -264,7 +264,7 @@ s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200]
 
 `s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
 
-`s0 sandbox logs/events/metrics` query the per-sandbox observability backend. Network audit events remain available through `s0 sandbox events --event-type network_audit`. Use `--watch` for realtime records, `--cursor` to resume, `--start-time` / `--end-time` for absolute windows, or `--since 10m` for a relative window. `s0 sandbox logs` prints log messages by default; use `-o json` or `-o yaml` for structured records.
+`s0 sandbox logs/events/metrics` query the per-sandbox observability backend. `s0 sandbox events` returns canonical signed audit facts, including API access, lifecycle, network, process, and file events. Filter by actor, action, resource, operation, outcome, source, or event type; use `--event-id` alone for exact lookup of one event and any conflicting payload variant. Use `--watch` for realtime records, `--cursor` to resume, `--start-time` / `--end-time` for absolute windows, or `--since 10m` for a relative window. Table output shows event identity, actor, action, resource, operation, signature status, and conflict state; use `-o json` or `-o yaml` for the full canonical record. `s0 sandbox logs` prints log messages by default.
 
 Manage the current user's SSH public keys with:
 

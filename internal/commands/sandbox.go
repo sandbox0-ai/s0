@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/ghodss/yaml"
+	"github.com/google/uuid"
+	"github.com/sandbox0-ai/s0/internal/output"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
@@ -29,24 +31,30 @@ var (
 	sandboxListLimit      int
 	sandboxListOffset     int
 	// observability flags
-	sandboxObsLimit      int
-	sandboxObsCursor     string
-	sandboxObsStartTime  string
-	sandboxObsEndTime    string
-	sandboxObsSince      string
-	sandboxObsWatch      bool
-	sandboxObsContextID  string
-	sandboxObsStream     string
-	sandboxObsNames      []string
-	sandboxObsSource     string
-	sandboxObsEventType  string
-	sandboxObsOutcome    string
-	sandboxMetricStep    int
-	sandboxMetricStat    string
-	sandboxMetricPoints  int
-	sandboxLogsFollow    bool
-	sandboxLogsTailLines int
-	sandboxLogsSinceSecs int64
+	sandboxObsLimit        int
+	sandboxObsCursor       string
+	sandboxObsStartTime    string
+	sandboxObsEndTime      string
+	sandboxObsSince        string
+	sandboxObsWatch        bool
+	sandboxObsContextID    string
+	sandboxObsStream       string
+	sandboxObsNames        []string
+	sandboxObsSource       string
+	sandboxObsEventType    string
+	sandboxObsOutcome      string
+	sandboxObsActorKind    string
+	sandboxObsActorID      string
+	sandboxObsAction       string
+	sandboxObsResourceType string
+	sandboxObsOperationID  string
+	sandboxObsEventID      string
+	sandboxMetricStep      int
+	sandboxMetricStat      string
+	sandboxMetricPoints    int
+	sandboxLogsFollow      bool
+	sandboxLogsTailLines   int
+	sandboxLogsSinceSecs   int64
 	// update flags
 	sandboxUpdateTTL        int32
 	sandboxUpdateHardTTL    int32
@@ -417,7 +425,7 @@ var sandboxLogsCmd = &cobra.Command{
 var sandboxEventsCmd = &cobra.Command{
 	Use:   "events <sandbox-id>",
 	Short: "Query sandbox observability events",
-	Long:  `Query sandbox lifecycle, network audit, and runtime stats events from the per-sandbox observability backend.`,
+	Long:  `Query canonical signed sandbox audit facts from the per-sandbox observability backend.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
@@ -607,9 +615,15 @@ func addSandboxObservabilityFlags(cmd *cobra.Command) {
 }
 
 func addSandboxEventFilterFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&sandboxObsSource, "source", "", "filter by event source (manager, netd, procd)")
-	cmd.Flags().StringVar(&sandboxObsEventType, "event-type", "", "filter by event type (lifecycle, network_audit, runtime_stats)")
-	cmd.Flags().StringVar(&sandboxObsOutcome, "outcome", "", "filter by outcome (completed, denied, error, succeeded, failed)")
+	cmd.Flags().StringVar(&sandboxObsSource, "source", "", "filter by event source")
+	cmd.Flags().StringVar(&sandboxObsEventType, "event-type", "", "filter by event type")
+	cmd.Flags().StringVar(&sandboxObsOutcome, "outcome", "", "filter by outcome")
+	cmd.Flags().StringVar(&sandboxObsActorKind, "actor-kind", "", "filter by actor kind")
+	cmd.Flags().StringVar(&sandboxObsActorID, "actor-id", "", "filter by actor identity")
+	cmd.Flags().StringVar(&sandboxObsAction, "action", "", "filter by canonical action")
+	cmd.Flags().StringVar(&sandboxObsResourceType, "resource-type", "", "filter by resource type")
+	cmd.Flags().StringVar(&sandboxObsOperationID, "operation-id", "", "filter by operation correlation ID")
+	cmd.Flags().StringVar(&sandboxObsEventID, "event-id", "", "look up one exact audit event ID")
 }
 
 func buildSandboxLogObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityLogOptions, bool, error) {
@@ -657,6 +671,9 @@ func buildSandboxLogObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxO
 }
 
 func buildSandboxEventObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityEventOptions, bool, error) {
+	if err := validateExactAuditEventLookup(cmd); err != nil {
+		return nil, false, err
+	}
 	query, watch, err := buildSandboxObservabilityQueryOptions(cmd)
 	if err != nil {
 		return nil, false, err
@@ -683,7 +700,41 @@ func buildSandboxEventObservabilityOptions(cmd *cobra.Command) (*sandbox0.Sandbo
 		}
 		options.Outcome = outcome
 	}
+	if sandboxObsActorKind != "" {
+		actorKind, err := parseSandboxAuditActorKind(sandboxObsActorKind)
+		if err != nil {
+			return nil, false, err
+		}
+		options.ActorKind = actorKind
+	}
+	options.ActorID = sandboxObsActorID
+	options.Action = sandboxObsAction
+	options.ResourceType = sandboxObsResourceType
+	options.OperationID = sandboxObsOperationID
+	if sandboxObsEventID != "" {
+		eventID, err := uuid.Parse(sandboxObsEventID)
+		if err != nil {
+			return nil, false, fmt.Errorf("invalid --event-id %q: %w", sandboxObsEventID, err)
+		}
+		options.EventID = eventID
+	}
 	return options, watch, nil
+}
+
+func validateExactAuditEventLookup(cmd *cobra.Command) error {
+	if sandboxObsEventID == "" {
+		return nil
+	}
+	for _, name := range []string{
+		"cursor", "start-time", "end-time", "since", "watch",
+		"source", "event-type", "outcome", "actor-kind", "actor-id",
+		"action", "resource-type", "operation-id",
+	} {
+		if cmd.Flags().Changed(name) {
+			return fmt.Errorf("--event-id cannot be combined with --%s", name)
+		}
+	}
+	return nil
 }
 
 func buildSandboxMetricObservabilityOptions(cmd *cobra.Command) (*sandbox0.SandboxObservabilityMetricOptions, error) {
@@ -834,18 +885,20 @@ func writeObservabilityWatchLine(line *sandbox0.SandboxObservabilityWatchLine) e
 }
 
 func writeObservabilityEvent(w io.Writer, event apispec.SandboxObservabilityEvent) {
-	outcome := ""
-	if value, ok := event.Outcome.Get(); ok {
-		outcome = string(value)
-	}
 	_, _ = fmt.Fprintf(
 		w,
-		"%s\t%s\t%s\t%s\t%s\n",
+		"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 		event.OccurredAt.Format(time.RFC3339),
+		event.EventID,
 		event.Source,
 		event.EventType,
-		outcome,
-		event.Cursor,
+		event.Phase,
+		event.Outcome,
+		output.FormatSandboxAuditActor(event.Actor),
+		event.Action,
+		output.FormatSandboxAuditResource(event.Resource),
+		event.OperationID,
+		output.FormatSandboxAuditIntegrity(event.Integrity),
 	)
 }
 
@@ -863,46 +916,35 @@ func parseSandboxObservabilityLogStream(value string) (apispec.SandboxObservabil
 }
 
 func parseObservabilityEventSource(value string) (apispec.ObservabilityEventSource, error) {
-	switch strings.ToLower(value) {
-	case "manager":
-		return apispec.ObservabilityEventSourceManager, nil
-	case "netd":
-		return apispec.ObservabilityEventSourceNetd, nil
-	case "procd":
-		return apispec.ObservabilityEventSourceProcd, nil
-	default:
-		return "", fmt.Errorf("invalid --source %q: expected manager, netd, or procd", value)
+	var source apispec.ObservabilityEventSource
+	if err := source.UnmarshalText([]byte(strings.ToLower(strings.TrimSpace(value)))); err != nil {
+		return "", fmt.Errorf("invalid --source %q: %w", value, err)
 	}
+	return source, nil
 }
 
 func parseSandboxObservabilityEventType(value string) (apispec.SandboxObservabilityEventType, error) {
-	switch strings.ToLower(value) {
-	case "lifecycle":
-		return apispec.SandboxObservabilityEventTypeLifecycle, nil
-	case "network_audit":
-		return apispec.SandboxObservabilityEventTypeNetworkAudit, nil
-	case "runtime_stats":
-		return apispec.SandboxObservabilityEventTypeRuntimeStats, nil
-	default:
-		return "", fmt.Errorf("invalid --event-type %q: expected lifecycle, network_audit, or runtime_stats", value)
+	var eventType apispec.SandboxObservabilityEventType
+	if err := eventType.UnmarshalText([]byte(strings.ToLower(strings.TrimSpace(value)))); err != nil {
+		return "", fmt.Errorf("invalid --event-type %q: %w", value, err)
 	}
+	return eventType, nil
 }
 
 func parseSandboxObservabilityOutcome(value string) (apispec.SandboxObservabilityOutcome, error) {
-	switch strings.ToLower(value) {
-	case "completed":
-		return apispec.SandboxObservabilityOutcomeCompleted, nil
-	case "denied":
-		return apispec.SandboxObservabilityOutcomeDenied, nil
-	case "error":
-		return apispec.SandboxObservabilityOutcomeError, nil
-	case "succeeded":
-		return apispec.SandboxObservabilityOutcomeSucceeded, nil
-	case "failed":
-		return apispec.SandboxObservabilityOutcomeFailed, nil
-	default:
-		return "", fmt.Errorf("invalid --outcome %q: expected completed, denied, error, succeeded, or failed", value)
+	var outcome apispec.SandboxObservabilityOutcome
+	if err := outcome.UnmarshalText([]byte(strings.ToLower(strings.TrimSpace(value)))); err != nil {
+		return "", fmt.Errorf("invalid --outcome %q: %w", value, err)
 	}
+	return outcome, nil
+}
+
+func parseSandboxAuditActorKind(value string) (apispec.SandboxAuditActorKind, error) {
+	var actorKind apispec.SandboxAuditActorKind
+	if err := actorKind.UnmarshalText([]byte(strings.ToLower(strings.TrimSpace(value)))); err != nil {
+		return "", fmt.Errorf("invalid --actor-kind %q: %w", value, err)
+	}
+	return actorKind, nil
 }
 
 func splitObservabilityNames(values []string) []string {

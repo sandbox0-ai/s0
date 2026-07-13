@@ -375,6 +375,73 @@ func TestBuildSandboxObservabilityOptions(t *testing.T) {
 		}
 	})
 
+	t.Run("events options use signed audit filters", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		cmd := newSandboxEventsOptionsTestCommand()
+		flags := map[string]string{
+			"source":        "cluster_gateway",
+			"event-type":    "api_access",
+			"outcome":       "succeeded",
+			"actor-kind":    "api_key",
+			"actor-id":      "key_1",
+			"action":        "sandbox.read",
+			"resource-type": "sandbox",
+			"operation-id":  "op_123",
+		}
+		for name, value := range flags {
+			if err := cmd.Flags().Set(name, value); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		options, watch, err := buildSandboxEventObservabilityOptions(cmd)
+		if err != nil {
+			t.Fatalf("buildSandboxEventObservabilityOptions() error = %v", err)
+		}
+		if watch {
+			t.Fatal("watch = true, want false")
+		}
+		if options.Source != apispec.ObservabilityEventSourceClusterGateway {
+			t.Fatalf("source = %q, want cluster_gateway", options.Source)
+		}
+		if options.EventType != apispec.SandboxObservabilityEventTypeAPIAccess {
+			t.Fatalf("event type = %q, want api_access", options.EventType)
+		}
+		if options.Outcome != apispec.SandboxObservabilityOutcomeSucceeded {
+			t.Fatalf("outcome = %q, want succeeded", options.Outcome)
+		}
+		if options.ActorKind != apispec.SandboxAuditActorKindAPIKey || options.ActorID != "key_1" {
+			t.Fatalf("actor = %q:%q, want api_key:key_1", options.ActorKind, options.ActorID)
+		}
+		if options.Action != "sandbox.read" || options.ResourceType != "sandbox" || options.OperationID != "op_123" {
+			t.Fatalf("event filters = %+v, want action/resource/operation filters", options)
+		}
+	})
+
+	t.Run("exact event lookup rejects other filters", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		cmd := newSandboxEventsOptionsTestCommand()
+		const eventID = "c48d73ec-a08f-41bb-82d2-3f48a827f9b2"
+		if err := cmd.Flags().Set("event-id", eventID); err != nil {
+			t.Fatal(err)
+		}
+
+		options, watch, err := buildSandboxEventObservabilityOptions(cmd)
+		if err != nil {
+			t.Fatalf("buildSandboxEventObservabilityOptions() error = %v", err)
+		}
+		if watch || options.EventID.String() != eventID {
+			t.Fatalf("exact lookup = watch %v event %s, want %s", watch, options.EventID, eventID)
+		}
+
+		if err := cmd.Flags().Set("action", "sandbox.read"); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := buildSandboxEventObservabilityOptions(cmd); err == nil || !strings.Contains(err.Error(), "--event-id cannot be combined with --action") {
+			t.Fatalf("exact lookup conflict error = %v", err)
+		}
+	})
+
 	t.Run("metrics split repeated and comma separated names", func(t *testing.T) {
 		resetSandboxFlagsForTest()
 		cmd := newSandboxMetricsOptionsTestCommand()
@@ -433,6 +500,13 @@ func newSandboxLogsOptionsTestCommand() *cobra.Command {
 	return cmd
 }
 
+func newSandboxEventsOptionsTestCommand() *cobra.Command {
+	cmd := &cobra.Command{Use: "events"}
+	addSandboxObservabilityFlags(cmd)
+	addSandboxEventFilterFlags(cmd)
+	return cmd
+}
+
 func newSandboxMetricsOptionsTestCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "metrics"}
 	cmd.Flags().StringVar(&sandboxObsStartTime, "start-time", "", "")
@@ -470,6 +544,12 @@ func resetSandboxFlagsForTest() {
 	sandboxObsSource = ""
 	sandboxObsEventType = ""
 	sandboxObsOutcome = ""
+	sandboxObsActorKind = ""
+	sandboxObsActorID = ""
+	sandboxObsAction = ""
+	sandboxObsResourceType = ""
+	sandboxObsOperationID = ""
+	sandboxObsEventID = ""
 	sandboxMetricStep = 0
 	sandboxMetricStat = ""
 	sandboxMetricPoints = 240
