@@ -805,21 +805,31 @@ func (f *TableFormatter) formatExecutionSessionInput(w io.Writer, response *apis
 
 func (f *TableFormatter) formatSandboxObservabilityEvents(w io.Writer, resp *apispec.SandboxObservabilityEventsResponse) error {
 	t := newTable(w)
-	t.Header([]string{"Occurred", "Source", "Type", "Outcome", "Cursor"})
+	t.Header([]string{"Occurred", "Event ID", "Source", "Type", "Phase / Outcome", "Actor", "Action", "Resource", "Operation", "Integrity"})
 	for _, event := range resp.Events {
-		outcome := ""
-		if value, ok := event.Outcome.Get(); ok {
-			outcome = string(value)
-		}
 		_ = t.Append([]string{
 			event.OccurredAt.Format(timeLayout),
+			event.EventID.String(),
 			string(event.Source),
 			string(event.EventType),
-			outcome,
-			event.Cursor,
+			string(event.Phase) + " / " + string(event.Outcome),
+			FormatSandboxAuditActor(event.Actor),
+			event.Action,
+			FormatSandboxAuditResource(event.Resource),
+			event.OperationID,
+			FormatSandboxAuditIntegrity(event.Integrity),
 		})
 	}
-	return t.Render()
+	if err := t.Render(); err != nil {
+		return err
+	}
+	if cursor, ok := resp.NextCursor.Get(); ok && cursor != "" {
+		_, _ = fmt.Fprintf(w, "Next cursor: %s\n", cursor)
+	}
+	if watermark, ok := resp.Watermark.Get(); ok && watermark != "" {
+		_, _ = fmt.Fprintf(w, "Watermark: %s\n", watermark)
+	}
+	return nil
 }
 
 func (f *TableFormatter) formatSandboxObservabilityLogs(w io.Writer, resp *apispec.SandboxObservabilityLogsResponse) error {

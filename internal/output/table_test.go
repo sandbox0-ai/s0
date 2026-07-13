@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 )
@@ -632,6 +633,55 @@ func TestTableFormatterFormatSSHPublicKey(t *testing.T) {
 	} {
 		if strings.Contains(output, unwanted) {
 			t.Fatalf("output contains %q:\n%s", unwanted, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatSignedSandboxObservabilityEvents(t *testing.T) {
+	formatter := &TableFormatter{}
+	response := &apispec.SandboxObservabilityEventsResponse{
+		Events: []apispec.SandboxObservabilityEvent{{
+			EventID:    uuid.MustParse("c48d73ec-a08f-41bb-82d2-3f48a827f9b2"),
+			OccurredAt: time.Date(2026, 7, 13, 14, 32, 29, 0, time.UTC),
+			Source:     apispec.ObservabilityEventSourceClusterGateway,
+			EventType:  apispec.SandboxObservabilityEventTypeAPIAccess,
+			Phase:      apispec.SandboxAuditEventPhaseResult,
+			Outcome:    apispec.SandboxObservabilityOutcomeSucceeded,
+			Actor: apispec.SandboxAuditActor{
+				Kind: apispec.SandboxAuditActorKindAPIKey,
+				ID:   apispec.NewOptString("key_1"),
+			},
+			Action:      "sandbox.read",
+			Resource:    apispec.SandboxAuditResource{Type: "sandbox", ID: "sb_123"},
+			OperationID: "op_123",
+			Integrity: apispec.SandboxAuditIntegrity{
+				SignatureStatus: apispec.SandboxAuditIntegritySignatureStatusVerified,
+				EventIDConflict: apispec.NewOptBool(true),
+			},
+		}},
+		NextCursor: apispec.NewOptString("cursor_2"),
+		Watermark:  apispec.NewOptString("2026-07-13T14:32:30Z"),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, response); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	formatted := buf.String()
+	for _, want := range []string{
+		"EVENT ID",
+		"c48d73ec-a08f-41bb-82d2-3f48a827f9b2",
+		"cluster_gateway",
+		"api_key:key_1",
+		"sandbox.read",
+		"sandbox:sb_123",
+		"verified/conflict",
+		"Next cursor: cursor_2",
+		"Watermark: 2026-07-13T14:32:30Z",
+	} {
+		if !strings.Contains(formatted, want) {
+			t.Fatalf("output missing %q:\n%s", want, formatted)
 		}
 	}
 }
