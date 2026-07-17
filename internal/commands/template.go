@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -29,11 +30,34 @@ func loadTemplateSpecFile(path string) (templateSpec, error) {
 		return spec, err
 	}
 
-	if err := yaml.Unmarshal(specData, &spec); err != nil {
+	specJSON, err := yaml.YAMLToJSON(specData)
+	if err != nil {
+		return spec, err
+	}
+	if err := rejectTemplateCPU(specJSON); err != nil {
+		return spec, err
+	}
+	if err := json.Unmarshal(specJSON, &spec); err != nil {
 		return spec, err
 	}
 
 	return spec, nil
+}
+
+// rejectTemplateCPU prevents removed CPU settings from being silently ignored by generated decoders.
+func rejectTemplateCPU(specJSON []byte) error {
+	var document map[string]any
+	if err := json.Unmarshal(specJSON, &document); err != nil {
+		return err
+	}
+
+	spec, _ := document["spec"].(map[string]any)
+	mainContainer, _ := spec["mainContainer"].(map[string]any)
+	resources, _ := mainContainer["resources"].(map[string]any)
+	if _, ok := resources["cpu"]; ok {
+		return fmt.Errorf("spec.mainContainer.resources.cpu is not supported; set memory only")
+	}
+	return nil
 }
 
 func buildTemplateCreateRequest(templateID, specFile string) (apispec.TemplateCreateRequest, error) {
