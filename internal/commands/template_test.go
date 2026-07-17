@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -17,7 +18,6 @@ func TestBuildTemplateCreateRequestPreservesTemplateEnvVars(t *testing.T) {
   mainContainer:
     image: cc-demo:test
     resources:
-      cpu: "250m"
       memory: 256Mi
   envVars:
     PORT: "8081"
@@ -53,6 +53,31 @@ func TestBuildTemplateCreateRequestPreservesTemplateEnvVars(t *testing.T) {
 	}
 }
 
+func TestBuildTemplateCreateRequestRejectsCPU(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	specFile := filepath.Join(dir, "template.yaml")
+	specYAML := `spec:
+  mainContainer:
+    image: cc-demo:test
+    resources:
+      cpu: "250m"
+      memory: 256Mi
+`
+	if err := os.WriteFile(specFile, []byte(specYAML), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err := buildTemplateCreateRequest("cc-demo-kind-test", specFile)
+	if err == nil {
+		t.Fatal("buildTemplateCreateRequest() error = nil, want unsupported CPU error")
+	}
+	if !strings.Contains(err.Error(), "resources.cpu is not supported") {
+		t.Fatalf("buildTemplateCreateRequest() error = %q, want unsupported CPU error", err)
+	}
+}
+
 func TestBuildTemplateCreateRequestPreservesSystemTemplateFields(t *testing.T) {
 	t.Parallel()
 
@@ -64,7 +89,6 @@ func TestBuildTemplateCreateRequestPreservesSystemTemplateFields(t *testing.T) {
     image: sandbox0ai/otemplates:default-v0.1.0
     imagePullPolicy: IfNotPresent
     resources:
-      cpu: "2"
       memory: 4Gi
       ephemeralStorage: 20Gi
     securityContext:
