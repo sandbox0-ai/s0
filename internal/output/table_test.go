@@ -190,6 +190,9 @@ func TestTableFormatterFormatVolumeShowsBackendAndS3Metadata(t *testing.T) {
 	for _, want := range []string{
 		"Backend:",
 		"s3",
+		"Metered storage:",
+		"External",
+		"Storage observed:",
 		"S3 Provider:",
 		"r2",
 		"S3 Bucket:",
@@ -204,6 +207,81 @@ func TestTableFormatterFormatVolumeShowsBackendAndS3Metadata(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
 		}
+	}
+}
+
+func TestTableFormatterFormatVolumesShowsMeteredStorage(t *testing.T) {
+	formatter := &TableFormatter{}
+	now := time.Date(2026, 7, 18, 8, 30, 0, 0, time.UTC)
+	volumes := []apispec.SandboxVolume{
+		{
+			ID:                  "vol_s0fs",
+			TeamID:              "team-1",
+			UserID:              "user-1",
+			Backend:             apispec.VolumeBackendS0fs,
+			MeteredStorageBytes: apispec.NewOptNilInt64(8_734_523_392),
+			StorageObservedAt:   apispec.NewOptNilDateTime(now),
+			CreatedAt:           now.Add(-time.Hour),
+			UpdatedAt:           now,
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, volumes); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"METERED STORAGE",
+		"8.1 GiB",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatVolumeShowsMeteredStorageObservation(t *testing.T) {
+	formatter := &TableFormatter{}
+	observedAt := time.Date(2026, 7, 18, 8, 30, 0, 0, time.UTC)
+	volume := &apispec.SandboxVolume{
+		ID:                  "vol_s0fs",
+		TeamID:              "team-1",
+		UserID:              "user-1",
+		Backend:             apispec.VolumeBackendS0fs,
+		MeteredStorageBytes: apispec.NewOptNilInt64(8_734_523_392),
+		StorageObservedAt:   apispec.NewOptNilDateTime(observedAt),
+		CreatedAt:           observedAt.Add(-time.Hour),
+		UpdatedAt:           observedAt,
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, volume); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Metered storage:",
+		"8.1 GiB",
+		"Storage observed:",
+		"2026-07-18 08:30:00",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestFormatVolumeMeteredStorageShowsUnavailableWithoutProjection(t *testing.T) {
+	volume := apispec.SandboxVolume{Backend: apispec.VolumeBackendS0fs}
+
+	if got := formatVolumeMeteredStorage(volume); got != "Unavailable" {
+		t.Fatalf("formatVolumeMeteredStorage() = %q, want Unavailable", got)
+	}
+	if got := formatVolumeStorageObservedAt(volume); got != "-" {
+		t.Fatalf("formatVolumeStorageObservedAt() = %q, want -", got)
 	}
 }
 
