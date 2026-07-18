@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBuildTemplateCreateRequestPreservesTemplateEnvVars(t *testing.T) {
@@ -50,6 +51,142 @@ func TestBuildTemplateCreateRequestPreservesTemplateEnvVars(t *testing.T) {
 	}
 	if envVars["PORT"] != "8081" || envVars["WORKSPACE_DIR"] != "/workspace" {
 		t.Fatalf("Spec.EnvVars = %+v, want PORT and WORKSPACE_DIR", envVars)
+	}
+}
+
+func TestBuildTemplateFromSandboxCreateRequest(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	specFile := filepath.Join(dir, "overrides.yaml")
+	specYAML := `displayName: Python ready
+tags:
+  - python
+pool:
+  minIdle: 1
+  maxIdle: 2
+`
+	if err := os.WriteFile(specFile, []byte(specYAML), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	req, err := buildTemplateFromSandboxCreateRequest("python-ready", "sb_source", specFile)
+	if err != nil {
+		t.Fatalf("buildTemplateFromSandboxCreateRequest() error = %v", err)
+	}
+	if req.TemplateID != "python-ready" || req.SandboxID != "sb_source" {
+		t.Fatalf("request = %+v", req)
+	}
+	overrides, ok := req.SpecOverrides.Get()
+	if !ok {
+		t.Fatal("SpecOverrides should be set")
+	}
+	if overrides.DisplayName.Or("") != "Python ready" || len(overrides.Tags) != 1 {
+		t.Fatalf("SpecOverrides = %+v", overrides)
+	}
+	pool, ok := overrides.Pool.Get()
+	if !ok || pool.MinIdle != 1 || pool.MaxIdle != 2 {
+		t.Fatalf("pool = %+v, set = %v", pool, ok)
+	}
+}
+
+func TestBuildTemplateFromSandboxCreateRequestWithoutOverrides(t *testing.T) {
+	t.Parallel()
+
+	req, err := buildTemplateFromSandboxCreateRequest("python-ready", "sb_source", "")
+	if err != nil {
+		t.Fatalf("buildTemplateFromSandboxCreateRequest() error = %v", err)
+	}
+	if req.SpecOverrides.IsSet() {
+		t.Fatal("SpecOverrides should not be set")
+	}
+}
+
+func TestBuildTemplateFromSandboxCreateRequestRejectsUnsupportedOverrides(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{
+			name: "unsupported override",
+			content: `mainContainer:
+  image: python:3.13
+`,
+			wantErr: "mainContainer is not supported in an overrides file",
+		},
+		{
+			name: "wrapped API request field",
+			content: `spec_overrides:
+  displayName: ignored
+`,
+			wantErr: "spec_overrides is not supported in an overrides file",
+		},
+		{
+			name: "unsupported pool field",
+			content: `pool:
+  minIdle: 0
+  maxIdle: 1
+  warmup: 2
+`,
+			wantErr: "pool.warmup is not supported",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			specFile := filepath.Join(t.TempDir(), "overrides.yaml")
+			if err := os.WriteFile(specFile, []byte(test.content), 0o600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+			_, err := buildTemplateFromSandboxCreateRequest("python-ready", "sb_source", specFile)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("error = %v, want substring %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateTemplateCreateMode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		opts    templateCreateModeOptions
+		wantErr string
+	}{
+		{name: "image mode", opts: templateCreateModeOptions{templateID: "image", specFile: "template.yaml"}},
+		{name: "from sandbox", opts: templateCreateModeOptions{templateID: "ready", fromSandbox: "sb_source"}},
+		{name: "from sandbox with overrides", opts: templateCreateModeOptions{templateID: "ready", fromSandbox: "sb_source", overridesFile: "overrides.yaml"}},
+		{name: "from sandbox wait", opts: templateCreateModeOptions{templateID: "ready", fromSandbox: "sb_source", wait: true, waitTimeout: time.Minute, pollInterval: time.Second}},
+		{name: "missing id", opts: templateCreateModeOptions{specFile: "template.yaml"}, wantErr: "--id is required"},
+		{name: "missing image spec", opts: templateCreateModeOptions{templateID: "image"}, wantErr: "--spec-file is required"},
+		{name: "overrides without source", opts: templateCreateModeOptions{templateID: "image", specFile: "template.yaml", overridesFile: "overrides.yaml"}, wantErr: "--overrides-file requires --from-sandbox"},
+		{name: "spec with source", opts: templateCreateModeOptions{templateID: "ready", fromSandbox: "sb_source", specFile: "template.yaml"}, wantErr: "--spec-file cannot be used with --from-sandbox"},
+		{name: "wait without source", opts: templateCreateModeOptions{templateID: "image", specFile: "template.yaml", wait: true}, wantErr: "require --from-sandbox"},
+		{name: "timeout without wait", opts: templateCreateModeOptions{templateID: "ready", fromSandbox: "sb_source", waitTimeoutChanged: true}, wantErr: "--wait-timeout requires --wait"},
+		{name: "invalid timeout", opts: templateCreateModeOptions{templateID: "ready", fromSandbox: "sb_source", wait: true, waitTimeout: 0, pollInterval: time.Second}, wantErr: "--wait-timeout must be greater than zero"},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateTemplateCreateMode(test.opts)
+			if test.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateTemplateCreateMode() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("error = %v, want substring %q", err, test.wantErr)
+			}
+		})
 	}
 }
 
