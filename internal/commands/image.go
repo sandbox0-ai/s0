@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/sandbox0-ai/s0/internal/docker"
@@ -122,15 +123,17 @@ var imagePushCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("\nImage pushed successfully: %s\n", targetImage)
 		templateImage := imageTag
 		if creds.PullRegistry != "" {
 			templateImage = fmt.Sprintf("%s/%s", creds.PullRegistry, imageTag)
 		}
-		if templateImage != targetImage {
-			fmt.Printf("Template image reference: %s\n", templateImage)
-		}
+		writeImagePushResult(os.Stdout, targetImage, templateImage)
 	},
+}
+
+func writeImagePushResult(w io.Writer, targetImage, templateImage string) {
+	fmt.Fprintf(w, "\nImage pushed successfully: %s\n", targetImage)
+	fmt.Fprintf(w, "Template image reference: %s\n", templateImage)
 }
 
 // imageCredentialsCmd prints registry credentials used for image push.
