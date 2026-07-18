@@ -172,12 +172,15 @@ func (f *TableFormatter) formatTemplates(w io.Writer, templates []apispec.Templa
 	}
 
 	t := newTable(w)
-	t.Header([]string{"TEMPLATE ID", "SCOPE", "CREATED AT"})
+	t.Header([]string{"TEMPLATE ID", "SCOPE", "STATE", "STAGE", "CREATED AT"})
 
 	for _, tmpl := range templates {
+		creation := templateCreationDisplayFor(tmpl)
 		_ = t.Append([]string{
 			tmpl.TemplateID,
 			tmpl.Scope,
+			creation.state,
+			creation.stage,
 			tmpl.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
@@ -194,9 +197,47 @@ func (f *TableFormatter) formatTemplate(w io.Writer, tmpl *apispec.Template) err
 	if v, ok := tmpl.UserID.Get(); ok {
 		_ = t.Append([]string{"User ID:", v})
 	}
+	creation := templateCreationDisplayFor(*tmpl)
+	_ = t.Append([]string{"Creation State:", creation.state})
+	_ = t.Append([]string{"Creation Stage:", creation.stage})
+	_ = t.Append([]string{"Output Image:", creation.outputImage})
+	_ = t.Append([]string{"Reason:", creation.reason})
+	_ = t.Append([]string{"Message:", creation.message})
 	_ = t.Append([]string{"Created:", tmpl.CreatedAt.Format("2006-01-02 15:04:05")})
 	_ = t.Append([]string{"Updated:", tmpl.UpdatedAt.Format("2006-01-02 15:04:05")})
 	return t.Render()
+}
+
+type templateCreationDisplay struct {
+	state       string
+	stage       string
+	outputImage string
+	reason      string
+	message     string
+}
+
+func templateCreationDisplayFor(tmpl apispec.Template) templateCreationDisplay {
+	display := templateCreationDisplay{
+		state:       "ready",
+		stage:       "-",
+		outputImage: "-",
+		reason:      "-",
+		message:     "-",
+	}
+	status, ok := tmpl.Status.Get()
+	if !ok {
+		return display
+	}
+	creation, ok := status.Creation.Get()
+	if !ok {
+		return display
+	}
+	display.state = string(creation.State)
+	display.stage = string(creation.Stage)
+	display.outputImage = creation.OutputImage.Or("-")
+	display.reason = creation.Reason.Or("-")
+	display.message = creation.Message.Or("-")
+	return display
 }
 
 func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVolume) error {

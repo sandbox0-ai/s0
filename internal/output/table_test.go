@@ -491,6 +491,90 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 	}
 }
 
+func TestTableFormatterFormatTemplateIncludesCreationStatus(t *testing.T) {
+	formatter := &TableFormatter{}
+	template := &apispec.Template{
+		TemplateID: "python-ready",
+		Scope:      "team",
+		Status: apispec.NewOptSandboxTemplateStatus(apispec.SandboxTemplateStatus{
+			Creation: apispec.NewOptTemplateCreationStatus(apispec.TemplateCreationStatus{
+				State:       apispec.TemplateCreationStatusStateFailed,
+				Stage:       apispec.TemplateCreationStatusStagePublishing,
+				OutputImage: apispec.NewOptString("registry.example.com/team/python-ready@sha256:abc"),
+				Reason:      apispec.NewOptString("registry_push_failed"),
+				Message:     apispec.NewOptString("registry rejected the published image manifest"),
+			}),
+		}),
+		CreatedAt: time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 7, 18, 12, 1, 0, 0, time.UTC),
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, template); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"Creation State:",
+		"failed",
+		"Creation Stage:",
+		"publishing",
+		"Output Image:",
+		"registry.example.com/team/python-ready@sha256:abc",
+		"Reason:",
+		"registry_push_failed",
+		"Message:",
+		"registry rejected the published image manifest",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestTableFormatterFormatTemplatesIncludesCreationState(t *testing.T) {
+	formatter := &TableFormatter{}
+	templates := []apispec.Template{
+		{
+			TemplateID: "legacy",
+			Scope:      "system",
+			CreatedAt:  time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			TemplateID: "python-ready",
+			Scope:      "team",
+			Status: apispec.NewOptSandboxTemplateStatus(apispec.SandboxTemplateStatus{
+				Creation: apispec.NewOptTemplateCreationStatus(apispec.TemplateCreationStatus{
+					State: apispec.TemplateCreationStatusStateCreating,
+					Stage: apispec.TemplateCreationStatusStageCapturing,
+				}),
+			}),
+			CreatedAt: time.Date(2026, 7, 18, 12, 1, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, templates); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{
+		"STATE",
+		"STAGE",
+		"legacy",
+		"ready",
+		"python-ready",
+		"creating",
+		"capturing",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+}
+
 func TestTableFormatterFormatSandboxRootFSSnapshotList(t *testing.T) {
 	formatter := &TableFormatter{}
 	snapshots := &apispec.SandboxRootFSSnapshotList{

@@ -522,9 +522,29 @@ s0 sandbox service update --services-file function-services.yaml -s <sandbox-id>
 s0 template list
 s0 template get <template-id>
 s0 template create --id <id> --spec-file template.yaml
+s0 template create --id <id> --from-sandbox <sandbox-id> [--overrides-file overrides.yaml] [--idempotency-key <key>] [--wait] [--wait-timeout <duration>] [--poll-interval <duration>]
 s0 template update <template-id> --spec-file template.yaml
 s0 template delete <template-id>
 ```
+
+With `--from-sandbox`, the optional overrides file is the override object itself
+and may contain `displayName`, `description`, `tags`, or `pool`:
+
+```yaml
+displayName: Python Ready
+tags:
+  - python
+pool:
+  minIdle: 0
+  maxIdle: 0
+```
+
+`--wait` waits for the captured root filesystem to be published and the new
+template to become claimable. Request acceptance is not the rootfs capture
+point, so keep the source sandbox available and avoid rootfs writes while the
+template is in the `capturing` stage.
+Timing out or interrupting the wait only stops the CLI; it does not cancel the
+server-side template build.
 
 ### Volume
 
