@@ -247,13 +247,14 @@ func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVol
 	}
 
 	t := newTable(w)
-	t.Header([]string{"ID", "TEAM ID", "BACKEND", "CREATED"})
+	t.Header([]string{"ID", "TEAM ID", "BACKEND", "METERED STORAGE", "CREATED"})
 
 	for _, v := range volumes {
 		_ = t.Append([]string{
 			v.ID,
 			v.TeamID,
 			formatVolumeBackend(v.Backend),
+			formatVolumeMeteredStorage(v),
 			v.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
@@ -266,6 +267,8 @@ func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) err
 	_ = t.Append([]string{"Team ID:", v.TeamID})
 	_ = t.Append([]string{"User ID:", v.UserID})
 	_ = t.Append([]string{"Backend:", formatVolumeBackend(v.Backend)})
+	_ = t.Append([]string{"Metered storage:", formatVolumeMeteredStorage(*v)})
+	_ = t.Append([]string{"Storage observed:", formatVolumeStorageObservedAt(*v)})
 	if s3, ok := v.S3.Get(); ok {
 		_ = t.Append([]string{"S3 Provider:", string(s3.Provider)})
 		_ = t.Append([]string{"S3 Bucket:", s3.Bucket})
@@ -289,6 +292,26 @@ func formatVolumeBackend(backend apispec.VolumeBackend) string {
 		return "-"
 	}
 	return string(backend)
+}
+
+func formatVolumeMeteredStorage(volume apispec.SandboxVolume) string {
+	if volume.Backend == apispec.VolumeBackendS3 {
+		return "External"
+	}
+	if sizeBytes, ok := volume.MeteredStorageBytes.Get(); ok {
+		return formatBytes(sizeBytes)
+	}
+	return "Unavailable"
+}
+
+func formatVolumeStorageObservedAt(volume apispec.SandboxVolume) string {
+	if volume.Backend == apispec.VolumeBackendS3 {
+		return "-"
+	}
+	if observedAt, ok := volume.StorageObservedAt.Get(); ok {
+		return observedAt.Format(timeLayout)
+	}
+	return "-"
 }
 
 func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapshot) error {
