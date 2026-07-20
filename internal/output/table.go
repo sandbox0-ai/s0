@@ -126,6 +126,12 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatTeamMember(w, &v)
 	case *apispec.TeamMember:
 		return f.formatTeamMember(w, v)
+	case []apispec.TeamQuota:
+		return f.formatTeamQuotaList(w, v)
+	case apispec.TeamQuota:
+		return f.formatTeamQuota(w, &v)
+	case *apispec.TeamQuota:
+		return f.formatTeamQuota(w, v)
 	case apispec.User:
 		return f.formatUser(w, &v)
 	case *apispec.User:
@@ -143,6 +149,68 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		_, _ = fmt.Fprintf(w, "%v\n", data)
 		return nil
 	}
+}
+
+func (f *TableFormatter) formatTeamQuotaList(w io.Writer, quotas []apispec.TeamQuota) error {
+	if len(quotas) == 0 {
+		_, _ = fmt.Fprintln(w, "No quotas found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"DIMENSION", "KIND", "LIMIT", "INTERVAL", "BURST", "CURRENT", "REMAINING", "UNIT", "SOURCE"})
+	for _, quota := range quotas {
+		_ = t.Append([]string{
+			string(quota.Dimension),
+			string(quota.Kind),
+			formatTeamQuotaLimit(quota),
+			formatTeamQuotaInterval(quota.IntervalMs),
+			formatTeamQuotaInt(quota.BurstValue),
+			formatTeamQuotaInt(quota.Current),
+			formatTeamQuotaInt(quota.Remaining),
+			string(quota.Unit),
+			string(quota.Source),
+		})
+	}
+	return t.Render()
+}
+
+func (f *TableFormatter) formatTeamQuota(w io.Writer, quota *apispec.TeamQuota) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Team ID:", quota.TeamID})
+	_ = t.Append([]string{"Dimension:", string(quota.Dimension)})
+	_ = t.Append([]string{"Kind:", string(quota.Kind)})
+	_ = t.Append([]string{"Limit:", formatTeamQuotaLimit(*quota)})
+	_ = t.Append([]string{"Interval:", formatTeamQuotaInterval(quota.IntervalMs)})
+	_ = t.Append([]string{"Burst:", formatTeamQuotaInt(quota.BurstValue)})
+	_ = t.Append([]string{"Current:", formatTeamQuotaInt(quota.Current)})
+	_ = t.Append([]string{"Remaining:", formatTeamQuotaInt(quota.Remaining)})
+	_ = t.Append([]string{"Unit:", string(quota.Unit)})
+	_ = t.Append([]string{"Source:", string(quota.Source)})
+	return t.Render()
+}
+
+func formatTeamQuotaLimit(quota apispec.TeamQuota) string {
+	if quota.Unlimited {
+		return "unlimited"
+	}
+	return formatTeamQuotaInt(quota.LimitValue)
+}
+
+func formatTeamQuotaInterval(value apispec.NilInt64) string {
+	intervalMs, ok := value.Get()
+	if !ok {
+		return "-"
+	}
+	return (time.Duration(intervalMs) * time.Millisecond).String()
+}
+
+func formatTeamQuotaInt(value apispec.NilInt64) string {
+	number, ok := value.Get()
+	if !ok {
+		return "-"
+	}
+	return strconv.FormatInt(number, 10)
 }
 
 func newTable(w io.Writer) *tablewriter.Table {
