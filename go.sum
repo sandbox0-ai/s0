@@ -118,6 +118,8 @@ github.com/sagikazarmark/slog-shim v0.1.0 h1:diDBnUNK9N/354PgrxMywXnAwEr1QZcOr6g
 github.com/sagikazarmark/slog-shim v0.1.0/go.mod h1:SrcSrq8aKtyuqEI1uvTDTK1arOWRIczQRv+GVI1AkeQ=
 github.com/sandbox0-ai/sdk-go v0.9.3 h1:47t+gTeGQ1DKPde8c+IGY5+vhm1hs/dZ2tNTk64LiYI=
 github.com/sandbox0-ai/sdk-go v0.9.3/go.mod h1:7cCeXNG40HLceDH2pNNZo4pEka06YDFFdTkz9XyDK98=
+github.com/sandbox0-ai/sdk-go v0.9.5-0.20260726151818-caebfa8b0fd9 h1:hSNUHmLTo5uC8H5iX0RSs8ZbYw33U9pBihREDrvbU5g=
+github.com/sandbox0-ai/sdk-go v0.9.5-0.20260726151818-caebfa8b0fd9/go.mod h1:7cCeXNG40HLceDH2pNNZo4pEka06YDFFdTkz9XyDK98=
 github.com/segmentio/asm v1.2.1 h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=
 github.com/segmentio/asm v1.2.1/go.mod h1:BqMnlJP91P8d+4ibuonYZw9mfnzI9HfxselHZr5aAcs=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=

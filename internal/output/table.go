@@ -132,6 +132,8 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatTeamQuota(w, &v)
 	case *apispec.TeamQuota:
 		return f.formatTeamQuota(w, v)
+	case *apispec.UsageWindowPage:
+		return f.formatUsageWindowPage(w, v)
 	case apispec.User:
 		return f.formatUser(w, &v)
 	case *apispec.User:
@@ -211,6 +213,43 @@ func formatTeamQuotaInt(value apispec.NilInt64) string {
 		return "-"
 	}
 	return strconv.FormatInt(number, 10)
+}
+
+func (f *TableFormatter) formatUsageWindowPage(w io.Writer, page *apispec.UsageWindowPage) error {
+	if len(page.Windows) == 0 {
+		_, _ = fmt.Fprintln(w, "No usage windows found.")
+		return nil
+	}
+
+	t := newTable(w)
+	t.Header([]string{"WINDOW ID", "TYPE", "SUBJECT", "SANDBOX", "START", "END", "VALUE", "UNIT"})
+	for _, window := range page.Windows {
+		_ = t.Append([]string{
+			window.WindowID,
+			window.WindowType,
+			window.SubjectType + ":" + window.SubjectID,
+			formatUsageWindowOptionalString(window.SandboxID),
+			window.WindowStart.Format(time.RFC3339),
+			window.WindowEnd.Format(time.RFC3339),
+			strconv.FormatInt(window.Value, 10),
+			window.Unit,
+		})
+	}
+	if err := t.Render(); err != nil {
+		return err
+	}
+	if page.NextCursor != "" {
+		_, _ = fmt.Fprintf(w, "Next cursor: %s\n", page.NextCursor)
+	}
+	return nil
+}
+
+func formatUsageWindowOptionalString(value apispec.OptString) string {
+	text, ok := value.Get()
+	if !ok || text == "" {
+		return "-"
+	}
+	return text
 }
 
 func newTable(w io.Writer) *tablewriter.Table {
