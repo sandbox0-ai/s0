@@ -221,6 +221,20 @@ s0 team use <team-id>
 
 ## Commands
 
+### Usage
+
+List immutable usage windows for the currently selected team:
+
+```bash
+s0 usage list
+s0 usage list --limit 250 --window-type sandbox.runtime_mib_milliseconds
+s0 usage list --cursor <next-cursor>
+```
+
+The table output prints the next cursor after each non-final page. Use
+`--output json` or `--output yaml` to retain the complete typed page, including
+region and cluster metadata.
+
 ### Team
 
 ```bash

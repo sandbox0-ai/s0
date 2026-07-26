@@ -65,7 +65,7 @@ func TestTableFormatterFormatsUnlimitedQuota(t *testing.T) {
 	nullValue.SetToNull()
 	quota := &apispec.TeamQuota{
 		TeamID:     "team-1",
-		Dimension:  apispec.QuotaDimensionMemoryMib,
+		Dimension:  apispec.QuotaDimensionActiveSandboxes,
 		Kind:       apispec.TeamQuotaKindCapacity,
 		LimitValue: nullValue,
 		IntervalMs: nullValue,
@@ -73,7 +73,7 @@ func TestTableFormatterFormatsUnlimitedQuota(t *testing.T) {
 		Current:    apispec.NewNilInt64(256),
 		Remaining:  nullValue,
 		Unlimited:  true,
-		Unit:       apispec.TeamQuotaUnitMiB,
+		Unit:       apispec.TeamQuotaUnitCount,
 		Source:     apispec.TeamQuotaSourceUnlimited,
 	}
 
@@ -81,7 +81,7 @@ func TestTableFormatterFormatsUnlimitedQuota(t *testing.T) {
 	if err := NewFormatter(FormatTable).Format(&output, quota); err != nil {
 		t.Fatalf("Format() error = %v", err)
 	}
-	for _, want := range []string{"memory_mib", "unlimited", "Current:", "256"} {
+	for _, want := range []string{"active_sandboxes", "unlimited", "Current:", "256"} {
 		if !strings.Contains(output.String(), want) {
 			t.Fatalf("output missing %q:\n%s", want, output.String())
 		}
