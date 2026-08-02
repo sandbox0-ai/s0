@@ -465,8 +465,8 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 			Username: "sb_123",
 		}),
 		ClaimedAt:     time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC),
-		ExpiresAt:     time.Date(2026, 4, 10, 13, 0, 0, 0, time.UTC),
-		HardExpiresAt: time.Date(2026, 4, 10, 14, 0, 0, 0, time.UTC),
+		ExpiresAt:     apispec.NewOptNilDateTime(time.Date(2026, 4, 10, 13, 0, 0, 0, time.UTC)),
+		HardExpiresAt: apispec.NewOptNilDateTime(time.Date(2026, 4, 10, 14, 0, 0, 0, time.UTC)),
 	}
 
 	var buf bytes.Buffer
@@ -488,6 +488,40 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
 		}
+	}
+}
+
+func TestTableFormatterFormatSandboxListShowsDisabledExpiration(t *testing.T) {
+	formatter := &TableFormatter{}
+	disabled := apispec.OptNilDateTime{}
+	disabled.SetToNull()
+	response := &sandbox0.ListSandboxesResponse{
+		Sandboxes: []apispec.SandboxSummary{
+			{
+				ID:                "sb_disabled_ttl",
+				TemplateID:        "default",
+				Status:            apispec.SandboxLifecycleStatusRunning,
+				CreatedAt:         time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC),
+				HardExpiresAt:     disabled,
+				RuntimeGeneration: 1,
+			},
+		},
+		Count: 1,
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, response); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{"sb_disabled_ttl", "running", "HARD EXPIRES AT", "-", "Total: 1"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "1970-") || strings.Contains(output, "expired") {
+		t.Fatalf("disabled expiration rendered as an expired timestamp:\n%s", output)
 	}
 }
 
