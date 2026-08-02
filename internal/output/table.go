@@ -560,8 +560,8 @@ func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 	}
 	_ = t.Append([]string{"Pod Name:", s.PodName})
 	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format(timeLayout)})
-	_ = t.Append([]string{"Soft Expires At:", formatTimestamp(s.ExpiresAt)})
-	_ = t.Append([]string{"Hard Expires At:", formatTimestamp(s.HardExpiresAt)})
+	_ = t.Append([]string{"Soft Expires At:", formatOptNilDateTime(s.ExpiresAt)})
+	_ = t.Append([]string{"Hard Expires At:", formatOptNilDateTime(s.HardExpiresAt)})
 	if ssh, ok := s.SSH.Get(); ok {
 		_ = t.Append([]string{"SSH Host:", valueOrDash(ssh.Host)})
 		_ = t.Append([]string{"SSH Port:", intOrDash(ssh.Port)})
@@ -610,11 +610,11 @@ func (f *TableFormatter) formatSandboxStatus(w io.Writer, s *apispec.SandboxStat
 	if v, ok := s.ClaimedAt.Get(); ok {
 		_ = t.Append([]string{"Claimed At:", v})
 	}
-	if v, ok := s.ExpiresAt.Get(); ok {
-		_ = t.Append([]string{"Soft Expires At:", formatTimestampText(v)})
+	if s.ExpiresAt.IsSet() {
+		_ = t.Append([]string{"Soft Expires At:", formatOptNilDateTime(s.ExpiresAt)})
 	}
-	if v, ok := s.HardExpiresAt.Get(); ok {
-		_ = t.Append([]string{"Hard Expires At:", formatTimestampText(v)})
+	if s.HardExpiresAt.IsSet() {
+		_ = t.Append([]string{"Hard Expires At:", formatOptNilDateTime(s.HardExpiresAt)})
 	}
 	if v, ok := s.CreatedAt.Get(); ok {
 		_ = t.Append([]string{"Created At:", v})
@@ -625,8 +625,8 @@ func (f *TableFormatter) formatSandboxStatus(w io.Writer, s *apispec.SandboxStat
 func (f *TableFormatter) formatRefreshResponse(w io.Writer, r *apispec.RefreshResponse) error {
 	t := newTable(w)
 	_ = t.Append([]string{"Sandbox ID:", r.SandboxID})
-	_ = t.Append([]string{"Soft Expires At:", formatTimestamp(r.ExpiresAt)})
-	_ = t.Append([]string{"Hard Expires At:", formatTimestamp(r.HardExpiresAt)})
+	_ = t.Append([]string{"Soft Expires At:", formatOptNilDateTime(r.ExpiresAt)})
+	_ = t.Append([]string{"Hard Expires At:", formatOptNilDateTime(r.HardExpiresAt)})
 	return t.Render()
 }
 
@@ -662,7 +662,7 @@ func (f *TableFormatter) formatSandboxList(w io.Writer, r *sandbox0.ListSandboxe
 			string(s.Status),
 			fmt.Sprintf("%v", s.Paused),
 			s.CreatedAt.Format(timeLayout),
-			formatTimestamp(s.HardExpiresAt),
+			formatOptNilDateTime(s.HardExpiresAt),
 		})
 	}
 	if err := t.Render(); err != nil {
