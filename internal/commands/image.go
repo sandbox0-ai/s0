@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/sandbox0-ai/s0/internal/client"
 	"github.com/sandbox0-ai/s0/internal/docker"
 
 	"github.com/spf13/cobra"
@@ -103,11 +104,7 @@ var imagePushCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Prepend registry to tag if not already present
-		targetImage := imageTag
-		if creds.PushRegistry != "" {
-			targetImage = fmt.Sprintf("%s/%s", creds.PushRegistry, imageTag)
-		}
+		targetImage, templateImage := imagePushReferences(creds, imageTag)
 
 		opts := docker.PushOptions{
 			SourceImage: localImage,
@@ -123,12 +120,27 @@ var imagePushCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		templateImage := imageTag
+		writeImagePushResult(os.Stdout, targetImage, templateImage)
+	},
+}
+
+func imagePushReferences(creds *client.RegistryCredentials, imageTag string) (targetImage, templateImage string) {
+	targetImage = creds.PushImage
+	if targetImage == "" {
+		targetImage = imageTag
+		if creds.PushRegistry != "" {
+			targetImage = fmt.Sprintf("%s/%s", creds.PushRegistry, imageTag)
+		}
+	}
+
+	templateImage = creds.PullImage
+	if templateImage == "" {
+		templateImage = imageTag
 		if creds.PullRegistry != "" {
 			templateImage = fmt.Sprintf("%s/%s", creds.PullRegistry, imageTag)
 		}
-		writeImagePushResult(os.Stdout, targetImage, templateImage)
-	},
+	}
+	return targetImage, templateImage
 }
 
 func writeImagePushResult(w io.Writer, targetImage, templateImage string) {
