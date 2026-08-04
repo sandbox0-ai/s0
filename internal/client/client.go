@@ -27,6 +27,8 @@ type RegistryCredentials struct {
 	Provider     string
 	PushRegistry string
 	PullRegistry string
+	PushImage    string
+	PullImage    string
 	Username     string
 	Password     string
 	ExpiresAt    string
@@ -60,6 +62,12 @@ func (c *Client) GetRegistryCredentials(ctx context.Context, targetImage string)
 		PullRegistry: data.PullRegistry,
 		Username:     data.Username,
 		Password:     data.Password,
+	}
+	if pushImage, ok := data.PushImage.Get(); ok {
+		creds.PushImage = pushImage
+	}
+	if pullImage, ok := data.PullImage.Get(); ok {
+		creds.PullImage = pullImage
 	}
 
 	if expiresAt, ok := data.ExpiresAt.Get(); ok {
