@@ -126,6 +126,10 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatTeamMember(w, &v)
 	case *apispec.TeamMember:
 		return f.formatTeamMember(w, v)
+	case TeamInvitation:
+		return f.formatTeamInvitation(w, &v)
+	case *TeamInvitation:
+		return f.formatTeamInvitation(w, v)
 	case []apispec.TeamQuota:
 		return f.formatTeamQuotaList(w, v)
 	case apispec.TeamQuota:
@@ -1422,6 +1426,34 @@ func (f *TableFormatter) formatTeamMember(w io.Writer, m *apispec.TeamMember) er
 	_ = t.Append([]string{"Avatar URL:", formatOptString(m.AvatarURL)})
 	_ = t.Append([]string{"Role:", m.Role})
 	_ = t.Append([]string{"Joined At:", formatTimestamp(m.JoinedAt)})
+	return t.Render()
+}
+
+func (f *TableFormatter) formatTeamInvitation(w io.Writer, invitation *TeamInvitation) error {
+	t := newTable(w)
+	_ = t.Append([]string{"ID:", invitation.ID})
+	_ = t.Append([]string{"Team ID:", invitation.TeamID})
+	if invitation.TeamName != "" {
+		_ = t.Append([]string{"Team Name:", invitation.TeamName})
+	}
+	_ = t.Append([]string{"Invitee Email:", invitation.InviteeEmail})
+	_ = t.Append([]string{"Role:", invitation.Role})
+	_ = t.Append([]string{"Status:", invitation.Status})
+	_ = t.Append([]string{"Expires At:", formatTimestamp(invitation.ExpiresAt)})
+	_ = t.Append([]string{"Delivery State:", invitation.DeliveryState})
+	_ = t.Append([]string{"Send Count:", strconv.Itoa(invitation.SendCount)})
+	_ = t.Append([]string{"Last Send Requested At:", formatTimestamp(invitation.LastSendRequestedAt)})
+	if invitation.LastSentAt != nil {
+		_ = t.Append([]string{"Last Sent At:", formatTimestamp(*invitation.LastSentAt)})
+	}
+	if invitation.DeliveryLastError != "" {
+		_ = t.Append([]string{"Delivery Error:", invitation.DeliveryLastError})
+	}
+	if invitation.DeliveryNextAttemptAt != nil {
+		_ = t.Append([]string{"Delivery Retry At:", formatTimestamp(*invitation.DeliveryNextAttemptAt)})
+	}
+	_ = t.Append([]string{"Created At:", formatTimestamp(invitation.CreatedAt)})
+	_ = t.Append([]string{"Updated At:", formatTimestamp(invitation.UpdatedAt)})
 	return t.Render()
 }
 
