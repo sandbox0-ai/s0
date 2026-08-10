@@ -881,3 +881,40 @@ func TestTableFormatterFormatSignedSandboxObservabilityEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestTableFormatterFormatTeamInvitation(t *testing.T) {
+	formatter := &TableFormatter{}
+	now := time.Date(2026, 8, 10, 12, 30, 0, 0, time.UTC)
+	invitation := &TeamInvitation{
+		ID:                  "invite-1",
+		TeamID:              "team-1",
+		TeamName:            "Example Team",
+		InviteeEmail:        "invitee@example.com",
+		Role:                "developer",
+		Status:              "pending",
+		ExpiresAt:           now.Add(7 * 24 * time.Hour),
+		LastSendRequestedAt: now,
+		SendCount:           1,
+		DeliveryState:       "queued",
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, invitation); err != nil {
+		t.Fatalf("Format() error = %v", err)
+	}
+	for _, want := range []string{
+		"invite-1",
+		"team-1",
+		"Example Team",
+		"invitee@example.com",
+		"developer",
+		"pending",
+		"queued",
+	} {
+		if !strings.Contains(buf.String(), want) {
+			t.Fatalf("output missing %q:\n%s", want, buf.String())
+		}
+	}
+}

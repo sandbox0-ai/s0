@@ -763,6 +763,7 @@ func init() {
 	teamCmd.AddCommand(teamUpdateCmd)
 	teamCmd.AddCommand(teamDeleteCmd)
 	teamCmd.AddCommand(teamMemberCmd)
+	teamCmd.AddCommand(newTeamInvitationCommand())
 
 	teamMemberCmd.AddCommand(teamMemberListCmd)
 	teamMemberCmd.AddCommand(teamMemberAddCmd)

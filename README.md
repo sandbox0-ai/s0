@@ -245,6 +245,16 @@ s0 team use <team-id>
 
 `s0 team list` marks the locally selected current team in the `CURRENT` column. JSON and YAML output include a `current` boolean for each team.
 
+### Team invitations (Sandbox0 Cloud)
+
+Invite a new or existing user to a team through a Cloud Global Gateway:
+
+```bash
+s0 team invitation create --team-id <team-id> --email person@example.com [--role developer]
+```
+
+The command creates a pending email invitation; it is not available on a direct, self-hosted control-plane endpoint. The caller must be a verified team admin.
+
 ### Admin Region
 
 ```bash
