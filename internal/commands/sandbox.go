@@ -22,7 +22,6 @@ var (
 	sandboxHardTTL    int32
 	sandboxMemory     string
 	sandboxConfigFile string
-	sandboxMounts     []string
 	sandboxSnapshotID string
 	// list flags
 	sandboxListStatus     string
@@ -64,12 +63,11 @@ var (
 )
 
 type sandboxCreateOutput struct {
-	ID              string                `json:"id"`
-	Template        string                `json:"template"`
-	ClusterID       *string               `json:"cluster_id,omitempty"`
-	PodName         string                `json:"pod_name"`
-	Status          string                `json:"status"`
-	BootstrapMounts []apispec.MountStatus `json:"bootstrap_mounts"`
+	ID        string  `json:"id"`
+	Template  string  `json:"template"`
+	ClusterID *string `json:"cluster_id,omitempty"`
+	PodName   string  `json:"pod_name"`
+	Status    string  `json:"status"`
 }
 
 func sandboxCreateOutputValue(sandbox *sandbox0.Sandbox) any {
@@ -77,12 +75,11 @@ func sandboxCreateOutputValue(sandbox *sandbox0.Sandbox) any {
 		return sandbox
 	}
 	return sandboxCreateOutput{
-		ID:              sandbox.ID,
-		Template:        sandbox.Template,
-		ClusterID:       sandbox.ClusterID,
-		PodName:         sandbox.PodName,
-		Status:          sandbox.Status,
-		BootstrapMounts: sandbox.BootstrapMounts,
+		ID:        sandbox.ID,
+		Template:  sandbox.Template,
+		ClusterID: sandbox.ClusterID,
+		PodName:   sandbox.PodName,
+		Status:    sandbox.Status,
 	}
 }
 
@@ -505,7 +502,6 @@ func init() {
 	sandboxCreateCmd.Flags().Int32Var(&sandboxTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
 	sandboxCreateCmd.Flags().StringVar(&sandboxMemory, "memory", "", "sandbox memory limit, for example 512Mi or 2Gi")
-	sandboxCreateCmd.Flags().StringArrayVar(&sandboxMounts, "mount", nil, "bootstrap mount in the form <sandboxvolume-id>:/absolute/path (repeatable)")
 	sandboxCreateCmd.Flags().StringVar(&sandboxSnapshotID, "snapshot-id", "", "rootfs snapshot ID used to initialize the new sandbox")
 
 	sandboxCmd.AddCommand(sandboxCreateCmd)
@@ -589,13 +585,6 @@ func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
 		request.Config = apispec.NewOptSandboxConfig(config)
 	}
 
-	mounts, err := parseSandboxCreateMounts(sandboxMounts)
-	if err != nil {
-		return apispec.ClaimRequest{}, err
-	}
-	if len(mounts) > 0 {
-		request.Mounts = append(request.Mounts, mounts...)
-	}
 	if _, ok := request.Template.Get(); !ok {
 		return apispec.ClaimRequest{}, fmt.Errorf("--template is required unless provided in config file")
 	}
@@ -999,27 +988,6 @@ func mergeSandboxCreateConfig(dst *apispec.SandboxConfig, src apispec.SandboxCon
 	}
 }
 
-func parseSandboxCreateMounts(values []string) ([]apispec.ClaimMountRequest, error) {
-	if len(values) == 0 {
-		return nil, nil
-	}
-	out := make([]apispec.ClaimMountRequest, 0, len(values))
-	for _, raw := range values {
-		volumeID, mountPoint, ok := strings.Cut(raw, ":")
-		if !ok || volumeID == "" || mountPoint == "" {
-			return nil, fmt.Errorf("invalid --mount %q: expected <sandboxvolume-id>:/absolute/path", raw)
-		}
-		if !strings.HasPrefix(mountPoint, "/") {
-			return nil, fmt.Errorf("invalid --mount %q: mount path must be absolute", raw)
-		}
-		out = append(out, apispec.ClaimMountRequest{
-			SandboxvolumeID: volumeID,
-			MountPoint:      mountPoint,
-		})
-	}
-	return out, nil
-}
-
 func readSandboxCreateInputFile(path string) (apispec.ClaimRequest, error) {
 	data, err := readConfigFile(path)
 	if err != nil {
@@ -1048,7 +1016,7 @@ func isSandboxCreateClaimRequest(data []byte) (bool, error) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return false, fmt.Errorf("parse sandbox create file: %w", err)
 	}
-	for _, key := range []string{"template", "config", "mounts", "snapshot_id"} {
+	for _, key := range []string{"template", "config", "snapshot_id"} {
 		if _, ok := raw[key]; ok {
 			return true, nil
 		}
