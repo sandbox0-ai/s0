@@ -163,9 +163,6 @@ hard_ttl: 120
 		sandboxConfigFile = writeTempFile(t, `
 template: from-file
 snapshot_id: snap_file
-mounts:
-  - sandboxvolume_id: vol_123
-    mount_point: /workspace/data
 config:
   ttl: 90
 `)
@@ -181,81 +178,6 @@ config:
 		snapshotID, ok := request.SnapshotID.Get()
 		if !ok || snapshotID != "snap_file" {
 			t.Fatalf("snapshot_id = %q, want snap_file", snapshotID)
-		}
-		if len(request.Mounts) != 1 {
-			t.Fatalf("mount count = %d, want 1", len(request.Mounts))
-		}
-		if request.Mounts[0].SandboxvolumeID != "vol_123" || request.Mounts[0].MountPoint != "/workspace/data" {
-			t.Fatalf("unexpected mount = %+v", request.Mounts[0])
-		}
-	})
-
-	t.Run("mount flags extend request", func(t *testing.T) {
-		resetSandboxFlagsForTest()
-		sandboxTemplate = "default"
-		sandboxMounts = []string{"vol_abc:/workspace/bootstrap-data"}
-
-		request, err := buildSandboxCreateRequest()
-		if err != nil {
-			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
-		}
-		if len(request.Mounts) != 1 {
-			t.Fatalf("mount count = %d, want 1", len(request.Mounts))
-		}
-	})
-
-	t.Run("mount flags append to request file mounts and template flag overrides", func(t *testing.T) {
-		resetSandboxFlagsForTest()
-		sandboxTemplate = "flag-template"
-		sandboxSnapshotID = "snap_flag"
-		sandboxConfigFile = writeTempFile(t, `
-template: from-file
-snapshot_id: snap_file
-mounts:
-  - sandboxvolume_id: vol_file
-    mount_point: /workspace/from-file
-`)
-		sandboxMounts = []string{"vol_flag:/workspace/from-flag"}
-
-		request, err := buildSandboxCreateRequest()
-		if err != nil {
-			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
-		}
-		template, ok := request.Template.Get()
-		if !ok || template != "flag-template" {
-			t.Fatalf("template = %q, want flag-template", template)
-		}
-		snapshotID, ok := request.SnapshotID.Get()
-		if !ok || snapshotID != "snap_flag" {
-			t.Fatalf("snapshot_id = %q, want snap_flag", snapshotID)
-		}
-		if len(request.Mounts) != 2 {
-			t.Fatalf("mount count = %d, want 2", len(request.Mounts))
-		}
-		if request.Mounts[0].SandboxvolumeID != "vol_file" || request.Mounts[1].SandboxvolumeID != "vol_flag" {
-			t.Fatalf("unexpected mounts = %+v", request.Mounts)
-		}
-	})
-
-	t.Run("invalid mount flag fails", func(t *testing.T) {
-		resetSandboxFlagsForTest()
-		sandboxTemplate = "default"
-		sandboxMounts = []string{"missing-separator"}
-
-		_, err := buildSandboxCreateRequest()
-		if err == nil {
-			t.Fatal("buildSandboxCreateRequest() error = nil, want error")
-		}
-	})
-
-	t.Run("relative mount path fails", func(t *testing.T) {
-		resetSandboxFlagsForTest()
-		sandboxTemplate = "default"
-		sandboxMounts = []string{"vol_abc:workspace/relative"}
-
-		_, err := buildSandboxCreateRequest()
-		if err == nil {
-			t.Fatal("buildSandboxCreateRequest() error = nil, want error")
 		}
 	})
 }
@@ -525,7 +447,6 @@ func resetSandboxFlagsForTest() {
 	sandboxHardTTL = 0
 	sandboxMemory = ""
 	sandboxConfigFile = ""
-	sandboxMounts = nil
 	sandboxSnapshotID = ""
 	sandboxListStatus = ""
 	sandboxListTemplateID = ""

@@ -210,7 +210,7 @@ Flags:
   --token string     Override API token
 ```
 
-In `global` mode, `auth`, `user`, `team`, and `admin` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `volume`, `credential`, `apikey`, and registry credential flows use the locally selected current team and switch to the home-region gateway automatically.
+In `global` mode, `auth`, `user`, `team`, and `admin` commands stay on the configured entrypoint. Workload-facing commands such as `sandbox`, `template`, `credential`, `apikey`, and registry credential flows use the locally selected current team and switch to the home-region gateway automatically.
 
 If a global-gateway profile has no current team selected yet, create one if needed and then select it locally:
 
@@ -271,7 +271,7 @@ s0 admin region delete <region-id>
 
 ```bash
 s0 sandbox run <sandbox-id> <input> [--alias <alias>] [--context-id <ctx-id>]
-s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200] [--snapshot-id <rootfs-snapshot-id>] [--mount <volume-id>:/absolute/path] [--wait-for-mounts] [--mount-wait-timeout-ms 45000]
+s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200] [--snapshot-id <rootfs-snapshot-id>]
 s0 sandbox get <sandbox-id>
 s0 sandbox update <sandbox-id> [-f sandbox-update.yaml] [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
 s0 sandbox delete <sandbox-id>
@@ -298,21 +298,16 @@ s0 user ssh-key add --public-key-file ~/.ssh/id_ed25519.pub
 s0 user ssh-key delete <ssh-key-id>
 ```
 
-Bootstrap mounts can be requested as part of sandbox creation:
+Create a sandbox from a rootfs snapshot:
 
 ```bash
-s0 volume create
 s0 sandbox create -t default \
-  --snapshot-id <rootfs-snapshot-id> \
-  --mount <volume-id>:/workspace/data
+  --snapshot-id <rootfs-snapshot-id>
 
 # Or provide a full claim request file.
 cat <<'EOF' > sandbox-claim.yaml
 template: default
 snapshot_id: <rootfs-snapshot-id>
-mounts:
-  - sandboxvolume_id: <volume-id>
-    mount_point: /workspace/data
 config:
   ttl: 3600
 EOF
@@ -570,41 +565,6 @@ template is in the `capturing` stage.
 Timing out or interrupting the wait only stops the CLI; it does not cancel the
 server-side template build.
 
-### Volume
-
-```bash
-s0 volume list
-s0 volume get <volume-id>
-s0 volume create [--access-mode RWO|ROX|RWX] [--snapshot-id <snapshot-id>]
-s0 volume create --backend s3 --s3-bucket <bucket> [--s3-prefix <prefix>] [--s3-region <region>] [--s3-provider aws|ali|r2] [--s3-endpoint-url <url>] [--s3-access-key <key> --s3-secret-key <secret>] [--s3-session-token <token>]
-s0 volume delete <volume-id> [--force]
-```
-
-### Volume Files
-
-```bash
-s0 volume files ls <volume-id> [path]
-s0 volume files cat <volume-id> <path>
-s0 volume files stat <volume-id> <path>
-s0 volume files mkdir <volume-id> <path> [--parents]
-s0 volume files rm <volume-id> <path>
-s0 volume files mv <volume-id> <src> <dst>
-s0 volume files upload <volume-id> <local> <remote>
-s0 volume files download <volume-id> <remote> <local>
-s0 volume files write <volume-id> <path> --stdin|--data <content>
-s0 volume files watch <volume-id> <path> --recursive
-```
-
-### Volume Snapshot
-
-```bash
-s0 volume snapshot list <volume-id>
-s0 volume snapshot get <volume-id> <snapshot-id>
-s0 volume snapshot create <volume-id> -n <name> [-d <description>]
-s0 volume snapshot delete <volume-id> <snapshot-id>
-s0 volume snapshot restore <volume-id> <snapshot-id>
-```
-
 ### Template Image
 
 ```bash
@@ -630,11 +590,6 @@ s0 sandbox fork <sandbox-id> --ttl 3600 --hard-ttl 7200
 # List files in sandbox
 s0 sandbox files ls /home/user -s <sandbox-id>
 
-# Operate on volume files directly without mounting into a sandbox first
-s0 volume files write <volume-id> /docs/readme.txt --data "Hello from s0"
-s0 volume files cat <volume-id> /docs/readme.txt
-s0 volume files watch <volume-id> /docs --recursive
-
 # Execute code in sandbox
 s0 sandbox context create --type repl --alias python -s <sandbox-id>
 s0 sandbox context exec <ctx-id> "print('hello')" -s <sandbox-id>
@@ -646,7 +601,4 @@ s0 sandbox service update --services-file services.yaml -s <sandbox-id>
 s0 template image build . -t my-image:v1
 s0 template image push my-image:v1 -t my-image:v1
 
-# Create a volume and snapshot
-s0 volume create
-s0 volume snapshot create <volume-id> -n my-snapshot
 ```

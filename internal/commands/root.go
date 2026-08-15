@@ -27,11 +27,11 @@ var (
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:   "s0",
-	Short: "Sandbox0 CLI - Manage sandboxes, templates, volumes, and images",
+	Short: "Sandbox0 CLI - Manage sandboxes, templates, and images",
 	Long: `s0 is the command-line interface for Sandbox0.
 
-It provides comprehensive management of sandboxes, templates, volumes,
-snapshots, and container images.`,
+It provides comprehensive management of sandboxes, templates,
+rootfs snapshots, and container images.`,
 }
 
 // Execute runs the root command.
@@ -165,7 +165,7 @@ func buildUserAgent() string {
 func commandRouteScope(cmd *cobra.Command) client.RouteScope {
 	for current := cmd; current != nil; current = current.Parent() {
 		switch current.Name() {
-		case "sandbox", "template", "volume", "credential", "apikey", "image", "ssh-key", "quota", "usage":
+		case "sandbox", "template", "credential", "apikey", "image", "ssh-key", "quota", "usage":
 			return client.RouteScopeHomeRegion
 		case "auth", "team", "user":
 			return client.RouteScopeEntrypoint

@@ -32,14 +32,6 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatTemplates(w, v)
 	case *apispec.Template:
 		return f.formatTemplate(w, v)
-	case []apispec.SandboxVolume:
-		return f.formatVolumes(w, v)
-	case *apispec.SandboxVolume:
-		return f.formatVolume(w, v)
-	case []apispec.Snapshot:
-		return f.formatSnapshots(w, v)
-	case *apispec.Snapshot:
-		return f.formatSnapshot(w, v)
 	case []apispec.SandboxRootFSSnapshot:
 		return f.formatSandboxRootFSSnapshots(w, v)
 	case *apispec.SandboxRootFSSnapshotList:
@@ -98,8 +90,6 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSandboxNetworkPolicy(w, v)
 	case *sandbox0.SandboxServicesResponse:
 		return f.formatSandboxServices(w, v)
-	case []apispec.MountStatus:
-		return f.formatMountStatusList(w, v)
 	case []apispec.APIKey:
 		return f.formatAPIKeyList(w, v)
 	case apispec.CreateAPIKeyResponse:
@@ -351,104 +341,6 @@ func templateCreationDisplayFor(tmpl apispec.Template) templateCreationDisplay {
 	return display
 }
 
-func (f *TableFormatter) formatVolumes(w io.Writer, volumes []apispec.SandboxVolume) error {
-	if len(volumes) == 0 {
-		_, _ = fmt.Fprintln(w, "No volumes found.")
-		return nil
-	}
-
-	t := newTable(w)
-	t.Header([]string{"ID", "TEAM ID", "BACKEND", "METERED STORAGE", "CREATED"})
-
-	for _, v := range volumes {
-		_ = t.Append([]string{
-			v.ID,
-			v.TeamID,
-			formatVolumeBackend(v.Backend),
-			formatVolumeMeteredStorage(v),
-			v.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
-	}
-	return t.Render()
-}
-
-func (f *TableFormatter) formatVolume(w io.Writer, v *apispec.SandboxVolume) error {
-	t := newTable(w)
-	_ = t.Append([]string{"ID:", v.ID})
-	_ = t.Append([]string{"Team ID:", v.TeamID})
-	_ = t.Append([]string{"User ID:", v.UserID})
-	_ = t.Append([]string{"Backend:", formatVolumeBackend(v.Backend)})
-	_ = t.Append([]string{"Metered storage:", formatVolumeMeteredStorage(*v)})
-	_ = t.Append([]string{"Storage observed:", formatVolumeStorageObservedAt(*v)})
-	if s3, ok := v.S3.Get(); ok {
-		_ = t.Append([]string{"S3 Provider:", string(s3.Provider)})
-		_ = t.Append([]string{"S3 Bucket:", s3.Bucket})
-		if prefix, ok := s3.Prefix.Get(); ok {
-			_ = t.Append([]string{"S3 Prefix:", prefix})
-		}
-		if region, ok := s3.Region.Get(); ok {
-			_ = t.Append([]string{"S3 Region:", region})
-		}
-		if endpointURL, ok := s3.EndpointURL.Get(); ok {
-			_ = t.Append([]string{"S3 Endpoint URL:", endpointURL})
-		}
-	}
-	_ = t.Append([]string{"Created:", v.CreatedAt.Format("2006-01-02 15:04:05")})
-	_ = t.Append([]string{"Updated:", v.UpdatedAt.Format("2006-01-02 15:04:05")})
-	return t.Render()
-}
-
-func formatVolumeBackend(backend apispec.VolumeBackend) string {
-	if backend == "" {
-		return "-"
-	}
-	return string(backend)
-}
-
-func formatVolumeMeteredStorage(volume apispec.SandboxVolume) string {
-	if volume.Backend == apispec.VolumeBackendS3 {
-		return "External"
-	}
-	if sizeBytes, ok := volume.MeteredStorageBytes.Get(); ok {
-		return formatBytes(sizeBytes)
-	}
-	return "Unavailable"
-}
-
-func formatVolumeStorageObservedAt(volume apispec.SandboxVolume) string {
-	if volume.Backend == apispec.VolumeBackendS3 {
-		return "-"
-	}
-	if observedAt, ok := volume.StorageObservedAt.Get(); ok {
-		return observedAt.Format(timeLayout)
-	}
-	return "-"
-}
-
-func (f *TableFormatter) formatSnapshots(w io.Writer, snapshots []apispec.Snapshot) error {
-	if len(snapshots) == 0 {
-		_, _ = fmt.Fprintln(w, "No snapshots found.")
-		return nil
-	}
-
-	t := newTable(w)
-	t.Header([]string{"ID", "NAME", "SIZE", "CREATED"})
-
-	for _, s := range snapshots {
-		name := s.Name
-		if name == "" {
-			name = "-"
-		}
-		_ = t.Append([]string{
-			s.ID,
-			name,
-			fmt.Sprintf("%d bytes", s.SizeBytes),
-			s.CreatedAt,
-		})
-	}
-	return t.Render()
-}
-
 func valueOrDash(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -469,19 +361,6 @@ func optInt32OrDash(value apispec.OptInt32) string {
 		return "-"
 	}
 	return fmt.Sprintf("%d", value.Value)
-}
-
-func (f *TableFormatter) formatSnapshot(w io.Writer, s *apispec.Snapshot) error {
-	t := newTable(w)
-	_ = t.Append([]string{"ID:", s.ID})
-	_ = t.Append([]string{"Volume ID:", s.VolumeID})
-	_ = t.Append([]string{"Name:", s.Name})
-	if v, ok := s.Description.Get(); ok {
-		_ = t.Append([]string{"Description:", v})
-	}
-	_ = t.Append([]string{"Size:", fmt.Sprintf("%d bytes", s.SizeBytes)})
-	_ = t.Append([]string{"Created:", s.CreatedAt})
-	return t.Render()
 }
 
 func (f *TableFormatter) formatSandboxRootFSSnapshotList(w io.Writer, snapshots *apispec.SandboxRootFSSnapshotList) error {
@@ -1221,47 +1100,6 @@ func formatTimestampText(v string) string {
 		return "-"
 	}
 	return v
-}
-
-func (f *TableFormatter) formatMountStatusList(w io.Writer, mounts []apispec.MountStatus) error {
-	if len(mounts) == 0 {
-		_, _ = fmt.Fprintln(w, "No mounted volumes.")
-		return nil
-	}
-
-	t := newTable(w)
-	t.Header([]string{"VOLUME ID", "MOUNT POINT", "STATE", "MOUNTED AT", "DURATION", "ERROR"})
-
-	for _, m := range mounts {
-		volumeID := m.SandboxvolumeID
-		mountPoint := m.MountPoint
-		mountedAt, _ := m.MountedAt.Get()
-		duration := "-"
-		if d, ok := m.MountedDurationSec.Get(); ok {
-			duration = formatDuration(d)
-		}
-		errorText := "-"
-		errorCode, hasErrorCode := m.ErrorCode.Get()
-		errorMessage, hasErrorMessage := m.ErrorMessage.Get()
-		switch {
-		case hasErrorCode && hasErrorMessage:
-			errorText = fmt.Sprintf("%s: %s", errorCode, errorMessage)
-		case hasErrorMessage:
-			errorText = errorMessage
-		case hasErrorCode:
-			errorText = errorCode
-		}
-
-		_ = t.Append([]string{
-			volumeID,
-			mountPoint,
-			string(m.State),
-			formatTimestampText(mountedAt),
-			duration,
-			errorText,
-		})
-	}
-	return t.Render()
 }
 
 func formatDuration(seconds int64) string {
