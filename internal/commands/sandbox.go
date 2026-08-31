@@ -57,7 +57,6 @@ var (
 	// update flags
 	sandboxUpdateTTL        int32
 	sandboxUpdateHardTTL    int32
-	sandboxUpdateMemory     string
 	sandboxUpdateAutoResume string
 	sandboxUpdateConfigFile string
 )
@@ -66,7 +65,7 @@ type sandboxCreateOutput struct {
 	ID        string  `json:"id"`
 	Template  string  `json:"template"`
 	ClusterID *string `json:"cluster_id,omitempty"`
-	PodName   string  `json:"pod_name"`
+	RuntimeID string  `json:"runtime_id"`
 	Status    string  `json:"status"`
 }
 
@@ -78,7 +77,7 @@ func sandboxCreateOutputValue(sandbox *sandbox0.Sandbox) any {
 		ID:        sandbox.ID,
 		Template:  sandbox.Template,
 		ClusterID: sandbox.ClusterID,
-		PodName:   sandbox.PodName,
+		RuntimeID: sandbox.RuntimeID,
 		Status:    sandbox.Status,
 	}
 }
@@ -284,7 +283,7 @@ var sandboxStatusCmd = &cobra.Command{
 var sandboxUpdateCmd = &cobra.Command{
 	Use:   "update <sandbox-id>",
 	Short: "Update sandbox configuration",
-	Long:  `Update the configuration of a sandbox (TTL, env vars, auto-resume, etc.).`,
+	Long:  `Update durable sandbox lifecycle and service configuration. Use the dedicated network command for network policy changes.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
@@ -302,7 +301,7 @@ var sandboxUpdateCmd = &cobra.Command{
 		}
 
 		if !hasConfig {
-			fmt.Fprintln(os.Stderr, "Error: at least one update input is required (--config-file, --ttl, --hard-ttl, --memory, --auto-resume)")
+			fmt.Fprintln(os.Stderr, "Error: at least one update input is required (--config-file, --ttl, --hard-ttl, --auto-resume)")
 			os.Exit(1)
 		}
 
@@ -520,7 +519,6 @@ func init() {
 	sandboxUpdateCmd.Flags().StringVarP(&sandboxUpdateConfigFile, "config-file", "f", "", "path to sandbox update config YAML/JSON file, or - for stdin")
 	sandboxUpdateCmd.Flags().Int32Var(&sandboxUpdateTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxUpdateCmd.Flags().Int32Var(&sandboxUpdateHardTTL, "hard-ttl", 0, "hard TTL in seconds")
-	sandboxUpdateCmd.Flags().StringVar(&sandboxUpdateMemory, "memory", "", "sandbox memory limit, for example 512Mi or 2Gi")
 	sandboxUpdateCmd.Flags().StringVar(&sandboxUpdateAutoResume, "auto-resume", "", "auto resume on access (true/false)")
 
 	// List command flags
@@ -1045,13 +1043,10 @@ func buildSandboxUpdateConfig() (apispec.SandboxUpdateConfig, bool, error) {
 		config.HardTTL = apispec.NewOptInt32(sandboxUpdateHardTTL)
 		hasConfig = true
 	}
-	if sandboxUpdateMemory != "" {
-		config.Resources = apispec.NewOptSandboxResourceConfig(apispec.SandboxResourceConfig{
-			Memory: apispec.NewOptString(sandboxUpdateMemory),
-		})
-		hasConfig = true
-	}
 	if sandboxUpdateAutoResume != "" {
+		if sandboxUpdateAutoResume != "true" && sandboxUpdateAutoResume != "false" {
+			return apispec.SandboxUpdateConfig{}, false, fmt.Errorf("--auto-resume must be true or false")
+		}
 		autoResume := sandboxUpdateAutoResume == "true"
 		config.AutoResume = apispec.NewOptBool(autoResume)
 		hasConfig = true
@@ -1084,6 +1079,9 @@ func readSandboxUpdateConfigFile(path string) (apispec.SandboxUpdateConfig, erro
 	if err != nil {
 		return apispec.SandboxUpdateConfig{}, err
 	}
+	if err := rejectUnsupportedSandboxUpdateConfig(data); err != nil {
+		return apispec.SandboxUpdateConfig{}, err
+	}
 	var config apispec.SandboxUpdateConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return apispec.SandboxUpdateConfig{}, fmt.Errorf("parse sandbox update config file: %w", err)
@@ -1092,6 +1090,25 @@ func readSandboxUpdateConfigFile(path string) (apispec.SandboxUpdateConfig, erro
 		return apispec.SandboxUpdateConfig{}, fmt.Errorf("invalid sandbox update config: %w", err)
 	}
 	return config, nil
+}
+
+func rejectUnsupportedSandboxUpdateConfig(data []byte) error {
+	jsonData, err := yaml.YAMLToJSON(data)
+	if err != nil {
+		return fmt.Errorf("parse sandbox update config file: %w", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(jsonData, &fields); err != nil || fields == nil {
+		return fmt.Errorf("sandbox update config file must contain an object")
+	}
+	for field := range fields {
+		switch field {
+		case "ttl", "hard_ttl", "auto_resume", "services":
+		default:
+			return fmt.Errorf("%s is not supported in a sandbox update config file", field)
+		}
+	}
+	return nil
 }
 
 func readConfigFile(path string) ([]byte, error) {

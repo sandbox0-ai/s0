@@ -40,6 +40,8 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatSandboxRootFSSnapshot(w, v)
 	case *apispec.RestoreSandboxRootFSResponse:
 		return f.formatRestoreSandboxRootFSResponse(w, v)
+	case *apispec.RebaseSandboxRootFSResponse:
+		return f.formatRebaseSandboxRootFSResponse(w, v)
 	case *apispec.ForkSandboxResponse:
 		return f.formatForkSandboxResponse(w, v)
 	case *apispec.Sandbox:
@@ -301,7 +303,8 @@ func (f *TableFormatter) formatTemplate(w io.Writer, tmpl *apispec.Template) err
 	creation := templateCreationDisplayFor(*tmpl)
 	_ = t.Append([]string{"Creation State:", creation.state})
 	_ = t.Append([]string{"Creation Stage:", creation.stage})
-	_ = t.Append([]string{"Output Image:", creation.outputImage})
+	_ = t.Append([]string{"Captured At:", creation.capturedAt})
+	_ = t.Append([]string{"Completed At:", creation.completedAt})
 	_ = t.Append([]string{"Reason:", creation.reason})
 	_ = t.Append([]string{"Message:", creation.message})
 	_ = t.Append([]string{"Created:", tmpl.CreatedAt.Format("2006-01-02 15:04:05")})
@@ -312,7 +315,8 @@ func (f *TableFormatter) formatTemplate(w io.Writer, tmpl *apispec.Template) err
 type templateCreationDisplay struct {
 	state       string
 	stage       string
-	outputImage string
+	capturedAt  string
+	completedAt string
 	reason      string
 	message     string
 }
@@ -321,7 +325,8 @@ func templateCreationDisplayFor(tmpl apispec.Template) templateCreationDisplay {
 	display := templateCreationDisplay{
 		state:       "ready",
 		stage:       "-",
-		outputImage: "-",
+		capturedAt:  "-",
+		completedAt: "-",
 		reason:      "-",
 		message:     "-",
 	}
@@ -335,7 +340,8 @@ func templateCreationDisplayFor(tmpl apispec.Template) templateCreationDisplay {
 	}
 	display.state = string(creation.State)
 	display.stage = string(creation.Stage)
-	display.outputImage = creation.OutputImage.Or("-")
+	display.capturedAt = formatOptDateTime(creation.CapturedAt)
+	display.completedAt = formatOptDateTime(creation.CompletedAt)
 	display.reason = creation.Reason.Or("-")
 	display.message = creation.Message.Or("-")
 	return display
@@ -416,6 +422,16 @@ func (f *TableFormatter) formatRestoreSandboxRootFSResponse(w io.Writer, r *apis
 	return t.Render()
 }
 
+func (f *TableFormatter) formatRebaseSandboxRootFSResponse(w io.Writer, r *apispec.RebaseSandboxRootFSResponse) error {
+	t := newTable(w)
+	_ = t.Append([]string{"Sandbox ID:", r.SandboxID})
+	_ = t.Append([]string{"Generation ID:", r.GenerationID})
+	_ = t.Append([]string{"Base Artifact Digest:", r.BaseArtifactDigest})
+	_ = t.Append([]string{"Rollback Expires At:", formatTimestamp(r.RollbackExpiresAt)})
+	_ = t.Append([]string{"Status:", string(r.Status)})
+	return t.Render()
+}
+
 func (f *TableFormatter) formatForkSandboxResponse(w io.Writer, r *apispec.ForkSandboxResponse) error {
 	t := newTable(w)
 	_ = t.Append([]string{"Source Sandbox ID:", r.SourceSandboxID})
@@ -441,7 +457,7 @@ func (f *TableFormatter) formatSandbox(w io.Writer, s *apispec.Sandbox) error {
 			_ = t.Append([]string{"Memory:", memory})
 		}
 	}
-	_ = t.Append([]string{"Pod Name:", s.PodName})
+	_ = t.Append([]string{"Runtime ID:", valueOrDash(s.RuntimeID)})
 	_ = t.Append([]string{"Claimed At:", s.ClaimedAt.Format(timeLayout)})
 	_ = t.Append([]string{"Soft Expires At:", formatOptNilDateTime(s.ExpiresAt)})
 	_ = t.Append([]string{"Hard Expires At:", formatOptNilDateTime(s.HardExpiresAt)})
@@ -568,8 +584,8 @@ func (f *TableFormatter) formatSDKSandbox(w io.Writer, s *sandbox0.Sandbox) erro
 	if s.ClusterID != nil {
 		_ = t.Append([]string{"Cluster ID:", *s.ClusterID})
 	}
-	if s.PodName != "" {
-		_ = t.Append([]string{"Pod Name:", s.PodName})
+	if s.RuntimeID != "" {
+		_ = t.Append([]string{"Runtime ID:", s.RuntimeID})
 	}
 	return t.Render()
 }

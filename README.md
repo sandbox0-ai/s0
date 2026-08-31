@@ -283,10 +283,20 @@ s0 sandbox logs <sandbox-id> [--limit 100] [--context-id <ctx-id>] [--stream std
 s0 sandbox events <sandbox-id> [--source <source>] [--event-type <type>] [--outcome <outcome>] [--actor-kind <kind>] [--actor-id <id>] [--action <action>] [--resource-type <type>] [--operation-id <id>] [--event-id <uuid>] [--watch]
 s0 sandbox metrics <sandbox-id> [--name <metric-name>] [--context-id <ctx-id>] [--watch]
 s0 sandbox list [--status <status>] [--template-id <id>] [--paused true|false] [--limit 50] [--offset 0]
+s0 sandbox snapshot list <sandbox-id>
+s0 sandbox snapshot get <snapshot-id>
+s0 sandbox snapshot create <sandbox-id> [--name <name>] [--description <text>] [--expires-at <rfc3339>]
+s0 sandbox snapshot restore <sandbox-id> <snapshot-id>
+s0 sandbox snapshot delete <snapshot-id>
 s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200]
+s0 sandbox rebase <sandbox-id> --target-base-artifact-digest <sha256:digest> [--rollback-ttl 86400]
 ```
 
 `s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
+
+`s0 sandbox update` only changes durable lifecycle and service fields. Use
+`s0 sandbox network update` for network policy changes; environment and resource
+changes require a new runtime.
 
 `s0 sandbox logs/events/metrics` query the per-sandbox observability backend. `s0 sandbox events` returns canonical signed audit facts, including API access, lifecycle, network, process, and file events. Filter by actor, action, resource, operation, outcome, source, or event type; use `--event-id` alone for exact lookup of one event and any conflicting payload variant. Use `--watch` for realtime records, `--cursor` to resume, `--start-time` / `--end-time` for absolute windows, or `--since 10m` for a relative window. Table output shows event identity, actor, action, resource, operation, signature status, and conflict state; use `-o json` or `-o yaml` for the full canonical record. `s0 sandbox logs` prints log messages by default.
 
@@ -546,22 +556,39 @@ s0 template update <template-id> --spec-file template.yaml
 s0 template delete <template-id>
 ```
 
+Image-based template specs use digest-pinned OCI images. Ephemeral mounts are
+claim-lifetime tmpfs filesystems and are excluded from pause, resume, fork, and
+snapshot RootFS generations:
+
+```yaml
+spec:
+  displayName: Docker in Sandbox
+  mainContainer:
+    image: ghcr.io/example/sandbox@sha256:<64-lowercase-hex-digest>
+    resources:
+      memory: 4Gi
+      ephemeralStorage: 20Gi
+    securityClass: privileged
+  ephemeralMounts:
+    - mountPath: /var/lib/docker
+      sizeLimit: 20Gi
+  network:
+    mode: allow-all
+```
+
 With `--from-sandbox`, the optional overrides file is the override object itself
-and may contain `displayName`, `description`, `tags`, or `pool`:
+and may contain `displayName`, `description`, or `tags`:
 
 ```yaml
 displayName: Python Ready
 tags:
   - python
-pool:
-  minIdle: 0
-  maxIdle: 0
 ```
 
 `--wait` waits for the captured root filesystem to be published and the new
 template to become claimable. Request acceptance is not the rootfs capture
-point, so keep the source sandbox available and avoid rootfs writes while the
-template is in the `capturing` stage.
+point, so keep the source sandbox available until capture completes. A running
+source is briefly write-barriered and remains running afterward.
 Timing out or interrupting the wait only stops the CLI; it does not cancel the
 server-side template build.
 
@@ -584,8 +611,13 @@ s0 template list
 # Create a sandbox
 s0 sandbox create -t my-template --ttl 3600
 
-# Fork a paused sandbox with a new lifecycle
+# Fork a running or paused sandbox into a new paused sandbox
 s0 sandbox fork <sandbox-id> --ttl 3600 --hard-ttl 7200
+
+# Rebase a paused sandbox onto an attested RootFS base
+s0 sandbox rebase <sandbox-id> \
+  --target-base-artifact-digest sha256:<digest> \
+  --rollback-ttl 86400
 
 # List files in sandbox
 s0 sandbox files ls /home/user -s <sandbox-id>

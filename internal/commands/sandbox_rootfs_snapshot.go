@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
@@ -15,6 +16,8 @@ var (
 	sandboxRootFSSnapshotExpiresAt   string
 	sandboxForkTTL                   int32
 	sandboxForkHardTTL               int32
+	sandboxRebaseTargetBaseDigest    string
+	sandboxRebaseRollbackTTL         int32
 )
 
 // sandboxSnapshotCmd represents the sandbox rootfs snapshot command group.
@@ -80,11 +83,11 @@ var sandboxSnapshotGetCmd = &cobra.Command{
 	},
 }
 
-// sandboxSnapshotCreateCmd creates a rootfs snapshot for a paused sandbox.
+// sandboxSnapshotCreateCmd creates a rootfs snapshot for a running or paused sandbox.
 var sandboxSnapshotCreateCmd = &cobra.Command{
 	Use:   "create <sandbox-id>",
 	Short: "Create a sandbox rootfs snapshot",
-	Long:  `Create a rootfs snapshot for a paused sandbox.`,
+	Long:  `Create a rootfs snapshot for a running or paused sandbox. A running source remains running after capture.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
@@ -170,11 +173,11 @@ var sandboxSnapshotRestoreCmd = &cobra.Command{
 	},
 }
 
-// sandboxForkCmd creates a paused sandbox fork from a paused source sandbox.
+// sandboxForkCmd creates a paused sandbox fork from a running or paused source sandbox.
 var sandboxForkCmd = &cobra.Command{
 	Use:   "fork <sandbox-id>",
-	Short: "Fork a paused sandbox",
-	Long:  `Create a paused sandbox fork from a paused source sandbox rootfs.`,
+	Short: "Fork a sandbox rootfs",
+	Long:  `Create a paused sandbox fork from a running or paused source sandbox rootfs. A running source remains running after capture.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
@@ -198,12 +201,46 @@ var sandboxForkCmd = &cobra.Command{
 	},
 }
 
+// sandboxRebaseCmd rebases a paused sandbox onto an attested immutable RootFS base.
+var sandboxRebaseCmd = &cobra.Command{
+	Use:   "rebase <sandbox-id>",
+	Short: "Rebase a paused sandbox rootfs",
+	Long:  `Apply a paused sandbox's file-level changes to an already-attested immutable RootFS base while retaining the previous generation for rollback.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		request, err := buildSandboxRebaseRequest(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error building sandbox rootfs rebase request: %v\n", err)
+			os.Exit(1)
+		}
+
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating client: %v\n", err)
+			os.Exit(1)
+		}
+
+		response, err := client.RebaseSandboxRootFS(cmd.Context(), args[0], request)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error rebasing sandbox rootfs: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := getFormatter().Format(os.Stdout, response); err != nil {
+			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
 func init() {
 	sandboxSnapshotCreateCmd.Flags().StringVarP(&sandboxRootFSSnapshotName, "name", "n", "", "snapshot name")
 	sandboxSnapshotCreateCmd.Flags().StringVarP(&sandboxRootFSSnapshotDescription, "description", "d", "", "snapshot description")
 	sandboxSnapshotCreateCmd.Flags().StringVar(&sandboxRootFSSnapshotExpiresAt, "expires-at", "", "snapshot expiration timestamp (RFC3339)")
 	sandboxForkCmd.Flags().Int32Var(&sandboxForkTTL, "ttl", 0, "soft TTL in seconds for the forked sandbox")
 	sandboxForkCmd.Flags().Int32Var(&sandboxForkHardTTL, "hard-ttl", 0, "hard TTL in seconds for the forked sandbox")
+	sandboxRebaseCmd.Flags().StringVar(&sandboxRebaseTargetBaseDigest, "target-base-artifact-digest", "", "target attested RootFS base artifact digest (required)")
+	sandboxRebaseCmd.Flags().Int32Var(&sandboxRebaseRollbackTTL, "rollback-ttl", 0, "rollback retention in seconds (1-604800)")
 
 	sandboxSnapshotCmd.AddCommand(sandboxSnapshotListCmd)
 	sandboxSnapshotCmd.AddCommand(sandboxSnapshotGetCmd)
@@ -213,6 +250,7 @@ func init() {
 
 	sandboxCmd.AddCommand(sandboxSnapshotCmd)
 	sandboxCmd.AddCommand(sandboxForkCmd)
+	sandboxCmd.AddCommand(sandboxRebaseCmd)
 }
 
 func buildSandboxRootFSSnapshotCreateRequest() (*apispec.CreateSandboxRootFSSnapshotRequest, error) {
@@ -259,4 +297,20 @@ func buildSandboxForkRequest(cmd *cobra.Command) *apispec.ForkSandboxRequest {
 	return &apispec.ForkSandboxRequest{
 		Config: apispec.NewOptForkSandboxConfig(config),
 	}
+}
+
+func buildSandboxRebaseRequest(cmd *cobra.Command) (apispec.RebaseSandboxRootFSRequest, error) {
+	targetDigest := strings.TrimSpace(sandboxRebaseTargetBaseDigest)
+	if targetDigest == "" {
+		return apispec.RebaseSandboxRootFSRequest{}, fmt.Errorf("--target-base-artifact-digest is required")
+	}
+
+	request := apispec.RebaseSandboxRootFSRequest{TargetBaseArtifactDigest: targetDigest}
+	if cmd.Flags().Changed("rollback-ttl") {
+		request.RollbackTTL = apispec.NewOptInt32(sandboxRebaseRollbackTTL)
+	}
+	if err := request.Validate(); err != nil {
+		return apispec.RebaseSandboxRootFSRequest{}, fmt.Errorf("invalid sandbox rootfs rebase request: %w", err)
+	}
+	return request, nil
 }

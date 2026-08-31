@@ -17,7 +17,7 @@ func TestBuildTemplateCreateRequestPreservesTemplateEnvVars(t *testing.T) {
   displayName: "Template Env Vars Test"
   description: "Minimal template for verifying template env vars"
   mainContainer:
-    image: cc-demo:test
+    image: ghcr.io/sandbox0-ai/cc-demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     resources:
       memory: 256Mi
   envVars:
@@ -25,9 +25,6 @@ func TestBuildTemplateCreateRequestPreservesTemplateEnvVars(t *testing.T) {
     WORKSPACE_DIR: /workspace
   network:
     mode: allow-all
-  pool:
-    minIdle: 0
-    maxIdle: 1
 `
 	if err := os.WriteFile(specFile, []byte(specYAML), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -62,9 +59,6 @@ func TestBuildTemplateFromSandboxCreateRequest(t *testing.T) {
 	specYAML := `displayName: Python ready
 tags:
   - python
-pool:
-  minIdle: 1
-  maxIdle: 2
 `
 	if err := os.WriteFile(specFile, []byte(specYAML), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -83,10 +77,6 @@ pool:
 	}
 	if overrides.DisplayName.Or("") != "Python ready" || len(overrides.Tags) != 1 {
 		t.Fatalf("SpecOverrides = %+v", overrides)
-	}
-	pool, ok := overrides.Pool.Get()
-	if !ok || pool.MinIdle != 1 || pool.MaxIdle != 2 {
-		t.Fatalf("pool = %+v, set = %v", pool, ok)
 	}
 }
 
@@ -125,13 +115,12 @@ func TestBuildTemplateFromSandboxCreateRequestRejectsUnsupportedOverrides(t *tes
 			wantErr: "spec_overrides is not supported in an overrides file",
 		},
 		{
-			name: "unsupported pool field",
+			name: "removed pool override",
 			content: `pool:
   minIdle: 0
   maxIdle: 1
-  warmup: 2
 `,
-			wantErr: "pool.warmup is not supported",
+			wantErr: "pool is not supported",
 		},
 	}
 
@@ -197,7 +186,7 @@ func TestBuildTemplateCreateRequestRejectsCPU(t *testing.T) {
 	specFile := filepath.Join(dir, "template.yaml")
 	specYAML := `spec:
   mainContainer:
-    image: cc-demo:test
+    image: ghcr.io/sandbox0-ai/cc-demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     resources:
       cpu: "250m"
       memory: 256Mi
@@ -215,7 +204,7 @@ func TestBuildTemplateCreateRequestRejectsCPU(t *testing.T) {
 	}
 }
 
-func TestBuildTemplateCreateRequestPreservesSystemTemplateFields(t *testing.T) {
+func TestBuildTemplateCreateRequestPreservesNomadTemplateFields(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -223,23 +212,16 @@ func TestBuildTemplateCreateRequestPreservesSystemTemplateFields(t *testing.T) {
 	specYAML := `spec:
   displayName: Docker in Sandbox
   mainContainer:
-    image: sandbox0ai/otemplates:default-v0.1.0
-    imagePullPolicy: IfNotPresent
+    image: ghcr.io/sandbox0-ai/otemplates@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     resources:
       memory: 4Gi
       ephemeralStorage: 20Gi
-    securityContext:
-      privileged: true
-      allowPrivilegeEscalation: true
-  pod:
-    emptyDirMounts:
-      - mountPath: /var/lib/docker
-        sizeLimit: 20Gi
+    securityClass: privileged
+  ephemeralMounts:
+    - mountPath: /var/lib/docker
+      sizeLimit: 20Gi
   network:
     mode: allow-all
-  pool:
-    minIdle: 1
-    maxIdle: 5
 `
 	if err := os.WriteFile(specFile, []byte(specYAML), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -250,39 +232,20 @@ func TestBuildTemplateCreateRequestPreservesSystemTemplateFields(t *testing.T) {
 		t.Fatalf("buildTemplateCreateRequest() error = %v", err)
 	}
 
-	main, ok := req.Spec.MainContainer.Get()
-	if !ok {
-		t.Fatal("mainContainer should be set")
-	}
-	if main.Image != "sandbox0ai/otemplates:default-v0.1.0" {
+	main := req.Spec.MainContainer
+	if main.Image != "ghcr.io/sandbox0-ai/otemplates@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" {
 		t.Fatalf("mainContainer.image = %q, want default image", main.Image)
 	}
-	if policy, ok := main.ImagePullPolicy.Get(); !ok || policy != "IfNotPresent" {
-		t.Fatalf("mainContainer.imagePullPolicy = %q, want IfNotPresent", policy)
+	if securityClass, ok := main.SecurityClass.Get(); !ok || securityClass != "privileged" {
+		t.Fatalf("mainContainer.securityClass = %q, want privileged", securityClass)
 	}
-	securityContext, ok := main.SecurityContext.Get()
-	if !ok {
-		t.Fatal("mainContainer.securityContext should be set")
+	if len(req.Spec.EphemeralMounts) != 1 {
+		t.Fatalf("len(ephemeralMounts) = %d, want 1", len(req.Spec.EphemeralMounts))
 	}
-	privileged, ok := securityContext.Privileged.Get()
-	if !ok || !privileged {
-		t.Fatalf("securityContext.privileged = %v, want true", privileged)
+	if got := req.Spec.EphemeralMounts[0].MountPath; got != "/var/lib/docker" {
+		t.Fatalf("ephemeralMounts[0].mountPath = %q, want /var/lib/docker", got)
 	}
-	allowPrivilegeEscalation, ok := securityContext.AllowPrivilegeEscalation.Get()
-	if !ok || !allowPrivilegeEscalation {
-		t.Fatalf("securityContext.allowPrivilegeEscalation = %v, want true", allowPrivilegeEscalation)
-	}
-	pod, ok := req.Spec.Pod.Get()
-	if !ok {
-		t.Fatal("pod should be set")
-	}
-	if len(pod.EmptyDirMounts) != 1 {
-		t.Fatalf("len(pod.emptyDirMounts) = %d, want 1", len(pod.EmptyDirMounts))
-	}
-	if got := pod.EmptyDirMounts[0].MountPath; got != "/var/lib/docker" {
-		t.Fatalf("pod.emptyDirMounts[0].mountPath = %q, want /var/lib/docker", got)
-	}
-	if got, ok := pod.EmptyDirMounts[0].SizeLimit.Get(); !ok || got != "20Gi" {
-		t.Fatalf("pod.emptyDirMounts[0].sizeLimit = %q, want 20Gi", got)
+	if got := req.Spec.EphemeralMounts[0].SizeLimit; got != "20Gi" {
+		t.Fatalf("ephemeralMounts[0].sizeLimit = %q, want 20Gi", got)
 	}
 }

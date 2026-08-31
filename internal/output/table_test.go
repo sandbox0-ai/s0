@@ -335,7 +335,7 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		Resources: apispec.NewOptSandboxResourceConfig(apispec.SandboxResourceConfig{
 			Memory: apispec.NewOptString("2Gi"),
 		}),
-		PodName: "sb-123-pod",
+		RuntimeID: "alloc-123",
 		SSH: apispec.NewOptSandboxSSHConnection(apispec.SandboxSSHConnection{
 			Host:     "aws-us-east-1.ssh.sandbox0.app",
 			Port:     30222,
@@ -361,6 +361,8 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 		"sb_123",
 		"Memory:",
 		"2Gi",
+		"Runtime ID:",
+		"alloc-123",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
@@ -411,9 +413,10 @@ func TestTableFormatterFormatTemplateIncludesCreationStatus(t *testing.T) {
 			Creation: apispec.NewOptTemplateCreationStatus(apispec.TemplateCreationStatus{
 				State:       apispec.TemplateCreationStatusStateFailed,
 				Stage:       apispec.TemplateCreationStatusStagePublishing,
-				OutputImage: apispec.NewOptString("registry.example.com/team/python-ready@sha256:abc"),
-				Reason:      apispec.NewOptString("registry_push_failed"),
-				Message:     apispec.NewOptString("registry rejected the published image manifest"),
+				CapturedAt:  apispec.NewOptDateTime(time.Date(2026, 7, 18, 12, 0, 30, 0, time.UTC)),
+				CompletedAt: apispec.NewOptDateTime(time.Date(2026, 7, 18, 12, 1, 0, 0, time.UTC)),
+				Reason:      apispec.NewOptString("rootfs_publish_failed"),
+				Message:     apispec.NewOptString("failed to publish the immutable RootFS base"),
 			}),
 		}),
 		CreatedAt: time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC),
@@ -431,12 +434,14 @@ func TestTableFormatterFormatTemplateIncludesCreationStatus(t *testing.T) {
 		"failed",
 		"Creation Stage:",
 		"publishing",
-		"Output Image:",
-		"registry.example.com/team/python-ready@sha256:abc",
+		"Captured At:",
+		"2026-07-18 12:00:30",
+		"Completed At:",
+		"2026-07-18 12:01:00",
 		"Reason:",
-		"registry_push_failed",
+		"rootfs_publish_failed",
 		"Message:",
-		"registry rejected the published image manifest",
+		"failed to publish the immutable RootFS base",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q:\n%s", want, output)
@@ -539,6 +544,24 @@ func TestTableFormatterFormatSandboxRootFSSnapshotActions(t *testing.T) {
 	for _, want := range []string{"Sandbox ID:", "sb_123", "Snapshot ID:", "snap_123", "paused"} {
 		if !strings.Contains(restoreOutput, want) {
 			t.Fatalf("restore output missing %q:\n%s", want, restoreOutput)
+		}
+	}
+
+	rebase := &apispec.RebaseSandboxRootFSResponse{
+		SandboxID:          "sb_123",
+		GenerationID:       "gen_2",
+		BaseArtifactDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		RollbackExpiresAt:  time.Date(2026, 4, 10, 13, 0, 0, 0, time.UTC),
+		Status:             apispec.SandboxLifecycleStatusPaused,
+	}
+	var rebaseBuf bytes.Buffer
+	if err := formatter.Format(&rebaseBuf, rebase); err != nil {
+		t.Fatalf("Format() rebase error = %v", err)
+	}
+	rebaseOutput := rebaseBuf.String()
+	for _, want := range []string{"Sandbox ID:", "sb_123", "Generation ID:", "gen_2", "Base Artifact Digest:", "sha256:aaaaaaaa", "Rollback Expires At:", "2026-04-10 13:00:00", "paused"} {
+		if !strings.Contains(rebaseOutput, want) {
+			t.Fatalf("rebase output missing %q:\n%s", want, rebaseOutput)
 		}
 	}
 

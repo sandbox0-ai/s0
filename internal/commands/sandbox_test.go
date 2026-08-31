@@ -19,10 +19,10 @@ func TestSandboxCreateOutputUsesAPIFieldNames(t *testing.T) {
 	cfgFormat = "json"
 
 	value := sandboxCreateOutputValue(&sandbox0.Sandbox{
-		ID:       "sb_123",
-		Template: "coding-agent",
-		PodName:  "coding-agent-pod",
-		Status:   "running",
+		ID:        "sb_123",
+		Template:  "coding-agent",
+		RuntimeID: "alloc-123",
+		Status:    "running",
 	})
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -38,6 +38,12 @@ func TestSandboxCreateOutputUsesAPIFieldNames(t *testing.T) {
 	}
 	if _, ok := output["ID"]; ok {
 		t.Fatal("unexpected legacy ID field")
+	}
+	if got := output["runtime_id"]; got != "alloc-123" {
+		t.Fatalf("runtime_id = %v, want alloc-123", got)
+	}
+	if _, ok := output["pod_name"]; ok {
+		t.Fatal("unexpected pod_name field")
 	}
 }
 
@@ -189,8 +195,7 @@ func TestBuildSandboxUpdateConfig(t *testing.T) {
 		resetSandboxFlagsForTest()
 		sandboxUpdateConfigFile = writeTempFile(t, `
 auto_resume: true
-network:
-  mode: allow-all
+services: []
 `)
 
 		config, hasConfig, err := buildSandboxUpdateConfig()
@@ -204,12 +209,8 @@ network:
 		if !ok || !autoResume {
 			t.Fatalf("autoResume = %v, want true", autoResume)
 		}
-		network, ok := config.Network.Get()
-		if !ok {
-			t.Fatal("network not set")
-		}
-		if network.Mode != apispec.SandboxNetworkPolicyModeAllowAll {
-			t.Fatalf("mode = %q, want %q", network.Mode, apispec.SandboxNetworkPolicyModeAllowAll)
+		if len(config.Services) != 0 {
+			t.Fatalf("services = %+v, want empty list", config.Services)
 		}
 	})
 
@@ -218,7 +219,6 @@ network:
 		sandboxUpdateConfigFile = writeTempFile(t, "ttl: 60\nauto_resume: false\n")
 		sandboxUpdateTTL = 600
 		sandboxUpdateAutoResume = "true"
-		sandboxUpdateMemory = "2Gi"
 
 		config, hasConfig, err := buildSandboxUpdateConfig()
 		if err != nil {
@@ -235,13 +235,25 @@ network:
 		if !ok || !autoResume {
 			t.Fatalf("autoResume = %v, want true", autoResume)
 		}
-		resources, ok := config.Resources.Get()
-		if !ok {
-			t.Fatal("resources not set")
+	})
+
+	t.Run("rejects fields that require a new runtime", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		sandboxUpdateConfigFile = writeTempFile(t, "resources:\n  memory: 2Gi\n")
+
+		_, _, err := buildSandboxUpdateConfig()
+		if err == nil || !strings.Contains(err.Error(), "resources is not supported") {
+			t.Fatalf("buildSandboxUpdateConfig() error = %v, want unsupported resources", err)
 		}
-		memory, ok := resources.Memory.Get()
-		if !ok || memory != "2Gi" {
-			t.Fatalf("memory = %q, want 2Gi", memory)
+	})
+
+	t.Run("rejects invalid auto resume flag", func(t *testing.T) {
+		resetSandboxFlagsForTest()
+		sandboxUpdateAutoResume = "yes"
+
+		_, _, err := buildSandboxUpdateConfig()
+		if err == nil || !strings.Contains(err.Error(), "must be true or false") {
+			t.Fatalf("buildSandboxUpdateConfig() error = %v, want boolean error", err)
 		}
 	})
 }
@@ -479,7 +491,6 @@ func resetSandboxFlagsForTest() {
 	sandboxLogsSinceSecs = 0
 	sandboxUpdateTTL = 0
 	sandboxUpdateHardTTL = 0
-	sandboxUpdateMemory = ""
 	sandboxUpdateAutoResume = ""
 	sandboxUpdateConfigFile = ""
 	sandboxRootFSSnapshotName = ""
@@ -487,4 +498,6 @@ func resetSandboxFlagsForTest() {
 	sandboxRootFSSnapshotExpiresAt = ""
 	sandboxForkTTL = 0
 	sandboxForkHardTTL = 0
+	sandboxRebaseTargetBaseDigest = ""
+	sandboxRebaseRollbackTTL = 0
 }
