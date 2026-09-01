@@ -43,7 +43,7 @@ func loadTemplateSpecFile(path string) (templateSpec, error) {
 	if err != nil {
 		return spec, err
 	}
-	if err := rejectTemplateCPU(specJSON); err != nil {
+	if err := rejectUnsupportedTemplateFields(specJSON); err != nil {
 		return spec, err
 	}
 	if err := json.Unmarshal(specJSON, &spec); err != nil {
@@ -53,18 +53,50 @@ func loadTemplateSpecFile(path string) (templateSpec, error) {
 	return spec, nil
 }
 
-// rejectTemplateCPU prevents removed CPU settings from being silently ignored by generated decoders.
-func rejectTemplateCPU(specJSON []byte) error {
+// rejectUnsupportedTemplateFields prevents removed fields from being silently ignored by generated decoders.
+func rejectUnsupportedTemplateFields(specJSON []byte) error {
 	var document map[string]any
 	if err := json.Unmarshal(specJSON, &document); err != nil {
 		return err
 	}
+	for field := range document {
+		if field != "spec" {
+			return fmt.Errorf("%s is not supported in a template spec file", field)
+		}
+	}
 
-	spec, _ := document["spec"].(map[string]any)
-	mainContainer, _ := spec["mainContainer"].(map[string]any)
-	resources, _ := mainContainer["resources"].(map[string]any)
-	if _, ok := resources["cpu"]; ok {
-		return fmt.Errorf("spec.mainContainer.resources.cpu is not supported; set memory only")
+	spec, ok := document["spec"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("spec must be an object")
+	}
+	for field := range spec {
+		switch field {
+		case "description", "displayName", "tags", "mainContainer", "ephemeralMounts", "network", "envVars":
+		default:
+			return fmt.Errorf("spec.%s is not supported", field)
+		}
+	}
+
+	mainContainer, ok := spec["mainContainer"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	for field := range mainContainer {
+		switch field {
+		case "image", "env", "resources", "securityClass":
+		default:
+			return fmt.Errorf("spec.mainContainer.%s is not supported", field)
+		}
+	}
+
+	resources, ok := mainContainer["resources"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	for field := range resources {
+		if field != "memory" && field != "ephemeralStorage" {
+			return fmt.Errorf("spec.mainContainer.resources.%s is not supported; set memory and optional ephemeralStorage only", field)
+		}
 	}
 	return nil
 }
@@ -113,20 +145,9 @@ func rejectUnsupportedTemplateFromSandboxOverrides(specJSON []byte) error {
 	}
 	for field := range overrides {
 		switch field {
-		case "description", "displayName", "tags", "pool":
+		case "description", "displayName", "tags":
 		default:
 			return fmt.Errorf("%s is not supported in an overrides file", field)
-		}
-	}
-	if rawPool, ok := overrides["pool"]; ok {
-		var pool map[string]json.RawMessage
-		if err := json.Unmarshal(rawPool, &pool); err != nil || pool == nil {
-			return fmt.Errorf("pool must be an object")
-		}
-		for field := range pool {
-			if field != "minIdle" && field != "maxIdle" {
-				return fmt.Errorf("pool.%s is not supported", field)
-			}
 		}
 	}
 	return nil
@@ -387,7 +408,7 @@ func init() {
 	// Create command flags
 	templateCreateCmd.Flags().StringVar(&templateID, "id", "", "template ID (required)")
 	templateCreateCmd.Flags().StringVarP(&templateSpecFile, "spec-file", "f", "", "template spec file for image-based creation")
-	templateCreateCmd.Flags().StringVar(&templateFromSandbox, "from-sandbox", "", "source sandbox ID whose current root filesystem should become the template image")
+	templateCreateCmd.Flags().StringVar(&templateFromSandbox, "from-sandbox", "", "source sandbox ID whose current root filesystem should become the template RootFS base")
 	templateCreateCmd.Flags().StringVar(&templateOverridesFile, "overrides-file", "", "optional override object YAML file for from-sandbox creation")
 	templateCreateCmd.Flags().StringVar(&templateIdempotencyKey, "idempotency-key", "", "safe retry key for a from-sandbox create request")
 	templateCreateCmd.Flags().BoolVar(&templateWait, "wait", false, "wait until from-sandbox template creation is ready or failed")

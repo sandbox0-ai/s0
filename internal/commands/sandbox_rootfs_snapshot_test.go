@@ -96,6 +96,44 @@ func TestBuildSandboxForkRequest(t *testing.T) {
 	}
 }
 
+func TestBuildSandboxRebaseRequest(t *testing.T) {
+	resetSandboxFlagsForTest()
+	cmd := newSandboxRebaseFlagsForTest()
+
+	if _, err := buildSandboxRebaseRequest(cmd); err == nil {
+		t.Fatal("buildSandboxRebaseRequest() error = nil, want required digest error")
+	}
+
+	sandboxRebaseTargetBaseDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := cmd.Flags().Set("rollback-ttl", "3600"); err != nil {
+		t.Fatalf("set rollback-ttl flag: %v", err)
+	}
+	request, err := buildSandboxRebaseRequest(cmd)
+	if err != nil {
+		t.Fatalf("buildSandboxRebaseRequest() error = %v", err)
+	}
+	if request.TargetBaseArtifactDigest != sandboxRebaseTargetBaseDigest {
+		t.Fatalf("target digest = %q", request.TargetBaseArtifactDigest)
+	}
+	rollbackTTL, ok := request.RollbackTTL.Get()
+	if !ok || rollbackTTL != 3600 {
+		t.Fatalf("rollback ttl = %d, %v; want 3600, true", rollbackTTL, ok)
+	}
+}
+
+func TestBuildSandboxRebaseRequestRejectsInvalidRollbackTTL(t *testing.T) {
+	resetSandboxFlagsForTest()
+	cmd := newSandboxRebaseFlagsForTest()
+	sandboxRebaseTargetBaseDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := cmd.Flags().Set("rollback-ttl", "0"); err != nil {
+		t.Fatalf("set rollback-ttl flag: %v", err)
+	}
+
+	if _, err := buildSandboxRebaseRequest(cmd); err == nil {
+		t.Fatal("buildSandboxRebaseRequest() error = nil, want validation error")
+	}
+}
+
 func TestSandboxRootFSCommandsRegistered(t *testing.T) {
 	if sandboxCmd.Commands() == nil {
 		t.Fatal("sandbox commands are not registered")
@@ -106,6 +144,9 @@ func TestSandboxRootFSCommandsRegistered(t *testing.T) {
 	if cmd, _, err := sandboxCmd.Find([]string{"fork"}); err != nil || cmd != sandboxForkCmd {
 		t.Fatalf("sandbox fork command not registered: cmd=%v err=%v", cmd, err)
 	}
+	if cmd, _, err := sandboxCmd.Find([]string{"rebase"}); err != nil || cmd != sandboxRebaseCmd {
+		t.Fatalf("sandbox rebase command not registered: cmd=%v err=%v", cmd, err)
+	}
 	if flag := sandboxSnapshotCreateCmd.Flags().Lookup("expires-at"); flag == nil {
 		t.Fatal("sandbox snapshot create --expires-at flag is not registered")
 	}
@@ -115,11 +156,24 @@ func TestSandboxRootFSCommandsRegistered(t *testing.T) {
 	if flag := sandboxForkCmd.Flags().Lookup("hard-ttl"); flag == nil {
 		t.Fatal("sandbox fork --hard-ttl flag is not registered")
 	}
+	if flag := sandboxRebaseCmd.Flags().Lookup("target-base-artifact-digest"); flag == nil {
+		t.Fatal("sandbox rebase --target-base-artifact-digest flag is not registered")
+	}
+	if flag := sandboxRebaseCmd.Flags().Lookup("rollback-ttl"); flag == nil {
+		t.Fatal("sandbox rebase --rollback-ttl flag is not registered")
+	}
 }
 
 func newSandboxForkFlagsForTest() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Flags().Int32Var(&sandboxForkTTL, "ttl", 0, "soft TTL in seconds for the forked sandbox")
 	cmd.Flags().Int32Var(&sandboxForkHardTTL, "hard-ttl", 0, "hard TTL in seconds for the forked sandbox")
+	return cmd
+}
+
+func newSandboxRebaseFlagsForTest() *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Flags().StringVar(&sandboxRebaseTargetBaseDigest, "target-base-artifact-digest", "", "")
+	cmd.Flags().Int32Var(&sandboxRebaseRollbackTTL, "rollback-ttl", 0, "")
 	return cmd
 }
