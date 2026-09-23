@@ -426,13 +426,10 @@ func maybeAutoSelectCurrentTeam(ctx context.Context, cfg *config.Config, profile
 	if !ok {
 		return nil, false, fmt.Errorf("list teams: unexpected response type %T", res)
 	}
-	data, ok := successRes.Data.Get()
-	if !ok {
-		return nil, false, fmt.Errorf("list teams: missing response data")
-	}
+	data := successRes.Data
 
 	for _, team := range data.Teams {
-		if strings.TrimSpace(team.ID) == currentTeamID && currentTeamID != "" {
+		if team.ID.String() == currentTeamID && currentTeamID != "" {
 			return nil, false, nil
 		}
 	}
@@ -449,7 +446,7 @@ func maybeAutoSelectCurrentTeam(ctx context.Context, cfg *config.Config, profile
 	if err != nil {
 		return nil, false, err
 	}
-	cfg.SetCurrentTeam(profileName, team.ID, homeRegionID, regionalGatewayURL)
+	cfg.SetCurrentTeam(profileName, team.ID.String(), homeRegionID, regionalGatewayURL)
 	return &team, true, nil
 }
 

@@ -18,7 +18,7 @@ func TestBuildCreateRegionRequest(t *testing.T) {
 	opts.addCreateFlags(cmd)
 
 	if err := cmd.Flags().Parse([]string{
-		"--id", " aws/us-east-1 ",
+		"--id", " aws-us-east-1 ",
 		"--display-name", " US East 1 ",
 		"--regional-gateway-url", " https://use1.example.com ",
 		"--metering-export-url", " https://metering.use1.example.com ",
@@ -32,8 +32,8 @@ func TestBuildCreateRegionRequest(t *testing.T) {
 		t.Fatalf("buildCreateRegionRequest() error = %v", err)
 	}
 
-	if req.ID != "aws/us-east-1" {
-		t.Fatalf("ID = %q, want aws/us-east-1", req.ID)
+	if req.ID != "aws-us-east-1" {
+		t.Fatalf("ID = %q, want aws-us-east-1", req.ID)
 	}
 	if req.RegionalGatewayURL != "https://use1.example.com" {
 		t.Fatalf("RegionalGatewayURL = %q, want https://use1.example.com", req.RegionalGatewayURL)
@@ -54,7 +54,7 @@ func TestBuildCreateRegionRequestRequiresGatewayURL(t *testing.T) {
 	cmd := &cobra.Command{Use: "create"}
 	opts.addCreateFlags(cmd)
 
-	if err := cmd.Flags().Parse([]string{"--id", "aws/us-east-1"}); err != nil {
+	if err := cmd.Flags().Parse([]string{"--id", "aws-us-east-1"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestAdminRegionListCommand(t *testing.T) {
 				t.Fatalf("Authorization = %q, want Bearer token-1", got)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"success":true,"data":{"regions":[{"id":"aws/us-east-1","display_name":"US East 1","regional_gateway_url":"https://use1.example.com","metering_export_url":"https://metering.use1.example.com","enabled":true}]}}`))
+			_, _ = w.Write([]byte(`{"success":true,"data":{"regions":[{"id":"aws-us-east-1","display_name":"US East 1","regional_gateway_url":"https://use1.example.com","metering_export_url":"https://metering.use1.example.com","enabled":true}]}}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -146,7 +146,7 @@ func TestAdminRegionListCommand(t *testing.T) {
 
 	output := stdout.String()
 	for _, want := range []string{
-		"aws/us-east-1",
+		"aws-us-east-1",
 		"US East 1",
 		"https://use1.example.com",
 		"https://metering.use1.example.com",

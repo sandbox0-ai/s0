@@ -17,12 +17,14 @@ import (
 )
 
 var (
-	sandboxTemplate   string
-	sandboxTTL        int32
-	sandboxHardTTL    int32
-	sandboxMemory     string
-	sandboxConfigFile string
-	sandboxSnapshotID string
+	sandboxTemplate     string
+	sandboxTTL          int32
+	sandboxHardTTL      int32
+	sandboxMemory       string
+	sandboxConfigFile   string
+	sandboxSnapshotID   string
+	sandboxPauseMemory  bool
+	sandboxResumeMemory bool
 	// list flags
 	sandboxListStatus     string
 	sandboxListTemplateID string
@@ -188,7 +190,11 @@ var sandboxPauseCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.PauseSandbox(cmd.Context(), sandboxID)
+		var options *sandbox0.SandboxExecutionStateOptions
+		if sandboxPauseMemory {
+			options = &sandbox0.SandboxExecutionStateOptions{Memory: true}
+		}
+		_, err = client.PauseSandboxWithOptions(cmd.Context(), sandboxID, options)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error pausing sandbox: %v\n", err)
 			os.Exit(1)
@@ -213,7 +219,11 @@ var sandboxResumeCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		_, err = client.ResumeSandbox(cmd.Context(), sandboxID)
+		var options *sandbox0.SandboxExecutionStateOptions
+		if sandboxResumeMemory {
+			options = &sandbox0.SandboxExecutionStateOptions{Memory: true}
+		}
+		_, err = client.ResumeSandboxWithOptions(cmd.Context(), sandboxID, options)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error resuming sandbox: %v\n", err)
 			os.Exit(1)
@@ -502,6 +512,8 @@ func init() {
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
 	sandboxCreateCmd.Flags().StringVar(&sandboxMemory, "memory", "", "sandbox memory limit, for example 512Mi or 2Gi")
 	sandboxCreateCmd.Flags().StringVar(&sandboxSnapshotID, "snapshot-id", "", "rootfs snapshot ID used to initialize the new sandbox")
+	sandboxPauseCmd.Flags().BoolVar(&sandboxPauseMemory, "memory", false, "retain process memory when pausing")
+	sandboxResumeCmd.Flags().BoolVar(&sandboxResumeMemory, "memory", false, "restore retained process memory when resuming")
 
 	sandboxCmd.AddCommand(sandboxCreateCmd)
 	sandboxCmd.AddCommand(sandboxGetCmd)
@@ -561,7 +573,7 @@ func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
 		}
 	}
 	if sandboxTemplate != "" {
-		request.Template = apispec.NewOptString(sandboxTemplate)
+		request.Template = sandboxTemplate
 	}
 	if sandboxSnapshotID != "" {
 		request.SnapshotID = apispec.NewOptString(sandboxSnapshotID)
@@ -583,7 +595,7 @@ func buildSandboxCreateRequest() (apispec.ClaimRequest, error) {
 		request.Config = apispec.NewOptSandboxConfig(config)
 	}
 
-	if _, ok := request.Template.Get(); !ok {
+	if strings.TrimSpace(request.Template) == "" {
 		return apispec.ClaimRequest{}, fmt.Errorf("--template is required unless provided in config file")
 	}
 	if err := request.Validate(); err != nil {

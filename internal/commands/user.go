@@ -47,11 +47,7 @@ var userGetCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error getting user profile: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
@@ -102,11 +98,7 @@ var userUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error updating user profile: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
@@ -190,11 +182,9 @@ var userSSHKeyDeleteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if data, ok := resp.Data.Get(); ok {
-			if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-				fmt.Println(message)
-				return
-			}
+		if message, ok := resp.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+			fmt.Println(message)
+			return
 		}
 		fmt.Printf("SSH public key %s deleted successfully\n", args[0])
 	},

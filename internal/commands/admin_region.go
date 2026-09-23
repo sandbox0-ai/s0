@@ -69,12 +69,7 @@ func newAdminRegionListCommand() *cobra.Command {
 				return fmt.Errorf("list regions: unexpected response type %T", res)
 			}
 
-			data, ok := successRes.Data.Get()
-			if !ok {
-				return fmt.Errorf("list regions: missing response data")
-			}
-
-			return getFormatter().Format(cmd.OutOrStdout(), data.Regions)
+			return getFormatter().Format(cmd.OutOrStdout(), successRes.Data.Regions)
 		},
 	}
 }
@@ -101,11 +96,7 @@ func newAdminRegionGetCommand() *cobra.Command {
 				return fmt.Errorf("get region: unexpected response type %T", res)
 			}
 
-			data, ok := successRes.Data.Get()
-			if !ok {
-				return fmt.Errorf("get region: missing response data")
-			}
-
+			data := successRes.Data
 			return getFormatter().Format(cmd.OutOrStdout(), &data)
 		},
 	}
@@ -138,11 +129,7 @@ func newAdminRegionCreateCommand() *cobra.Command {
 				return fmt.Errorf("create region: unexpected response type %T", res)
 			}
 
-			data, ok := successRes.Data.Get()
-			if !ok {
-				return fmt.Errorf("create region: missing response data")
-			}
-
+			data := successRes.Data
 			return getFormatter().Format(cmd.OutOrStdout(), &data)
 		},
 	}
@@ -178,11 +165,7 @@ func newAdminRegionUpdateCommand() *cobra.Command {
 				return fmt.Errorf("update region: unexpected response type %T", res)
 			}
 
-			data, ok := successRes.Data.Get()
-			if !ok {
-				return fmt.Errorf("update region: missing response data")
-			}
-
+			data := successRes.Data
 			return getFormatter().Format(cmd.OutOrStdout(), &data)
 		},
 	}
@@ -212,11 +195,9 @@ func newAdminRegionDeleteCommand() *cobra.Command {
 				return fmt.Errorf("delete region: unexpected response type %T", res)
 			}
 
-			if data, ok := successRes.Data.Get(); ok {
-				if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-					_, err := fmt.Fprintln(cmd.OutOrStdout(), message)
-					return err
-				}
+			if message, ok := successRes.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+				_, err := fmt.Fprintln(cmd.OutOrStdout(), message)
+				return err
 			}
 
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Region %s deleted successfully\n", args[0])

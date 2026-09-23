@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -96,6 +97,49 @@ func TestBuildSandboxForkRequest(t *testing.T) {
 	}
 }
 
+func TestBuildSandboxForkMemoryRequestAndRetryKey(t *testing.T) {
+	resetSandboxFlagsForTest()
+	cmd := newSandboxForkFlagsForTest()
+	if err := cmd.Flags().Set("memory", "true"); err != nil {
+		t.Fatalf("set memory flag: %v", err)
+	}
+	request := buildSandboxForkRequest(cmd)
+	if request == nil || !request.Memory.Or(false) {
+		t.Fatalf("request = %+v, want memory preservation", request)
+	}
+	if request.Config.IsSet() {
+		t.Fatal("memory-only fork unexpectedly sets lifecycle config")
+	}
+	options, err := buildSandboxForkOptions(cmd)
+	if err != nil {
+		t.Fatalf("buildSandboxForkOptions() error = %v", err)
+	}
+	if options == nil || options.IdempotencyKey == "" {
+		t.Fatalf("options = %+v, want generated retry key", options)
+	}
+
+	if err := cmd.Flags().Set("idempotency-key", " retry-one "); err != nil {
+		t.Fatalf("set idempotency-key flag: %v", err)
+	}
+	options, err = buildSandboxForkOptions(cmd)
+	if err != nil || options.IdempotencyKey != "retry-one" {
+		t.Fatalf("options = %+v, error = %v; want retry-one", options, err)
+	}
+}
+
+func TestBuildSandboxForkOptionsRejectsInvalidKey(t *testing.T) {
+	for _, key := range []string{" ", strings.Repeat("a", 256)} {
+		resetSandboxFlagsForTest()
+		cmd := newSandboxForkFlagsForTest()
+		if err := cmd.Flags().Set("idempotency-key", key); err != nil {
+			t.Fatalf("set idempotency-key flag: %v", err)
+		}
+		if _, err := buildSandboxForkOptions(cmd); err == nil {
+			t.Fatalf("key %q accepted", key)
+		}
+	}
+}
+
 func TestBuildSandboxRebaseRequest(t *testing.T) {
 	resetSandboxFlagsForTest()
 	cmd := newSandboxRebaseFlagsForTest()
@@ -156,6 +200,14 @@ func TestSandboxRootFSCommandsRegistered(t *testing.T) {
 	if flag := sandboxForkCmd.Flags().Lookup("hard-ttl"); flag == nil {
 		t.Fatal("sandbox fork --hard-ttl flag is not registered")
 	}
+	for _, cmd := range []*cobra.Command{sandboxPauseCmd, sandboxResumeCmd, sandboxForkCmd} {
+		if flag := cmd.Flags().Lookup("memory"); flag == nil {
+			t.Fatalf("sandbox %s --memory flag is not registered", cmd.Name())
+		}
+	}
+	if flag := sandboxForkCmd.Flags().Lookup("idempotency-key"); flag == nil {
+		t.Fatal("sandbox fork --idempotency-key flag is not registered")
+	}
 	if flag := sandboxRebaseCmd.Flags().Lookup("target-base-artifact-digest"); flag == nil {
 		t.Fatal("sandbox rebase --target-base-artifact-digest flag is not registered")
 	}
@@ -168,6 +220,8 @@ func newSandboxForkFlagsForTest() *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Flags().Int32Var(&sandboxForkTTL, "ttl", 0, "soft TTL in seconds for the forked sandbox")
 	cmd.Flags().Int32Var(&sandboxForkHardTTL, "hard-ttl", 0, "hard TTL in seconds for the forked sandbox")
+	cmd.Flags().BoolVar(&sandboxForkMemory, "memory", false, "")
+	cmd.Flags().StringVar(&sandboxForkIdempotencyKey, "idempotency-key", "", "")
 	return cmd
 }
 

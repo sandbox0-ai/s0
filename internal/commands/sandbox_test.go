@@ -108,9 +108,8 @@ network:
 		if err != nil {
 			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
 		}
-		template, ok := request.Template.Get()
-		if !ok || template != "default" {
-			t.Fatalf("template = %q, want default", template)
+		if request.Template != "default" {
+			t.Fatalf("template = %q, want default", request.Template)
 		}
 		config, ok := request.Config.Get()
 		if !ok {
@@ -177,9 +176,8 @@ config:
 		if err != nil {
 			t.Fatalf("buildSandboxCreateRequest() error = %v", err)
 		}
-		template, ok := request.Template.Get()
-		if !ok || template != "from-file" {
-			t.Fatalf("template = %q, want from-file", template)
+		if request.Template != "from-file" {
+			t.Fatalf("template = %q, want from-file", request.Template)
 		}
 		snapshotID, ok := request.SnapshotID.Get()
 		if !ok || snapshotID != "snap_file" {
@@ -460,6 +458,8 @@ func resetSandboxFlagsForTest() {
 	sandboxMemory = ""
 	sandboxConfigFile = ""
 	sandboxSnapshotID = ""
+	sandboxPauseMemory = false
+	sandboxResumeMemory = false
 	sandboxListStatus = ""
 	sandboxListTemplateID = ""
 	sandboxListPaused = ""
@@ -498,6 +498,8 @@ func resetSandboxFlagsForTest() {
 	sandboxRootFSSnapshotExpiresAt = ""
 	sandboxForkTTL = 0
 	sandboxForkHardTTL = 0
+	sandboxForkMemory = false
+	sandboxForkIdempotencyKey = ""
 	sandboxRebaseTargetBaseDigest = ""
 	sandboxRebaseRollbackTTL = 0
 }

@@ -275,8 +275,8 @@ s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard
 s0 sandbox get <sandbox-id>
 s0 sandbox update <sandbox-id> [-f sandbox-update.yaml] [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
 s0 sandbox delete <sandbox-id>
-s0 sandbox pause <sandbox-id>
-s0 sandbox resume <sandbox-id>
+s0 sandbox pause <sandbox-id> [--memory]
+s0 sandbox resume <sandbox-id> [--memory]
 s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
 s0 sandbox logs <sandbox-id> [--limit 100] [--context-id <ctx-id>] [--stream stdout|stderr|pty] [--watch]
@@ -288,7 +288,7 @@ s0 sandbox snapshot get <snapshot-id>
 s0 sandbox snapshot create <sandbox-id> [--name <name>] [--description <text>] [--expires-at <rfc3339>]
 s0 sandbox snapshot restore <sandbox-id> <snapshot-id>
 s0 sandbox snapshot delete <snapshot-id>
-s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200]
+s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200] [--memory] [--idempotency-key <key>]
 s0 sandbox rebase <sandbox-id> --target-base-artifact-digest <sha256:digest> [--rollback-ttl 86400]
 ```
 
@@ -297,6 +297,13 @@ s0 sandbox rebase <sandbox-id> --target-base-artifact-digest <sha256:digest> [--
 `s0 sandbox update` only changes durable lifecycle and service fields. Use
 `s0 sandbox network update` for network policy changes; environment and resource
 changes require a new runtime.
+
+Pause, resume, and fork remain filesystem-only by default. Use `--memory` on
+pause and resume to retain and restore process state. A memory fork creates a
+paused child; resume it with `--memory`. Memory forks use a retry key, generated
+automatically unless `--idempotency-key` is supplied. If a fork request fails,
+the CLI prints its key so the same request can be retried without creating a
+second child.
 
 `s0 sandbox logs/events/metrics` query the per-sandbox observability backend. `s0 sandbox events` returns canonical signed audit facts, including API access, lifecycle, network, process, and file events. Filter by actor, action, resource, operation, outcome, source, or event type; use `--event-id` alone for exact lookup of one event and any conflicting payload variant. Use `--watch` for realtime records, `--cursor` to resume, `--start-time` / `--end-time` for absolute windows, or `--since 10m` for a relative window. Table output shows event identity, actor, action, resource, operation, signature status, and conflict state; use `-o json` or `-o yaml` for the full canonical record. `s0 sandbox logs` prints log messages by default.
 

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
@@ -48,13 +49,9 @@ func (c *Client) GetRegistryCredentials(ctx context.Context, targetImage string)
 
 	successResp, ok := resp.(*apispec.SuccessRegistryCredentialsResponse)
 	if !ok {
-		return nil, err
+		return nil, fmt.Errorf("unexpected registry credentials response %T", resp)
 	}
-
-	data, ok := successResp.Data.Get()
-	if !ok {
-		return nil, err
-	}
+	data := successResp.Data
 
 	creds := &RegistryCredentials{
 		Provider:     data.Provider,
