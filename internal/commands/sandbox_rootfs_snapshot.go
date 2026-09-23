@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
 )
@@ -16,6 +18,8 @@ var (
 	sandboxRootFSSnapshotExpiresAt   string
 	sandboxForkTTL                   int32
 	sandboxForkHardTTL               int32
+	sandboxForkMemory                bool
+	sandboxForkIdempotencyKey        string
 	sandboxRebaseTargetBaseDigest    string
 	sandboxRebaseRollbackTTL         int32
 )
@@ -176,8 +180,8 @@ var sandboxSnapshotRestoreCmd = &cobra.Command{
 // sandboxForkCmd creates a paused sandbox fork from a running or paused source sandbox.
 var sandboxForkCmd = &cobra.Command{
 	Use:   "fork <sandbox-id>",
-	Short: "Fork a sandbox rootfs",
-	Long:  `Create a paused sandbox fork from a running or paused source sandbox rootfs. A running source remains running after capture.`,
+	Short: "Fork a sandbox",
+	Long:  `Create a paused sandbox fork from a running or paused source. A running source remains running after capture. Use --memory to retain process state in the fork.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		sandboxID := args[0]
@@ -188,9 +192,18 @@ var sandboxForkCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		response, err := client.ForkSandbox(cmd.Context(), sandboxID, buildSandboxForkRequest(cmd))
+		options, err := buildSandboxForkOptions(cmd)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error forking sandbox: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error building sandbox fork request: %v\n", err)
+			os.Exit(1)
+		}
+		response, err := client.ForkSandboxWithOptions(cmd.Context(), sandboxID, buildSandboxForkRequest(cmd), options)
+		if err != nil {
+			if sandboxForkMemory {
+				fmt.Fprintf(os.Stderr, "Error forking sandbox (retry with --idempotency-key %q): %v\n", options.IdempotencyKey, err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error forking sandbox: %v\n", err)
+			}
 			os.Exit(1)
 		}
 
@@ -239,6 +252,8 @@ func init() {
 	sandboxSnapshotCreateCmd.Flags().StringVar(&sandboxRootFSSnapshotExpiresAt, "expires-at", "", "snapshot expiration timestamp (RFC3339)")
 	sandboxForkCmd.Flags().Int32Var(&sandboxForkTTL, "ttl", 0, "soft TTL in seconds for the forked sandbox")
 	sandboxForkCmd.Flags().Int32Var(&sandboxForkHardTTL, "hard-ttl", 0, "hard TTL in seconds for the forked sandbox")
+	sandboxForkCmd.Flags().BoolVar(&sandboxForkMemory, "memory", false, "retain process memory in the paused fork")
+	sandboxForkCmd.Flags().StringVar(&sandboxForkIdempotencyKey, "idempotency-key", "", "stable key for retrying a fork; generated for memory forks if omitted")
 	sandboxRebaseCmd.Flags().StringVar(&sandboxRebaseTargetBaseDigest, "target-base-artifact-digest", "", "target attested RootFS base artifact digest (required)")
 	sandboxRebaseCmd.Flags().Int32Var(&sandboxRebaseRollbackTTL, "rollback-ttl", 0, "rollback retention in seconds (1-604800)")
 
@@ -291,12 +306,31 @@ func buildSandboxForkRequest(cmd *cobra.Command) *apispec.ForkSandboxRequest {
 		config.HardTTL = apispec.NewOptInt32(sandboxForkHardTTL)
 		hasConfig = true
 	}
-	if !hasConfig {
+	if !hasConfig && !sandboxForkMemory {
 		return nil
 	}
-	return &apispec.ForkSandboxRequest{
-		Config: apispec.NewOptForkSandboxConfig(config),
+	request := &apispec.ForkSandboxRequest{}
+	if hasConfig {
+		request.Config = apispec.NewOptForkSandboxConfig(config)
 	}
+	if sandboxForkMemory {
+		request.Memory = apispec.NewOptBool(true)
+	}
+	return request
+}
+
+func buildSandboxForkOptions(cmd *cobra.Command) (*sandbox0.ForkSandboxOptions, error) {
+	key := strings.TrimSpace(sandboxForkIdempotencyKey)
+	if (cmd.Flags().Changed("idempotency-key") && key == "") || len(key) > 255 {
+		return nil, fmt.Errorf("--idempotency-key must contain 1-255 non-whitespace characters")
+	}
+	if key == "" && sandboxForkMemory {
+		key = uuid.NewString()
+	}
+	if key == "" {
+		return nil, nil
+	}
+	return &sandbox0.ForkSandboxOptions{IdempotencyKey: key}, nil
 }
 
 func buildSandboxRebaseRequest(cmd *cobra.Command) (apispec.RebaseSandboxRootFSRequest, error) {

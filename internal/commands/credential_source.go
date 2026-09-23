@@ -152,11 +152,9 @@ var credentialSourceDeleteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if data, ok := resp.Data.Get(); ok {
-			if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-				fmt.Println(message)
-				return
-			}
+		if message, ok := resp.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+			fmt.Println(message)
+			return
 		}
 		fmt.Printf("Credential source %s deleted successfully\n", args[0])
 	},

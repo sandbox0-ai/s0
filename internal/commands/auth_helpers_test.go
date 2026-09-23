@@ -19,7 +19,7 @@ func TestShouldShowCurrentTeamSelectionHint(t *testing.T) {
 }
 
 func TestShouldShowCurrentTeamSelectionHintSkipsWhenCurrentTeamExists(t *testing.T) {
-	if shouldShowCurrentTeamSelectionHint(config.GatewayModeGlobal, "team-1") {
+	if shouldShowCurrentTeamSelectionHint(config.GatewayModeGlobal, "11111111-1111-4111-8111-111111111111") {
 		t.Fatal("shouldShowCurrentTeamSelectionHint() = true, want false")
 	}
 }
@@ -38,7 +38,7 @@ func TestMaybeAutoSelectCurrentTeamSelectsOnlyTeamInDirectMode(t *testing.T) {
 				"success": true,
 				"data": map[string]any{
 					"teams": []map[string]any{{
-						"id":         "team-1",
+						"id":         "11111111-1111-4111-8111-111111111111",
 						"name":       "Personal Team",
 						"slug":       "personal-team",
 						"created_at": "2026-01-01T00:00:00Z",
@@ -69,16 +69,16 @@ func TestMaybeAutoSelectCurrentTeamSelectsOnlyTeamInDirectMode(t *testing.T) {
 	if !ok {
 		t.Fatal("maybeAutoSelectCurrentTeam() did not auto-select team")
 	}
-	if team.ID != "team-1" {
-		t.Fatalf("team.ID = %q, want team-1", team.ID)
+	if team.ID.String() != "11111111-1111-4111-8111-111111111111" {
+		t.Fatalf("team.ID = %q, want 11111111-1111-4111-8111-111111111111", team.ID)
 	}
 
 	profile, err := cfg.GetProfile("default")
 	if err != nil {
 		t.Fatalf("GetProfile() error = %v", err)
 	}
-	if got := profile.GetCurrentTeamID(); got != "team-1" {
-		t.Fatalf("CurrentTeamID = %q, want team-1", got)
+	if got := profile.GetCurrentTeamID(); got != "11111111-1111-4111-8111-111111111111" {
+		t.Fatalf("CurrentTeamID = %q, want 11111111-1111-4111-8111-111111111111", got)
 	}
 	if target, ok := profile.GetCurrentTeamTarget(); ok {
 		t.Fatalf("CurrentTeamTarget should be unset in direct mode, got %+v", target)
@@ -94,10 +94,10 @@ func TestMaybeAutoSelectCurrentTeamDoesNotSelectWhenMultipleTeamsExist(t *testin
 				"data": map[string]any{
 					"teams": []map[string]any{
 						{
-							"id": "team-1", "name": "One", "slug": "one", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+							"id": "11111111-1111-4111-8111-111111111111", "name": "One", "slug": "one", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
 						},
 						{
-							"id": "team-2", "name": "Two", "slug": "two", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+							"id": "22222222-2222-4222-8222-222222222222", "name": "Two", "slug": "two", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
 						},
 					},
 				},
@@ -143,7 +143,7 @@ func TestMaybeAutoSelectCurrentTeamReplacesStaleTeamWhenOnlyOneTeamExists(t *tes
 				"success": true,
 				"data": map[string]any{
 					"teams": []map[string]any{{
-						"id":         "team-2",
+						"id":         "22222222-2222-4222-8222-222222222222",
 						"name":       "New Team",
 						"slug":       "new-team",
 						"created_at": "2026-01-01T00:00:00Z",
@@ -163,7 +163,7 @@ func TestMaybeAutoSelectCurrentTeamReplacesStaleTeamWhenOnlyOneTeamExists(t *tes
 			"default": {
 				APIURL:        server.URL,
 				Token:         "user-token",
-				CurrentTeamID: "team-1",
+				CurrentTeamID: "11111111-1111-4111-8111-111111111111",
 			},
 		},
 	}
@@ -175,16 +175,16 @@ func TestMaybeAutoSelectCurrentTeamReplacesStaleTeamWhenOnlyOneTeamExists(t *tes
 	if !ok {
 		t.Fatal("maybeAutoSelectCurrentTeam() did not replace stale team")
 	}
-	if team == nil || team.ID != "team-2" {
-		t.Fatalf("team = %+v, want team-2", team)
+	if team == nil || team.ID.String() != "22222222-2222-4222-8222-222222222222" {
+		t.Fatalf("team = %+v, want 22222222-2222-4222-8222-222222222222", team)
 	}
 
 	profile, err := cfg.GetProfile("default")
 	if err != nil {
 		t.Fatalf("GetProfile() error = %v", err)
 	}
-	if got := profile.GetCurrentTeamID(); got != "team-2" {
-		t.Fatalf("CurrentTeamID = %q, want team-2", got)
+	if got := profile.GetCurrentTeamID(); got != "22222222-2222-4222-8222-222222222222" {
+		t.Fatalf("CurrentTeamID = %q, want 22222222-2222-4222-8222-222222222222", got)
 	}
 }
 
@@ -197,14 +197,14 @@ func TestMaybeAutoSelectCurrentTeamClearsStaleTeamWhenMultipleTeamsExist(t *test
 				"data": map[string]any{
 					"teams": []map[string]any{
 						{
-							"id":         "team-2",
+							"id":         "22222222-2222-4222-8222-222222222222",
 							"name":       "Two",
 							"slug":       "two",
 							"created_at": "2026-01-01T00:00:00Z",
 							"updated_at": "2026-01-01T00:00:00Z",
 						},
 						{
-							"id":         "team-3",
+							"id":         "33333333-3333-4333-8333-333333333333",
 							"name":       "Three",
 							"slug":       "three",
 							"created_at": "2026-01-01T00:00:00Z",
@@ -225,7 +225,7 @@ func TestMaybeAutoSelectCurrentTeamClearsStaleTeamWhenMultipleTeamsExist(t *test
 			"default": {
 				APIURL:              server.URL,
 				Token:               "user-token",
-				CurrentTeamID:       "team-1",
+				CurrentTeamID:       "11111111-1111-4111-8111-111111111111",
 				CurrentTeamRegionID: "aws-us-east-1",
 			},
 		},

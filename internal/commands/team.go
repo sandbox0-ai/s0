@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/sandbox0-ai/s0/internal/config"
 	"github.com/sandbox0-ai/s0/internal/output"
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
@@ -22,6 +23,15 @@ var (
 	teamMemberEmail  string
 	teamMemberRole   string
 )
+
+func teamUUIDOrExit(value, label string) uuid.UUID {
+	id, err := uuid.Parse(strings.TrimSpace(value))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid %s %q: %v\n", label, value, err)
+		os.Exit(1)
+	}
+	return id
+}
 
 var teamCmd = &cobra.Command{
 	Use:   "team",
@@ -52,11 +62,7 @@ var teamListCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error listing teams: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		currentTeamID, err := getCurrentTeamID()
 		if err != nil {
@@ -96,7 +102,7 @@ var teamGetCmd = &cobra.Command{
 		}
 
 		res, err := client.API().TeamsIDGet(cmd.Context(), apispec.TeamsIDGetParams{
-			ID: args[0],
+			ID: teamUUIDOrExit(args[0], "team ID"),
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error getting team: %v\n", err)
@@ -109,11 +115,7 @@ var teamGetCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error getting team: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
@@ -152,11 +154,7 @@ var teamCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error creating team: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
@@ -229,7 +227,11 @@ func resolveTeamGatewayURL(ctx context.Context, client *sandbox0.Client, teamID 
 }
 
 func resolveTeamHomeRegionID(ctx context.Context, client *sandbox0.Client, teamID string) (string, error) {
-	res, err := client.API().TeamsIDGet(ctx, apispec.TeamsIDGetParams{ID: teamID})
+	id, err := uuid.Parse(strings.TrimSpace(teamID))
+	if err != nil {
+		return "", fmt.Errorf("invalid team ID %q: %w", teamID, err)
+	}
+	res, err := client.API().TeamsIDGet(ctx, apispec.TeamsIDGetParams{ID: id})
 	if err != nil {
 		return "", fmt.Errorf("get team %s: %w", teamID, err)
 	}
@@ -237,10 +239,7 @@ func resolveTeamHomeRegionID(ctx context.Context, client *sandbox0.Client, teamI
 	if !ok {
 		return "", fmt.Errorf("get team %s: unexpected response type %T", teamID, res)
 	}
-	data, ok := successRes.Data.Get()
-	if !ok {
-		return "", fmt.Errorf("get team %s: missing response data", teamID)
-	}
+	data := successRes.Data
 	homeRegionID, ok := data.HomeRegionID.Get()
 	if !ok || strings.TrimSpace(homeRegionID) == "" {
 		return "", fmt.Errorf("team %s has no home region", teamID)
@@ -273,7 +272,7 @@ var teamUseCmd = &cobra.Command{
 		}
 
 		res, err := client.API().TeamsIDGet(cmd.Context(), apispec.TeamsIDGetParams{
-			ID: teamID,
+			ID: teamUUIDOrExit(teamID, "team ID"),
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error validating team: %v\n", err)
@@ -286,11 +285,7 @@ var teamUseCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error validating team: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		cfg, err := getConfig()
 		if err != nil {
@@ -352,10 +347,7 @@ func resolveRegionalGatewayURL(ctx context.Context, client *sandbox0.Client, reg
 	if !ok {
 		return "", fmt.Errorf("list regions: unexpected response type %T", res)
 	}
-	data, ok := successRes.Data.Get()
-	if !ok {
-		return "", fmt.Errorf("list regions: missing response data")
-	}
+	data := successRes.Data
 	for _, region := range data.Regions {
 		if strings.TrimSpace(region.ID) != strings.TrimSpace(regionID) {
 			continue
@@ -402,7 +394,7 @@ var teamUpdateCmd = &cobra.Command{
 		}
 
 		res, err := client.API().TeamsIDPut(cmd.Context(), req, apispec.TeamsIDPutParams{
-			ID: args[0],
+			ID: teamUUIDOrExit(args[0], "team ID"),
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating team: %v\n", err)
@@ -415,11 +407,7 @@ var teamUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error updating team: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
@@ -441,7 +429,7 @@ var teamDeleteCmd = &cobra.Command{
 		}
 
 		res, err := client.API().TeamsIDDelete(cmd.Context(), apispec.TeamsIDDeleteParams{
-			ID: args[0],
+			ID: teamUUIDOrExit(args[0], "team ID"),
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error deleting team: %v\n", err)
@@ -459,11 +447,9 @@ var teamDeleteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if data, ok := successRes.Data.Get(); ok {
-			if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-				fmt.Println(message)
-				return
-			}
+		if message, ok := successRes.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+			fmt.Println(message)
+			return
 		}
 		fmt.Printf("Team %s deleted successfully\n", args[0])
 	},
@@ -525,7 +511,7 @@ var teamMemberListCmd = &cobra.Command{
 		}
 
 		res, err := client.API().TeamsIDMembersGet(cmd.Context(), apispec.TeamsIDMembersGetParams{
-			ID: teamMemberTeamID,
+			ID: teamUUIDOrExit(teamMemberTeamID, "team ID"),
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error listing team members: %v\n", err)
@@ -538,11 +524,7 @@ var teamMemberListCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error listing team members: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if err := getFormatter().Format(os.Stdout, data.Members); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
@@ -581,7 +563,7 @@ var teamMemberAddCmd = &cobra.Command{
 		res, err := client.API().TeamsIDMembersPost(
 			cmd.Context(),
 			req,
-			apispec.TeamsIDMembersPostParams{ID: teamMemberTeamID},
+			apispec.TeamsIDMembersPostParams{ID: teamUUIDOrExit(teamMemberTeamID, "team ID")},
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error adding team member: %v\n", err)
@@ -594,11 +576,7 @@ var teamMemberAddCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error adding team member: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if err := getFormatter().Format(os.Stdout, data); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
@@ -633,8 +611,8 @@ var teamMemberUpdateCmd = &cobra.Command{
 			cmd.Context(),
 			req,
 			apispec.TeamsIDMembersUserIdPutParams{
-				ID:     teamMemberTeamID,
-				UserId: args[0],
+				ID:     teamUUIDOrExit(teamMemberTeamID, "team ID"),
+				UserId: teamUUIDOrExit(args[0], "user ID"),
 			},
 		)
 		if err != nil {
@@ -648,11 +626,9 @@ var teamMemberUpdateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if data, ok := successRes.Data.Get(); ok {
-			if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-				fmt.Println(message)
-				return
-			}
+		if message, ok := successRes.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+			fmt.Println(message)
+			return
 		}
 		fmt.Printf("Member %s updated in team %s\n", args[0], teamMemberTeamID)
 	},
@@ -673,8 +649,8 @@ var teamMemberRemoveCmd = &cobra.Command{
 		res, err := client.API().TeamsIDMembersUserIdDelete(
 			cmd.Context(),
 			apispec.TeamsIDMembersUserIdDeleteParams{
-				ID:     teamMemberTeamID,
-				UserId: args[0],
+				ID:     teamUUIDOrExit(teamMemberTeamID, "team ID"),
+				UserId: teamUUIDOrExit(args[0], "user ID"),
 			},
 		)
 		if err != nil {
@@ -688,11 +664,9 @@ var teamMemberRemoveCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if data, ok := successRes.Data.Get(); ok {
-			if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-				fmt.Println(message)
-				return
-			}
+		if message, ok := successRes.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+			fmt.Println(message)
+			return
 		}
 		fmt.Printf("Member %s removed from team %s\n", args[0], teamMemberTeamID)
 	},
@@ -748,7 +722,7 @@ func buildCreateTeamRequest(name, slug, homeRegion string) *apispec.CreateTeamRe
 		req.Slug = apispec.NewOptString(trimmedSlug)
 	}
 	if trimmedHomeRegion := strings.TrimSpace(homeRegion); trimmedHomeRegion != "" {
-		req.HomeRegionID = apispec.NewOptNilString(trimmedHomeRegion)
+		req.HomeRegionID = trimmedHomeRegion
 	}
 	return req
 }

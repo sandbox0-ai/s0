@@ -26,14 +26,14 @@ func NewTeamList(teams []apispec.Team, currentTeamID string) TeamList {
 	items := make(TeamList, 0, len(teams))
 	for _, team := range teams {
 		items = append(items, TeamListItem{
-			ID:           team.ID,
+			ID:           team.ID.String(),
 			Name:         team.Name,
 			Slug:         team.Slug,
-			OwnerID:      optNilStringPtr(team.OwnerID),
+			OwnerID:      optNilUUIDPtr(team.OwnerID),
 			HomeRegionID: optNilStringPtr(team.HomeRegionID),
 			CreatedAt:    team.CreatedAt,
 			UpdatedAt:    team.UpdatedAt,
-			Current:      currentTeamID != "" && strings.TrimSpace(team.ID) == currentTeamID,
+			Current:      currentTeamID != "" && team.ID.String() == currentTeamID,
 		})
 	}
 	return items
@@ -42,6 +42,14 @@ func NewTeamList(teams []apispec.Team, currentTeamID string) TeamList {
 func optNilStringPtr(value apispec.OptNilString) *string {
 	if s, ok := value.Get(); ok {
 		return &s
+	}
+	return nil
+}
+
+func optNilUUIDPtr(value apispec.OptNilUUID) *string {
+	if id, ok := value.Get(); ok {
+		value := id.String()
+		return &value
 	}
 	return nil
 }

@@ -532,10 +532,8 @@ func (f *TableFormatter) formatRefreshResponse(w io.Writer, r *apispec.RefreshRe
 func (f *TableFormatter) formatSuccessMessage(w io.Writer, r *apispec.SuccessMessageResponse) error {
 	t := newTable(w)
 	_ = t.Append([]string{"Success:", fmt.Sprintf("%v", r.Success)})
-	if v, ok := r.Data.Get(); ok {
-		if msg, ok := v.Message.Get(); ok {
-			_ = t.Append([]string{"Message:", msg})
-		}
+	if msg, ok := r.Data.Message.Get(); ok {
+		_ = t.Append([]string{"Message:", msg})
 	}
 	return t.Render()
 }
@@ -1211,10 +1209,10 @@ func (f *TableFormatter) formatTeamListWithCurrent(w io.Writer, teams TeamList) 
 
 func (f *TableFormatter) formatTeam(w io.Writer, team *apispec.Team) error {
 	t := newTable(w)
-	_ = t.Append([]string{"ID:", team.ID})
+	_ = t.Append([]string{"ID:", team.ID.String()})
 	_ = t.Append([]string{"Name:", team.Name})
 	_ = t.Append([]string{"Slug:", team.Slug})
-	_ = t.Append([]string{"Owner ID:", formatOptNilString(team.OwnerID)})
+	_ = t.Append([]string{"Owner ID:", formatOptNilUUID(team.OwnerID)})
 	_ = t.Append([]string{"Created At:", formatTimestamp(team.CreatedAt)})
 	_ = t.Append([]string{"Updated At:", formatTimestamp(team.UpdatedAt)})
 	return t.Render()
@@ -1260,8 +1258,8 @@ func (f *TableFormatter) formatTeamMemberList(w io.Writer, members []apispec.Tea
 	t.Header([]string{"ID", "USER ID", "EMAIL", "NAME", "ROLE", "JOINED AT"})
 	for _, m := range members {
 		_ = t.Append([]string{
-			m.ID,
-			m.UserID,
+			m.ID.String(),
+			m.UserID.String(),
 			formatOptString(m.Email),
 			formatOptString(m.Name),
 			m.Role,
@@ -1273,8 +1271,8 @@ func (f *TableFormatter) formatTeamMemberList(w io.Writer, members []apispec.Tea
 
 func (f *TableFormatter) formatTeamMember(w io.Writer, m *apispec.TeamMember) error {
 	t := newTable(w)
-	_ = t.Append([]string{"ID:", m.ID})
-	_ = t.Append([]string{"User ID:", m.UserID})
+	_ = t.Append([]string{"ID:", m.ID.String()})
+	_ = t.Append([]string{"User ID:", m.UserID.String()})
 	_ = t.Append([]string{"Email:", formatOptString(m.Email)})
 	_ = t.Append([]string{"Name:", formatOptString(m.Name)})
 	_ = t.Append([]string{"Avatar URL:", formatOptString(m.AvatarURL)})
@@ -1351,6 +1349,13 @@ func formatOptNilString(v apispec.OptNilString) string {
 	}
 	if s, ok := v.Get(); ok && s != "" {
 		return s
+	}
+	return "-"
+}
+
+func formatOptNilUUID(v apispec.OptNilUUID) string {
+	if id, ok := v.Get(); ok {
+		return id.String()
 	}
 	return "-"
 }

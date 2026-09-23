@@ -89,12 +89,7 @@ func discoverGatewayMode(ctx context.Context, baseURL, userAgent string) (config
 		return "", false
 	}
 
-	metadata, ok := metadataRes.Data.Get()
-	if !ok {
-		return "", false
-	}
-
-	return config.ParseGatewayMode(string(metadata.GatewayMode))
+	return config.ParseGatewayMode(string(metadataRes.Data.GatewayMode))
 }
 
 func newSDKClient(baseURL, token, userAgent string) (*sandbox0.Client, error) {

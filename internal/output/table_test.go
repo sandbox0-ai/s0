@@ -164,20 +164,20 @@ func TestTableFormatterFormatRegion(t *testing.T) {
 
 func TestNewTeamListMarksCurrentTeam(t *testing.T) {
 	teams := []apispec.Team{
-		{ID: "team-1", Name: "Team One"},
-		{ID: "team-2", Name: "Team Two"},
+		{ID: uuid.MustParse("11111111-1111-4111-8111-111111111111"), Name: "Team One"},
+		{ID: uuid.MustParse("22222222-2222-4222-8222-222222222222"), Name: "Team Two"},
 	}
 
-	list := NewTeamList(teams, " team-2 ")
+	list := NewTeamList(teams, " 22222222-2222-4222-8222-222222222222 ")
 
 	if len(list) != 2 {
 		t.Fatalf("len(list) = %d, want 2", len(list))
 	}
 	if list[0].Current {
-		t.Fatal("team-1 should not be current")
+		t.Fatal("11111111-1111-4111-8111-111111111111 should not be current")
 	}
 	if !list[1].Current {
-		t.Fatal("team-2 should be current")
+		t.Fatal("22222222-2222-4222-8222-222222222222 should be current")
 	}
 }
 
@@ -186,18 +186,18 @@ func TestTableFormatterFormatTeamListShowsCurrentMarker(t *testing.T) {
 	now := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
 	teams := NewTeamList([]apispec.Team{
 		{
-			ID:        "team-1",
+			ID:        uuid.MustParse("11111111-1111-4111-8111-111111111111"),
 			Name:      "Team One",
 			Slug:      "team-one",
 			CreatedAt: now,
 		},
 		{
-			ID:        "team-2",
+			ID:        uuid.MustParse("22222222-2222-4222-8222-222222222222"),
 			Name:      "Team Two",
 			Slug:      "team-two",
 			CreatedAt: now,
 		},
-	}, "team-2")
+	}, "22222222-2222-4222-8222-222222222222")
 
 	var buf bytes.Buffer
 	if err := formatter.Format(&buf, teams); err != nil {
@@ -208,8 +208,8 @@ func TestTableFormatterFormatTeamListShowsCurrentMarker(t *testing.T) {
 	for _, want := range []string{
 		"CURRENT",
 		"ID",
-		"team-1",
-		"team-2",
+		"11111111-1111-4111-8111-111111111111",
+		"22222222-2222-4222-8222-222222222222",
 		"*",
 	} {
 		if !strings.Contains(output, want) {
@@ -217,10 +217,10 @@ func TestTableFormatterFormatTeamListShowsCurrentMarker(t *testing.T) {
 		}
 	}
 	for _, line := range strings.Split(output, "\n") {
-		if strings.Contains(line, "team-1") && strings.Contains(line, "*") {
+		if strings.Contains(line, "11111111-1111-4111-8111-111111111111") && strings.Contains(line, "*") {
 			t.Fatalf("non-current team row contains current marker:\n%s", output)
 		}
-		if strings.Contains(line, "team-2") && !strings.Contains(line, "*") {
+		if strings.Contains(line, "22222222-2222-4222-8222-222222222222") && !strings.Contains(line, "*") {
 			t.Fatalf("current team row missing current marker:\n%s", output)
 		}
 	}
@@ -229,9 +229,9 @@ func TestTableFormatterFormatTeamListShowsCurrentMarker(t *testing.T) {
 func TestJSONFormatterTeamListIncludesCurrentField(t *testing.T) {
 	formatter := &JSONFormatter{}
 	teams := NewTeamList([]apispec.Team{
-		{ID: "team-1", Name: "Team One", Slug: "team-one"},
-		{ID: "team-2", Name: "Team Two", Slug: "team-two"},
-	}, "team-1")
+		{ID: uuid.MustParse("11111111-1111-4111-8111-111111111111"), Name: "Team One", Slug: "team-one"},
+		{ID: uuid.MustParse("22222222-2222-4222-8222-222222222222"), Name: "Team Two", Slug: "team-two"},
+	}, "11111111-1111-4111-8111-111111111111")
 
 	var buf bytes.Buffer
 	if err := formatter.Format(&buf, teams); err != nil {
@@ -245,11 +245,11 @@ func TestJSONFormatterTeamListIncludesCurrentField(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("len(got) = %d, want 2", len(got))
 	}
-	if got[0]["id"] != "team-1" || got[0]["current"] != true {
-		t.Fatalf("first team = %#v, want current team-1", got[0])
+	if got[0]["id"] != "11111111-1111-4111-8111-111111111111" || got[0]["current"] != true {
+		t.Fatalf("first team = %#v, want current 11111111-1111-4111-8111-111111111111", got[0])
 	}
-	if got[1]["id"] != "team-2" || got[1]["current"] != false {
-		t.Fatalf("second team = %#v, want non-current team-2", got[1])
+	if got[1]["id"] != "22222222-2222-4222-8222-222222222222" || got[1]["current"] != false {
+		t.Fatalf("second team = %#v, want non-current 22222222-2222-4222-8222-222222222222", got[1])
 	}
 }
 
@@ -257,9 +257,9 @@ func TestTableFormatterFormatTeamMemberListIncludesProfileFields(t *testing.T) {
 	formatter := &TableFormatter{}
 	members := []apispec.TeamMember{
 		{
-			ID:        "tm_123",
-			TeamID:    "team_123",
-			UserID:    "user_123",
+			ID:        uuid.MustParse("33333333-3333-4333-8333-333333333333"),
+			TeamID:    uuid.MustParse("44444444-4444-4444-8444-444444444444"),
+			UserID:    uuid.MustParse("55555555-5555-4555-8555-555555555555"),
 			Email:     apispec.NewOptString("dev@example.com"),
 			Name:      apispec.NewOptString("Dev User"),
 			AvatarURL: apispec.NewOptString("https://example.com/avatar.png"),
@@ -291,9 +291,9 @@ func TestTableFormatterFormatTeamMemberListIncludesProfileFields(t *testing.T) {
 func TestTableFormatterFormatTeamMemberIncludesProfileFields(t *testing.T) {
 	formatter := &TableFormatter{}
 	member := &apispec.TeamMember{
-		ID:        "tm_123",
-		TeamID:    "team_123",
-		UserID:    "user_123",
+		ID:        uuid.MustParse("33333333-3333-4333-8333-333333333333"),
+		TeamID:    uuid.MustParse("44444444-4444-4444-8444-444444444444"),
+		UserID:    uuid.MustParse("55555555-5555-4555-8555-555555555555"),
 		Email:     apispec.NewOptString("dev@example.com"),
 		Name:      apispec.NewOptString("Dev User"),
 		AvatarURL: apispec.NewOptString("https://example.com/avatar.png"),
@@ -328,7 +328,7 @@ func TestTableFormatterFormatSandboxIncludesSSHConnection(t *testing.T) {
 	sandbox := &apispec.Sandbox{
 		ID:         "sb_123",
 		TemplateID: "default",
-		TeamID:     "team_123",
+		TeamID:     "44444444-4444-4444-8444-444444444444",
 		Status:     "running",
 		Paused:     false,
 		AutoResume: true,
@@ -787,7 +787,7 @@ func TestTableFormatterFormatTeamInvitation(t *testing.T) {
 	now := time.Date(2026, 8, 10, 12, 30, 0, 0, time.UTC)
 	invitation := &TeamInvitation{
 		ID:                  "invite-1",
-		TeamID:              "team-1",
+		TeamID:              "11111111-1111-4111-8111-111111111111",
 		TeamName:            "Example Team",
 		InviteeEmail:        "invitee@example.com",
 		Role:                "developer",
@@ -806,7 +806,7 @@ func TestTableFormatterFormatTeamInvitation(t *testing.T) {
 	}
 	for _, want := range []string{
 		"invite-1",
-		"team-1",
+		"11111111-1111-4111-8111-111111111111",
 		"Example Team",
 		"invitee@example.com",
 		"developer",

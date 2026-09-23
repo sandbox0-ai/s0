@@ -53,13 +53,7 @@ var apiKeyListCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error listing API keys: missing response data")
-			os.Exit(1)
-		}
-
-		if err := getFormatter().Format(os.Stdout, data.APIKeys); err != nil {
+		if err := getFormatter().Format(os.Stdout, successRes.Data.APIKeys); err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting output: %v\n", err)
 			os.Exit(1)
 		}
@@ -114,11 +108,7 @@ var apiKeyCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		data, ok := successRes.Data.Get()
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error creating API key: missing response data")
-			os.Exit(1)
-		}
+		data := successRes.Data
 
 		if apiKeyRaw {
 			if err := printCreatedAPIKeyRaw(os.Stdout, &data); err != nil {
@@ -164,11 +154,9 @@ var apiKeyDeactivateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if data, ok := successRes.Data.Get(); ok {
-			if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-				fmt.Println(message)
-				return
-			}
+		if message, ok := successRes.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+			fmt.Println(message)
+			return
 		}
 		fmt.Printf("API key %s deactivated successfully\n", args[0])
 	},
@@ -200,11 +188,9 @@ var apiKeyDeleteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if data, ok := successRes.Data.Get(); ok {
-			if message, ok := data.Message.Get(); ok && strings.TrimSpace(message) != "" {
-				fmt.Println(message)
-				return
-			}
+		if message, ok := successRes.Data.Message.Get(); ok && strings.TrimSpace(message) != "" {
+			fmt.Println(message)
+			return
 		}
 		fmt.Printf("API key %s deleted successfully\n", args[0])
 	},
