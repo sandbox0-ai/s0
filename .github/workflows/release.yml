@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -9,7 +10,30 @@ permissions:
   contents: write
 
 jobs:
+  prepare-sdk-upgrade:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+      - name: Upgrade SDK and test CLI
+        run: |
+          go get github.com/sandbox0-ai/sdk-go@v0.10.4
+          go mod tidy
+          go test ./... > s0-unit.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-sdk-upgrade
+          retention-days: 7
+          path: |
+            go.mod
+            go.sum
+            s0-unit.log
   build:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       matrix:
