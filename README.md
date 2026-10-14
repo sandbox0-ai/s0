@@ -583,6 +583,15 @@ spec:
     mode: allow-all
 ```
 
+`resources.ephemeralStorage` sets the initial RootFS filesystem capacity for image
+imports (`8Gi` by default; `300Mi` through `1Ti`, aligned to 4096 bytes). Deployments
+with automatic growth enabled expand XFS online within their configured sparse
+device ceiling while sandbox processes continue running. Fixed-size deployments
+use this value as the device capacity; existing generations retain their geometry.
+Stored data remains subject to service storage quotas. See the
+[automatic-growth deployment guide](https://github.com/sandbox0-ai/sandbox0/blob/main/deploy/nomad/rootfs-autogrow.md)
+for operator enablement and bounded cache/write-journal behavior.
+
 With `--from-sandbox`, the optional overrides file is the override object itself
 and may contain `displayName`, `description`, or `tags`:
 
