@@ -2,6 +2,11 @@
 
 Command-line interface for Sandbox0.
 
+> This CLI remains open source. Current Sandbox0 runtime development is closed source.
+> Sandbox0 Cloud is the supported service. Self-hosting is no longer supported.
+> Bring Your Own Cloud (BYOC) is planned and is not available yet.
+> See [deployment options](https://sandbox0.ai/docs/sandbox/deployment).
+
 ## Installation
 
 ### One-step install
@@ -120,7 +125,7 @@ Mode resolution order:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SANDBOX0_TOKEN` | API authentication token | - |
-| `SANDBOX0_BASE_URL` | Optional API base URL override for self-hosted or private deployments | `https://api.sandbox0.ai` |
+| `SANDBOX0_BASE_URL` | Optional API base URL override | `https://api.sandbox0.ai` |
 
 ## GitHub Actions
 
@@ -154,7 +159,7 @@ jobs:
       - run: s0 template list
 ```
 
-For self-hosted or private Sandbox0 deployments, also pass `api-url: ${{ vars.SANDBOX0_BASE_URL }}`.
+To explicitly override the API endpoint, pass `api-url: ${{ vars.SANDBOX0_BASE_URL }}`.
 
 ### Reusable Workflow
 
@@ -172,7 +177,7 @@ jobs:
       sandbox0_token: ${{ secrets.SANDBOX0_TOKEN }}
 ```
 
-For self-hosted or private Sandbox0 deployments, also pass `api-url: ${{ vars.SANDBOX0_BASE_URL }}`.
+To explicitly override the API endpoint, pass `api-url: ${{ vars.SANDBOX0_BASE_URL }}`.
 
 Consume the pushed template image reference from workflow outputs:
 
@@ -194,7 +199,7 @@ jobs:
 
 For production workflows, pin `@main` to a published `s0` release tag such as `@v0.2.4` or `@v0`.
 
-For Sandbox0 SaaS, you usually only need `SANDBOX0_TOKEN`. Set `SANDBOX0_BASE_URL` when your workflow talks to a self-hosted or private Sandbox0 deployment.
+For Sandbox0 SaaS, you usually only need `SANDBOX0_TOKEN`. Set `SANDBOX0_BASE_URL` only when an explicit API endpoint override is required.
 
 ## Usage
 
@@ -253,7 +258,7 @@ Invite a new or existing user to a team through a Cloud Global Gateway:
 s0 team invitation create --team-id <team-id> --email person@example.com [--role developer]
 ```
 
-The command creates a pending email invitation; it is not available on a direct, self-hosted control-plane endpoint. The caller must be a verified team admin.
+The command creates a pending email invitation through Sandbox0 Cloud. The caller must be a verified team admin.
 
 ### Admin Region
 
