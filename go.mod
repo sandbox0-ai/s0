@@ -79,3 +79,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
+
+// Workspace development: release the reviewed SDK changes and update the
+// required version before removing this replacement for a release build.
+replace github.com/sandbox0-ai/sdk-go => ../sdk-go

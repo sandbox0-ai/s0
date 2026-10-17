@@ -35,6 +35,7 @@ var (
 	sessionReadyOutput       string
 	sessionReadyTimeout      int32
 	sessionIdempotencyKey    string
+	sessionLookupGeneration  int64
 	sessionReplaceAttempt    bool
 	sessionInputData         string
 	sessionInputBase64       string
@@ -107,6 +108,26 @@ var sandboxSessionGetCmd = &cobra.Command{
 			return fmt.Errorf("get session: %w", err)
 		}
 		return getFormatter().Format(os.Stdout, value)
+	},
+}
+
+var sandboxSessionFindConditionalCmd = &cobra.Command{
+	Use:   "find-conditional <sandbox-id> <creation-key>",
+	Short: "Find a creation receipt in an exact generation without auto-resume",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if sessionLookupGeneration <= 0 || strings.TrimSpace(args[1]) == "" || len(args[1]) > 255 {
+			return fmt.Errorf("positive --runtime-generation and original creation key are required")
+		}
+		client, err := getClientRaw(cmd)
+		if err != nil {
+			return err
+		}
+		value, err := client.Sandbox(args[0]).FindConditionalSession(cmd.Context(), args[1], sessionLookupGeneration)
+		if err != nil {
+			return fmt.Errorf("find conditional session: %w", err)
+		}
+		return getFormatter().Format(cmd.OutOrStdout(), value)
 	},
 }
 
@@ -308,6 +329,7 @@ func init() {
 		sandboxSessionListCmd,
 		sandboxSessionCreateCmd,
 		sandboxSessionGetCmd,
+		sandboxSessionFindConditionalCmd,
 		sandboxSessionUpdateCmd,
 		sandboxSessionDeleteCmd,
 		sandboxSessionStartCmd,
@@ -319,6 +341,8 @@ func init() {
 		sandboxSessionEventsCmd,
 	)
 
+	sandboxSessionFindConditionalCmd.Flags().Int64Var(&sessionLookupGeneration, "runtime-generation", 0, "original conditional creation generation (required)")
+	_ = sandboxSessionFindConditionalCmd.MarkFlagRequired("runtime-generation")
 	sandboxSessionCreateCmd.Flags().StringVarP(&sessionSpecFile, "spec-file", "f", "", "session spec YAML/JSON file, or - for stdin")
 	sandboxSessionCreateCmd.Flags().StringVar(&sessionName, "name", "", "stable human-readable session name")
 	sandboxSessionCreateCmd.Flags().StringVar(&sessionCWD, "cwd", "", "working directory")

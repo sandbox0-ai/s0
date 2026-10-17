@@ -46,6 +46,12 @@ func (f *TableFormatter) Format(w io.Writer, data interface{}) error {
 		return f.formatForkSandboxResponse(w, v)
 	case *apispec.Sandbox:
 		return f.formatSandbox(w, v)
+	case *apispec.SandboxSnapshotRestoreOperation:
+		return f.formatSandboxSnapshotRestore(w, v)
+	case *apispec.SandboxRestartOperation:
+		return f.formatSandboxRestart(w, v)
+	case *apispec.SandboxHealth:
+		return f.formatSandboxHealth(w, v)
 	case *apispec.SandboxStatus:
 		return f.formatSandboxStatus(w, v)
 	case *apispec.RefreshResponse:

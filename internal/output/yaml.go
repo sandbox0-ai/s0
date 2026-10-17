@@ -1,8 +1,10 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,11 +25,40 @@ func (f *YAMLFormatter) Format(w io.Writer, data interface{}) error {
 	}
 
 	var generic interface{}
-	if err := json.Unmarshal(jsonBytes, &generic); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
+	decoder.UseNumber()
+	if err := decoder.Decode(&generic); err != nil {
 		return err
 	}
 
 	encoder := yaml.NewEncoder(w)
 	encoder.SetIndent(2)
-	return encoder.Encode(generic)
+	return encoder.Encode(yamlExactNumbers(generic))
+}
+
+// Preserve runtime generations and other integer identities beyond float64's
+// exact range when converting generated JSON models to YAML.
+func yamlExactNumbers(value any) any {
+	switch v := value.(type) {
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return n
+		}
+		if n, err := strconv.ParseUint(string(v), 10, 64); err == nil {
+			return n
+		}
+		if n, err := v.Float64(); err == nil {
+			return n
+		}
+		return string(v)
+	case map[string]any:
+		for k, item := range v {
+			v[k] = yamlExactNumbers(item)
+		}
+	case []any:
+		for i, item := range v {
+			v[i] = yamlExactNumbers(item)
+		}
+	}
+	return value
 }
