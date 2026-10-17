@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.1
 	github.com/olekukonko/tablewriter v1.1.3
-	github.com/sandbox0-ai/sdk-go v0.10.4
+	github.com/sandbox0-ai/sdk-go v0.10.5-0.20261017040351-513387afdd5f
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -79,7 +79,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
-
-// Workspace development: release the reviewed SDK changes and update the
-// required version before removing this replacement for a release build.
-replace github.com/sandbox0-ai/sdk-go => ../sdk-go
