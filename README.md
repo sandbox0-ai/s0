@@ -282,8 +282,12 @@ s0 sandbox update <sandbox-id> [-f sandbox-update.yaml] [--ttl 3600] [--hard-ttl
 s0 sandbox delete <sandbox-id>
 s0 sandbox pause <sandbox-id> [--memory]
 s0 sandbox resume <sandbox-id> [--memory]
+s0 sandbox restart <sandbox-id> --expected-runtime-generation <generation> --idempotency-key <key> [--wait]
+s0 sandbox restart-status <sandbox-id> --operation-id <id> [--wait]
+s0 sandbox restart-status <sandbox-id> --idempotency-key <key> [--wait]
 s0 sandbox refresh <sandbox-id>
 s0 sandbox status <sandbox-id>
+s0 sandbox health <sandbox-id> [--timeout 10s] [-o json|yaml]
 s0 sandbox logs <sandbox-id> [--limit 100] [--context-id <ctx-id>] [--stream stdout|stderr|pty] [--watch]
 s0 sandbox events <sandbox-id> [--source <source>] [--event-type <type>] [--outcome <outcome>] [--actor-kind <kind>] [--actor-id <id>] [--action <action>] [--resource-type <type>] [--operation-id <id>] [--event-id <uuid>] [--watch]
 s0 sandbox metrics <sandbox-id> [--name <metric-name>] [--context-id <ctx-id>] [--watch]
@@ -296,6 +300,30 @@ s0 sandbox snapshot delete <snapshot-id>
 s0 sandbox fork <sandbox-id> [--ttl 3600] [--hard-ttl 7200] [--memory] [--idempotency-key <key>]
 s0 sandbox rebase <sandbox-id> --target-base-artifact-digest <sha256:digest> [--rollback-ttl 86400]
 ```
+
+`s0 sandbox health` prints independently sourced runtime, execution, terminal,
+and storage observations, including fixed reasons and observation times. The
+query has a 10-second default timeout and never resumes or restarts a sandbox.
+It may run bounded guest diagnostics; these are advisory. Storage identity and
+writer authority do not prove current I/O, which currently remains `unknown`.
+Exit status indicates query success; inspect each observation for availability.
+This unreleased command requires the matching SDK and server health endpoint.
+
+`s0 sandbox restart` explicitly ends old processes and starts a fresh runtime
+from externally published writable RootFS. It does not reconnect a terminal,
+restore memory, or roll files back to a snapshot. Read the source generation
+from sandbox detail, then supply it and a stable request key. The CLI never
+refreshes that generation or retries the mutation automatically. If the response
+is lost, use `restart-status --idempotency-key` to recover the original receipt;
+any submission retry must retain both original inputs.
+
+Submission returns an operation receipt. `--wait` polls that same operation;
+only `succeeded` proves a committed replacement. `failed` and `superseded` print
+the receipt and exit unsuccessfully. `--timeout` (default `2m`) and Ctrl-C stop
+only the client; accepted server work continues. A timeout prints the last
+receipt when known so another process can continue reading it. Receipt queries
+do not execute guest commands or start new compute. Use `-o json` or `-o yaml`
+for structured operation identity, generation, state and retry diagnostics.
 
 `s0 sandbox get <sandbox-id>` prints the SSH connection fields returned by sandbox detail when they are available, including `SSH Host`, `SSH Port`, and `SSH Username`.
 
@@ -655,3 +683,36 @@ s0 template image build . -t my-image:v1
 s0 template image push my-image:v1 -t my-image:v1
 
 ```
+
+## Unreleased restart integration
+
+The current workspace uses the reviewed sibling `../sdk-go` through a local
+`go.mod` replacement for the durable restart and independent health APIs. The CLI and SDK must be
+released together: first publish the reviewed SDK, update the required SDK
+version, and verify a build without that replacement. The release workflow
+removes local replacements; the current older pinned SDK does not contain
+these methods. This development change does not publish either repository.
+
+
+Read a conditional Session creation receipt without auto-resume or creation:
+
+```sh
+s0 sandbox session find-conditional <sandbox-id> <creation-key> --runtime-generation 7
+```
+
+Use the original conditional creation key and generation. A missing receipt or
+unsupported server returns an error; this command never submits a new process.
+
+## Explicit snapshot recovery
+
+```bash
+s0 sandbox restore-snapshot <sandbox-id> \
+  --expected-runtime-generation 7 \
+  --snapshot-id <snapshot-id> --snapshot-generation-id <snapshot-generation-id> \
+  --discard-process-state --idempotency-key <original-key> --wait
+s0 sandbox restore-snapshot-status <sandbox-id> --idempotency-key <original-key>
+```
+
+This ends old processes, replaces writable RootFS with the selected snapshot and launches a fresh runtime. All source/target coordinates and the discard acknowledgement are required. The existing `sandbox snapshot restore` remains a storage-only operation on an already paused sandbox.
+
+Keep the exact request and key after a lost reply. Status and wait only read the recorded operation; Ctrl-C or a local timeout never cancels accepted server work. Only `succeeded` proves runtime launch, and terminal failure returns a nonzero exit status. Managed credential owners must complete final-capture custody separately before retirement; this CLI does not bypass that protocol.
