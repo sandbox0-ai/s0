@@ -14,8 +14,8 @@ var credentialSourceSpecFile string
 
 var credentialSourceCmd = &cobra.Command{
 	Use:   "credential",
-	Short: "Manage egress credential sources",
-	Long:  `List, get, create, update, and delete team-scoped egress credential sources.`,
+	Short: "Manage credential sources",
+	Long:  `List, get, create, update, and delete team-scoped credential sources.`,
 }
 
 var credentialSourceListCmd = &cobra.Command{
@@ -167,6 +167,7 @@ type credentialSourceWriteRequestFile struct {
 }
 
 type credentialSourceWriteRequestSpecFile struct {
+	StaticS3                   *apispec.StaticS3SourceSpec                     `json:"staticS3" yaml:"staticS3"`
 	StaticHeaders              *credentialSourceStaticHeadersFile              `json:"staticHeaders" yaml:"staticHeaders"`
 	StaticTLSClientCertificate *credentialSourceStaticTLSClientCertificateFile `json:"staticTLSClientCertificate" yaml:"staticTLSClientCertificate"`
 	StaticUsernamePassword     *credentialSourceStaticUsernamePasswordFile     `json:"staticUsernamePassword" yaml:"staticUsernamePassword"`
@@ -220,6 +221,14 @@ func credentialSourceWriteRequestFromFile(file credentialSourceWriteRequestFile)
 	}
 
 	switch resolverKind {
+	case apispec.CredentialSourceResolverKindStaticS3:
+		if file.Spec.StaticS3 == nil {
+			return nil, fmt.Errorf("spec.staticS3 is required for resolverKind %q", resolverKind)
+		}
+		if err := file.Spec.StaticS3.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid spec.staticS3: check required fields and field lengths")
+		}
+		req.Spec.StaticS3 = apispec.NewOptStaticS3SourceSpec(*file.Spec.StaticS3)
 	case apispec.CredentialSourceResolverKindStaticHeaders:
 		if file.Spec.StaticHeaders == nil {
 			return nil, fmt.Errorf("spec.staticHeaders is required for resolverKind %q", resolverKind)
@@ -269,6 +278,8 @@ func credentialSourceWriteRequestFromFile(file credentialSourceWriteRequestFile)
 
 func parseCredentialSourceResolverKind(raw string) (apispec.CredentialSourceResolverKind, error) {
 	switch apispec.CredentialSourceResolverKind(strings.TrimSpace(raw)) {
+	case apispec.CredentialSourceResolverKindStaticS3:
+		return apispec.CredentialSourceResolverKindStaticS3, nil
 	case apispec.CredentialSourceResolverKindStaticHeaders:
 		return apispec.CredentialSourceResolverKindStaticHeaders, nil
 	case apispec.CredentialSourceResolverKindStaticTLSClientCertificate:
@@ -277,8 +288,9 @@ func parseCredentialSourceResolverKind(raw string) (apispec.CredentialSourceReso
 		return apispec.CredentialSourceResolverKindStaticUsernamePassword, nil
 	default:
 		return "", fmt.Errorf(
-			"invalid resolverKind %q, must be one of: %s, %s, %s",
+			"invalid resolverKind %q, must be one of: %s, %s, %s, %s",
 			raw,
+			apispec.CredentialSourceResolverKindStaticS3,
 			apispec.CredentialSourceResolverKindStaticHeaders,
 			apispec.CredentialSourceResolverKindStaticTLSClientCertificate,
 			apispec.CredentialSourceResolverKindStaticUsernamePassword,
