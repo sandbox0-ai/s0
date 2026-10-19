@@ -124,6 +124,8 @@ github.com/sandbox0-ai/sdk-go v0.10.4 h1:SAQ/TOyo4uoIFSzHx3JrqmDO0CIs/JjQIcK3MZz
 github.com/sandbox0-ai/sdk-go v0.10.4/go.mod h1:7cCeXNG40HLceDH2pNNZo4pEka06YDFFdTkz9XyDK98=
 github.com/sandbox0-ai/sdk-go v0.10.5-0.20261017040351-513387afdd5f h1:ahjdyOKDioAtWBBGjfhLHPIpQjYv/9YktP2UYq7Te7Y=
 github.com/sandbox0-ai/sdk-go v0.10.5-0.20261017040351-513387afdd5f/go.mod h1:7cCeXNG40HLceDH2pNNZo4pEka06YDFFdTkz9XyDK98=
+github.com/sandbox0-ai/sdk-go v0.10.5-0.20261019194521-b3178b3d2d1f h1:rEUbhps5xvHlpbWaarfGQRbj90AB5GXTvtzWSTBDtbA=
+github.com/sandbox0-ai/sdk-go v0.10.5-0.20261019194521-b3178b3d2d1f/go.mod h1:7cCeXNG40HLceDH2pNNZo4pEka06YDFFdTkz9XyDK98=
 github.com/segmentio/asm v1.2.1 h1:DTNbBqs57ioxAD4PrArqftgypG4/qNpXoJx8TVXxPR0=
 github.com/segmentio/asm v1.2.1/go.mod h1:BqMnlJP91P8d+4ibuonYZw9mfnzI9HfxselHZr5aAcs=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=

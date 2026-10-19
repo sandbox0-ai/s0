@@ -93,6 +93,49 @@ make build
 cp bin/s0 /usr/local/bin/
 ```
 
+## External S3 mounts (pre-release)
+
+This feature requires an enabled region and is not enabled in production yet.
+Create a team-owned S3 credential source from a private YAML/JSON file:
+
+```yaml
+name: customer-data
+resolverKind: static_s3
+spec:
+  staticS3:
+    bucket: customer-bucket
+    region: us-east-1
+    prefix: agents/
+    accessKey: REPLACE_WITH_ACCESS_KEY
+    secretKey: REPLACE_WITH_SECRET_KEY
+    allowWrite: false
+```
+
+```bash
+s0 credential create --file private-source.yaml
+s0 sandbox create --config-file sandbox.yaml
+```
+
+`sandbox.yaml` contains only source references and mount configuration:
+
+```yaml
+template: default
+config:
+  external_mounts:
+    - source_ref: customer-data
+      mount_path: /data
+      prefix: runs/
+      access: read_only
+```
+
+A binding's prefix narrows the source prefix. Writable bindings additionally
+require `allowWrite: true` on the source. Bindings cannot be changed by sandbox
+update; `s0 sandbox get <id> --output json` includes them even while paused.
+Filesystem pause/resume preserves bindings. Memory pause/resume and migration
+with mounts are unsupported. External objects are excluded from RootFS snapshots,
+forks and paused Files API access; forks drop bindings. Sandbox deletion leaves
+bucket contents intact. See [external mounts](https://sandbox0.ai/docs/sandbox/external-mounts).
+
 ## Configuration
 
 Configuration file: `~/.s0/config.yaml`
