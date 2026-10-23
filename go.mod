@@ -2,6 +2,8 @@ module github.com/sandbox0-ai/s0
 
 go 1.25.0
 
+toolchain go1.26.10
+
 require (
 	github.com/docker/docker v27.0.0+incompatible
 	github.com/ghodss/yaml v1.0.0
