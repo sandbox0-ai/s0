@@ -117,6 +117,47 @@ func TestReadSandboxServicesFileRequiresPath(t *testing.T) {
 	}
 }
 
+func TestParseSandboxServicesPreservesSharedRuntime(t *testing.T) {
+	services, err := parseSandboxServices([]byte(`
+services:
+  - id: desktop
+    port: 6080
+    ingress:
+      public: false
+    runtime:
+      type: cmd
+      command: [sandbox0-browser, --cdp-proxy-port, "9223"]
+  - id: cdp
+    port: 9223
+    ingress:
+      public: false
+    runtime:
+      type: service
+      service_id: desktop
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(services.Services) != 2 {
+		t.Fatalf("services count = %d, want 2", len(services.Services))
+	}
+	runtime := services.Services[1].Runtime.Or(apispec.SandboxAppServiceRuntime{})
+	if runtime.Type != apispec.SandboxAppServiceRuntimeTypeService || runtime.ServiceID.Or("") != "desktop" {
+		t.Fatalf("shared runtime = %#v, want service reference to desktop", runtime)
+	}
+	remaining, err := deleteSandboxServiceByID([]apispec.SandboxAppServiceView{
+		{ID: "unrelated"},
+		{ID: "cdp", Runtime: apispec.NewOptSandboxAppServiceRuntime(runtime)},
+	}, "unrelated")
+	if err != nil || len(remaining) != 1 {
+		t.Fatalf("delete unrelated service: remaining=%#v, err=%v", remaining, err)
+	}
+	retained := remaining[0].Runtime.Or(apispec.SandboxAppServiceRuntime{})
+	if retained.Type != runtime.Type || retained.ServiceID.Or("") != "desktop" {
+		t.Fatalf("shared runtime lost while deleting unrelated service: %#v", retained)
+	}
+}
+
 func TestDeleteSandboxServiceByID(t *testing.T) {
 	runtime := apispec.SandboxAppServiceRuntime{
 		Type: apispec.SandboxAppServiceRuntimeTypeFunction,
