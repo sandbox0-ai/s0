@@ -14,17 +14,20 @@ import (
 	sandbox0 "github.com/sandbox0-ai/sdk-go"
 	"github.com/sandbox0-ai/sdk-go/pkg/apispec"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var (
-	sandboxTemplate     string
-	sandboxTTL          int32
-	sandboxHardTTL      int32
-	sandboxMemory       string
-	sandboxConfigFile   string
-	sandboxSnapshotID   string
-	sandboxPauseMemory  bool
-	sandboxResumeMemory bool
+	sandboxTemplate           string
+	sandboxTTL                int32
+	sandboxHardTTL            int32
+	sandboxMemory             string
+	sandboxMemoryBurstPercent int32
+	sandboxMemoryBurstFlag    *pflag.Flag
+	sandboxConfigFile         string
+	sandboxSnapshotID         string
+	sandboxPauseMemory        bool
+	sandboxResumeMemory       bool
 	// list flags
 	sandboxListStatus     string
 	sandboxListTemplateID string
@@ -510,7 +513,9 @@ func init() {
 	sandboxCreateCmd.Flags().StringVarP(&sandboxConfigFile, "config-file", "f", "", "path to sandbox config or claim request YAML/JSON file, or - for stdin")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxTTL, "ttl", 0, "soft TTL in seconds")
 	sandboxCreateCmd.Flags().Int32Var(&sandboxHardTTL, "hard-ttl", 0, "hard TTL in seconds")
-	sandboxCreateCmd.Flags().StringVar(&sandboxMemory, "memory", "", "sandbox memory limit, for example 512Mi or 2Gi")
+	sandboxCreateCmd.Flags().StringVar(&sandboxMemory, "memory", "", "base sandbox memory, for example 512Mi or 2Gi")
+	sandboxCreateCmd.Flags().Int32Var(&sandboxMemoryBurstPercent, "memory-burst-percent", 0, "preauthorize 0-50 percent additional memory where enabled; CPU stays unchanged and billing follows the applied limit")
+	sandboxMemoryBurstFlag = sandboxCreateCmd.Flags().Lookup("memory-burst-percent")
 	sandboxCreateCmd.Flags().StringVar(&sandboxSnapshotID, "snapshot-id", "", "rootfs snapshot ID used to initialize the new sandbox")
 	sandboxPauseCmd.Flags().BoolVar(&sandboxPauseMemory, "memory", false, "retain process memory when pausing")
 	sandboxResumeCmd.Flags().BoolVar(&sandboxResumeMemory, "memory", false, "restore retained process memory when resuming")
@@ -978,6 +983,12 @@ func buildSandboxCreateConfigOverrides() (apispec.SandboxConfig, bool, error) {
 		})
 		hasConfig = true
 	}
+	if sandboxMemoryBurstFlag != nil && sandboxMemoryBurstFlag.Changed {
+		resources, _ := config.Resources.Get()
+		resources.MemoryBurstPercent = apispec.NewOptInt32(sandboxMemoryBurstPercent)
+		config.Resources = apispec.NewOptSandboxResourceConfig(resources)
+		hasConfig = true
+	}
 	if hasConfig {
 		if err := config.Validate(); err != nil {
 			return apispec.SandboxConfig{}, false, fmt.Errorf("invalid sandbox config: %w", err)
@@ -994,7 +1005,14 @@ func mergeSandboxCreateConfig(dst *apispec.SandboxConfig, src apispec.SandboxCon
 		dst.HardTTL = apispec.NewOptInt32(value)
 	}
 	if value, ok := src.Resources.Get(); ok {
-		dst.Resources = apispec.NewOptSandboxResourceConfig(value)
+		resources, _ := dst.Resources.Get()
+		if value.Memory.IsSet() {
+			resources.Memory = value.Memory
+		}
+		if value.MemoryBurstPercent.IsSet() {
+			resources.MemoryBurstPercent = value.MemoryBurstPercent
+		}
+		dst.Resources = apispec.NewOptSandboxResourceConfig(resources)
 	}
 }
 

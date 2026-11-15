@@ -274,9 +274,16 @@ s0 admin region delete <region-id>
 
 ### Sandbox
 
+On regions that enable memory burst, `s0 sandbox create -t default --memory 4Gi --memory-burst-percent 50` preauthorizes automatic 4 → 6 → 4 GiB hard limits.
+CPU stays based on 4 GiB, and billing follows the applied memory limit. Growth
+requires available worker memory; shrink happens only when safe. The percentage
+must be 0–50; omit the flag or use `0` to disable it. These automatic transitions
+preserve processes; explicit resource updates retain their existing restart
+semantics. Config files use `resources.memory_burst_percent`.
+
 ```bash
 s0 sandbox run <sandbox-id> <input> [--alias <alias>] [--context-id <ctx-id>]
-s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200] [--snapshot-id <rootfs-snapshot-id>]
+s0 sandbox create -t <template-id> [-f sandbox-config.yaml] [--ttl 3600] [--hard-ttl 7200] [--snapshot-id <rootfs-snapshot-id>] [--memory 4Gi] [--memory-burst-percent 50]
 s0 sandbox get <sandbox-id>
 s0 sandbox update <sandbox-id> [-f sandbox-update.yaml] [--ttl 3600] [--hard-ttl 7200] [--auto-resume true|false]
 s0 sandbox delete <sandbox-id>

@@ -456,6 +456,8 @@ func resetSandboxFlagsForTest() {
 	sandboxTTL = 0
 	sandboxHardTTL = 0
 	sandboxMemory = ""
+	sandboxMemoryBurstPercent = 0
+	sandboxCreateCmd.Flags().Lookup("memory-burst-percent").Changed = false
 	sandboxConfigFile = ""
 	sandboxSnapshotID = ""
 	sandboxPauseMemory = false
@@ -502,4 +504,47 @@ func resetSandboxFlagsForTest() {
 	sandboxForkIdempotencyKey = ""
 	sandboxRebaseTargetBaseDigest = ""
 	sandboxRebaseRollbackTTL = 0
+}
+
+func TestSandboxMemoryBurstFlagsMergeAndValidate(t *testing.T) {
+	defer resetSandboxFlagsForTest()
+	for _, percent := range []string{"0", "50", "-1", "51"} {
+		resetSandboxFlagsForTest()
+		sandboxTemplate = "default"
+		sandboxConfigFile = writeTempFile(t, "resources:\n  memory: 4Gi\n  memory_burst_percent: 25\n")
+		if err := sandboxCreateCmd.Flags().Set("memory-burst-percent", percent); err != nil {
+			t.Fatal(err)
+		}
+		request, err := buildSandboxCreateRequest()
+		if percent == "-1" || percent == "51" {
+			if err == nil {
+				t.Fatal("invalid percentage accepted")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		config, _ := request.Config.Get()
+		resources, _ := config.Resources.Get()
+		memory, _ := resources.Memory.Get()
+		burst, _ := resources.MemoryBurstPercent.Get()
+		if memory != "4Gi" || percent == "0" && burst != 0 || percent == "50" && burst != 50 {
+			t.Fatalf("merged resources = %+v", resources)
+		}
+	}
+	resetSandboxFlagsForTest()
+	sandboxTemplate = "default"
+	sandboxConfigFile = writeTempFile(t, "resources:\n  memory: 2Gi\n  memory_burst_percent: 50\n")
+	sandboxMemory = "4Gi"
+	request, err := buildSandboxCreateRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, _ := request.Config.Get()
+	resources, _ := config.Resources.Get()
+	burst, _ := resources.MemoryBurstPercent.Get()
+	if burst != 50 {
+		t.Fatal("memory override discarded burst allowance")
+	}
 }
